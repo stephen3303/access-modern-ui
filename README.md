@@ -24,6 +24,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 | Module | What it does |
 |---|---|
 | modTableUI | Responsive columns, matching headers, counted filters, uniform tag widths and opt-in pagination |
+| modTextUI | Standalone measured single-line text fitting and header captions with full-text tooltips |
 | modUIKit | Build-time form and control builders (catalog below) |
 | modDarkMode | Palette engine: `ThemeForm` repaints each form on open, `Th()` gives runtime colors, and `SetPalette`/`ShowAppearance` switch palettes |
 | modPng | `PillPng`: anti-aliased capsule PNGs for rounded pills and badges, cached in `%LOCALAPPDATA%\<APP_NAME>\pills` |
@@ -50,7 +51,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 | `PALETTE_COUNT`, `PaletteKey`, `PaletteName`, `PaletteIsDark`, `PaletteSwatch`, `PaletteOf` | modDarkMode, dlgAppearance | modPalette (generated) |
 | `APP_NAME` | modPng | modGlobals |
 | `HandleError`, `LogError`, `RaiseAgain` | modDarkMode, modCsv | modErrors (`examples/modules`) |
-| `MeasureText(s, size, weight)` (text width in twips) | `TitleTip`/`PageHeader` | modWrap |
+| `MeasureText(s, size, weight)` (Segoe UI text width in twips; size in points, weight 400 normal / 700 bold) | modTextUI, modPng, `TitleTip`/`PageHeader` | modWrap |
 | `ShowTip(frm, nm)` | the "?" marks from `TitleTip` | modUI |
 | `frmMain` with `PageKey` and `Reopen pg` | `SetPalette` (reopens the window) | frmMain |
 | `dlgAppearance` form | `ShowAppearance` | `Build_dlgAppearance` + dlgAppearance.vba |
@@ -127,6 +128,37 @@ Sizes are in twips. `px(n)` converts CSS pixels at 15 twips per pixel.
 | `Ev c, "OnClick", ...` | Point event properties at the form module's handlers |
 
 ## Shared table policy
+
+### Text fitting without table dependencies
+
+`modTextUI` can be imported alone. Its only application hook is
+`MeasureText(text, size, weight)`, which must measure Segoe UI text in twips.
+Access's normal form/control types and `Nz` are also required.
+
+Apps without an existing measurement hook can import the optional Windows adapter
+`kit/adapters/modTextMeasure.bas`. It measures Segoe UI through GDI, supports
+32-bit and 64-bit Access, and returns twips using a canonical 96 DPI font.
+Import it **instead of** an existing `MeasureText` implementation to avoid a
+duplicate public name. Adapters are outside `kit/modules` and are not imported
+automatically. The native test's `-UseGdiMeasurement` switch imports this adapter,
+removes its test stand-in, and checks proportional character widths before
+running the complete fixture.
+
+- `FitSingleLineText(value, width [, size = 9, weight = 400])` replaces line breaks
+  with spaces and returns measured text with an ellipsis when it does not fit.
+  Width is the available text area in twips, excluding control margins. A null
+  value or a width too small for the ellipsis returns an empty string. Keep the
+  original bound value intact and available in the record editor.
+- `FitHeaderText(heading, fullCaption [, preferredSize = 9, minimumSize = 8])`
+  fits the caption to the control's inner width, reducing the font to the supplied
+  minimum before ellipsizing. Pass the original caption on every resize so a
+  wider column restores its complete text and preferred font. The native tooltip
+  retains up to 255 characters of the full caption. Use a Segoe UI label or button
+  with margin properties.
+
+Native `ControlTipText` is shared across repeated instances of a continuous form
+control. It cannot reliably reveal each hovered row's bound value. Use header
+tooltips for captions and the record editor for complete row values.
 
 Use pills for finite categories, statuses and filter tags. Leave names, free text,
 dates and numeric progress as plain text. Use TagWidth(values) or TableTagWidth(form,

@@ -8,6 +8,7 @@ End Sub
 Public Function TestKit(ByVal root As String) As String
     Dim grid As Form, host As Form, c As Control, cols As Variant, i As Long
     Dim rows As DAO.Recordset, ids As Object, height As Long
+    Dim text As String, fitted As String, measured As Long
     g_SrcRoot = root & "\kit": UseBuildPalette
     CurrentDb.Execute "CREATE TABLE test_rows (id LONG PRIMARY KEY, category TEXT(60), description TEXT(255))"
     For i = 1 To 23
@@ -32,6 +33,32 @@ Public Function TestKit(ByVal root As String) As String
     SaveForm "frmTest", "testHost"
     DoCmd.OpenForm "frmTest"
     Set host = Forms("frmTest"): Set grid = host.sfRows.Form
+    Check FitSingleLineText(Null, px(100)) = "", "Null presentation text differs"
+    Check FitSingleLineText("A" & vbCrLf & "B" & vbLf & "C", px(100)) = "A B C", "Presentation text retains line breaks"
+    measured = MeasureText("Exact fit", 9, 400)
+    Check FitSingleLineText("Exact fit", measured) = "Exact fit", "Exact-fit text was truncated"
+    Check FitSingleLineText("Text", 0) = "", "Zero-width text overflows"
+    measured = MeasureText(ChrW(&H2026), 9, 400)
+    Check FitSingleLineText("Long text", measured - 1) = "", "Tiny cell emits overflowing ellipsis"
+    text = "Wide WWW and narrow iii characters in a long description"
+    fitted = FitSingleLineText(text, px(90))
+    Check Right$(fitted, 1) = ChrW(&H2026), "Clipped text lacks ellipsis"
+    Check MeasureText(fitted, 9, 400) <= px(90), "Measured presentation text overflows"
+    Check Len(fitted) < Len(text), "Clipped text was not shortened"
+    Check text = "Wide WWW and narrow iii characters in a long description", "Presentation fitting changed original text"
+    Set c = host.head1
+    c.Width = px(85)
+    FitHeaderText c, "A long description heading", 9, 8
+    Check c.ControlTipText = "A long description heading", "Header does not expose full caption"
+    Check c.FontSize = 8, "Narrow header did not reduce font to minimum"
+    Check Right$(c.Caption, 1) = ChrW(&H2026), "Narrow header lacks ellipsis"
+    Check MeasureText(c.Caption, c.FontSize, IIf(c.FontBold, 700, 400)) <= c.Width - c.LeftMargin - c.RightMargin, "Header text exceeds its inner width"
+    c.Width = px(400)
+    FitHeaderText c, "A long description heading", 9, 8
+    Check c.Caption = "A long description heading" And c.FontSize = 9, "Widened header did not restore caption and preferred font"
+    FitHeaderText c, String$(300, "W"), 9, 8
+    Check Len(c.ControlTipText) = 255, "Native header tip exceeds Access limit"
+    FitHeaderText c, "Description", 9, 8
     LayoutFilterRow host, Array("filter0", "filter1"), px(24), px(10), px(600)
     Check host.filter0.Width = host.filter1.Width, "Filter widths differ"
     Check host.filter0.Top = host.filter1.Top, "Filters do not share one row"
