@@ -77,7 +77,7 @@ End Sub
 Private Sub ParkFocus(c As Control)
     Dim frm As Form, o As Control
     Set frm = OwnerForm(c)
-    If HasFocusSink(frm) Then
+    If c.Name <> "txtFocusSink" And HasFocusSink(frm) Then
         If Not Holds(c, frm.Controls("txtFocusSink")) Then
             If TryFocus(frm.Controls("txtFocusSink")) Then Exit Sub
         End If
