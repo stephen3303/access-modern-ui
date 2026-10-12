@@ -184,7 +184,7 @@ End Function
 Public Sub LayoutTableFooter(ByVal host As Form, ByVal subName As String, ByVal prefix As String, ByVal keyField As String)
     On Error GoTo Failed
     Dim box As Control, grid As Form, c As Control, state As Object, key As String
-    Dim fullHeight As Long, size As Long, count As Long, pages As Long, skip As Long
+    Dim originalScroll As Long, fullHeight As Long, size As Long, count As Long, pages As Long, skip As Long
     Dim rows As DAO.Recordset, ids As String, shown As Long, i As Long, number As Long, first As Long
     If m_busy Then Exit Sub
     Set box = host.Controls(subName): key = TableKey(host, subName)
@@ -195,6 +195,7 @@ Public Sub LayoutTableFooter(ByVal host As Form, ByVal subName As String, ByVal 
         If Not m_geometry Is Nothing Then
             If m_geometry.Exists(key) Then
                 If box.Height = m_geometry(key)(1) Then box.Height = m_geometry(key)(0)
+                If Len(box.SourceObject) > 0 Then box.Form.ScrollBars = m_geometry(key)(2)
                 m_geometry.Remove key
             End If
         End If
@@ -216,12 +217,14 @@ Public Sub LayoutTableFooter(ByVal host As Form, ByVal subName As String, ByVal 
     m_busy = True
     If m_geometry Is Nothing Then Set m_geometry = CreateObject("Scripting.Dictionary")
     If m_pages Is Nothing Then Set m_pages = CreateObject("Scripting.Dictionary")
-    fullHeight = box.Height
+    fullHeight = box.Height: originalScroll = grid.ScrollBars
     If m_geometry.Exists(key) Then
+        originalScroll = m_geometry(key)(2)
         If fullHeight = m_geometry(key)(1) Then fullHeight = m_geometry(key)(0)
     End If
     If fullHeight < grid.Section(acDetail).Height + px(40) Then fullHeight = grid.Section(acDetail).Height + px(40)
-    box.Height = fullHeight - px(40): m_geometry(key) = Array(fullHeight, box.Height)
+    box.Height = fullHeight - px(40): m_geometry(key) = Array(fullHeight, box.Height, originalScroll)
+    grid.ScrollBars = IIf(grid.ScrollBars = 1 Or grid.ScrollBars = 3, 1, 0)
     size = box.Height \ grid.Section(acDetail).Height: If size < 1 Then size = 1
     If Not m_pages.Exists(key) Then
         Set state = CreateObject("Scripting.Dictionary")

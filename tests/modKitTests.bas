@@ -61,6 +61,7 @@ Public Function TestKit(ByVal root As String) As String
     Check grid.txtCol1.Width > grid.txtCol0.Width, "Description did not expand"
     grid.Filter = "id > 3": grid.FilterOn = True
     LayoutTableFooter host, "sfRows", "pager", "id"
+    Check grid.ScrollBars = 0, "Paginated grid retains vertical scrolling"
     Check host.pagerCount.Visible, "Marked footer hidden"
     Check host.sfRows.Height < height, "Footer did not reserve space"
     Check TableFullFilter(grid) = "id > 3", "Full export scope differs"
@@ -81,6 +82,7 @@ Public Function TestKit(ByVal root As String) As String
     LayoutTableFooter host, "sfRows", "pager", "id"
     Check host.sfRows.Tag = "AppTag", "Opt-out lost app tag"
     Check Not host.pagerCount.Visible, "Opt-out footer visible"
+    Check grid.ScrollBars = 2, "Opt-out did not restore vertical scrolling"
     Check host.sfRows.Height = height, "Opt-out did not restore height"
     Check grid.Filter = "id > 3", "Opt-out did not restore filter"
     Check grid.Recordset.RecordCount = 20, "Opt-out did not restore all rows"
