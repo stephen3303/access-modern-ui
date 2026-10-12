@@ -8,6 +8,8 @@ Option Explicit
 
 ' Width the table's vertical scroll bar takes (twips).
 Private Const SCROLL_W As Long = 300
+' Widest a form can be: 22 inches (twips).
+Private Const MAX_FORM_W As Long = 31680
 
 ' ---------------------------------------------------------------------------
 ' Tables
@@ -31,6 +33,7 @@ Public Sub GridFit(sf As Control, Optional ByVal prefix As String = "")
     If sf.HorizontalAnchor = 2 Then avail = avail + host.InsideWidth - host.Width
     ratio = (avail - SCROLL_W) / (design - SCROLL_W)
     If ratio < 1 Then ratio = 1
+    If design * ratio > MAX_FORM_W Then ratio = MAX_FORM_W / design
     newW = CLng(design * ratio)
     ' Access ignores g.Width = n on a form shown in a subform: the form only
     ' grows when a control's right edge pushes it, and moving a column past
