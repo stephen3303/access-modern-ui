@@ -1,10 +1,12 @@
 Option Compare Database
 Option Explicit
 
-' Access UI kit - rounded pill images. Access controls only draw
-' square corners, so pills and badges sit on a bound/unbound image control
-' showing an anti-aliased capsule PNG drawn here. Images are written once per
-' color and size to %LOCALAPPDATA%\<APP_NAME>\pills and reused.
+' Access UI kit - rounded images. Access controls only draw square corners,
+' so pills, badges, card corners and progress bars are image controls showing
+' anti-aliased PNGs drawn here. Each image is written once per color and size
+' to %LOCALAPPDATA%\<APP_NAME>\pills and reused. The image controls get them
+' through ControlSource expressions such as =PillPng(<color>,w,h), so
+' ThemeForm can repaint the colors written in them.
 
 Private Const SCALE_UP As Long = 2          ' draw at 2x for crisp edges when zoomed
 Private m_crc(255) As Long
@@ -15,25 +17,92 @@ Private m_dir As String
 ' Path of a capsule image of the given Access color, sized for a control of
 ' wPx x hPx screen pixels. Null color (no matching condition) -> no image.
 Public Function PillPng(ByVal clr As Variant, ByVal wPx As Long, ByVal hPx As Long) As Variant
-    Dim key As String, path As String
+    Dim key As String, path As String, draw As Boolean
     PillPng = Null
     If IsNull(clr) Or IsEmpty(clr) Then Exit Function
     If clr < 0 Or wPx < 2 Or hPx < 2 Then Exit Function
-    key = "p_" & Right$("00000" & Hex$(clr), 6) & "_" & wPx & "x" & hPx
-    If m_cache Is Nothing Then Set m_cache = New Collection
-    On Error Resume Next
-    path = m_cache(key)
     On Error GoTo Fail
-    If Len(path) = 0 Then
-        path = PillDir() & "\" & key & ".png"
-        If Len(Dir$(path)) = 0 Then WriteCapsule path, CLng(clr), wPx * SCALE_UP, hPx * SCALE_UP
-        m_cache.Add path, key
+    key = "p_" & Hex6(clr) & "_" & wPx & "x" & hPx
+    path = ImagePath(key, draw)
+    If draw Then
+        WriteCapsule path, CLng(clr), -1, 1, wPx * SCALE_UP, hPx * SCALE_UP
+        Remember key, path
     End If
     PillPng = path
     Exit Function
 Fail:
     PillPng = Null
 End Function
+
+' Progress capsule for a control of wPx x hPx: a track in color track, filled
+' from the left in color fill to percent (0-100; Null or text counts as 0).
+Public Function ProgressPng(ByVal percent As Variant, ByVal fill As Long, ByVal track As Long, _
+                            ByVal wPx As Long, ByVal hPx As Long) As Variant
+    Dim key As String, path As String, draw As Boolean, v As Long
+    ProgressPng = Null
+    If wPx < 2 Or hPx < 2 Then Exit Function
+    On Error GoTo Fail
+    If IsNumeric(percent) Then v = CLng(percent)
+    If v < 0 Then v = 0
+    If v > 100 Then v = 100
+    key = "g_" & Hex6(fill) & "_" & Hex6(track) & "_" & v & "_" & wPx & "x" & hPx
+    path = ImagePath(key, draw)
+    If draw Then
+        WriteCapsule path, fill, track, v / 100, wPx * SCALE_UP, hPx * SCALE_UP
+        Remember key, path
+    End If
+    ProgressPng = path
+    Exit Function
+Fail:
+    ProgressPng = Null
+End Function
+
+' One rounded corner of a card (modUIKit.Card): a square image of side rPx
+' laid over the corner of a square box. Inside the arc it is fill, on the arc
+' a 1px border, outside it back (what the card sits on). corner: 1 top-left,
+' 2 top-right, 3 bottom-right, 4 bottom-left.
+Public Function CardPng(ByVal fill As Long, ByVal border As Long, ByVal back As Long, ByVal rPx As Long, _
+                        ByVal corner As Long) As Variant
+    Dim key As String, path As String, draw As Boolean
+    CardPng = Null
+    If rPx < 2 Or corner < 1 Or corner > 4 Then Exit Function
+    On Error GoTo Fail
+    key = "c_" & Hex6(fill) & "_" & Hex6(border) & "_" & Hex6(back) & "_" & rPx & "_" & corner
+    path = ImagePath(key, draw)
+    If draw Then
+        WriteCorner path, fill, border, back, rPx * SCALE_UP, SCALE_UP, corner
+        Remember key, path
+    End If
+    CardPng = path
+    Exit Function
+Fail:
+    CardPng = Null
+End Function
+
+' Six hex digits of a color, for file names.
+Private Function Hex6(ByVal clr As Long) As String
+    Hex6 = Right$("00000" & Hex$(clr), 6)
+End Function
+
+' Path for image key. draw is set when the file doesn't exist yet: the caller
+' writes it, then calls Remember.
+Private Function ImagePath(ByVal key As String, draw As Boolean) As String
+    Dim path As String
+    If m_cache Is Nothing Then Set m_cache = New Collection
+    On Error Resume Next
+    path = m_cache(key)
+    On Error GoTo 0
+    If Len(path) = 0 Then
+        path = PillDir() & "\" & key & ".png"
+        draw = (Len(Dir$(path)) = 0)
+        If Not draw Then m_cache.Add path, key
+    End If
+    ImagePath = path
+End Function
+
+Private Sub Remember(ByVal key As String, ByVal path As String)
+    m_cache.Add path, key
+End Sub
 
 ' %LOCALAPPDATA%\<APP_NAME>\pills (TEMP if LOCALAPPDATA is missing), created on first use.
 Private Function PillDir() As String
@@ -49,15 +118,18 @@ Private Function PillDir() As String
     PillDir = m_dir
 End Function
 
-' Capsule (fully rounded ends) in color clr on a transparent background.
-Private Sub WriteCapsule(ByVal path As String, ByVal clr As Long, ByVal w As Long, ByVal h As Long)
-    Dim raw() As Byte, x As Long, y As Long, i As Long
+' Capsule (fully rounded ends) in color clr on a transparent background. With
+' a track color (track >= 0) only the left fraction is clr and the rest is
+' track, as in a progress bar.
+Private Sub WriteCapsule(ByVal path As String, ByVal clr As Long, ByVal track As Long, ByVal fraction As Double, _
+                         ByVal w As Long, ByVal h As Long)
+    Dim raw() As Byte, x As Long, y As Long, i As Long, edge As Double, t As Double
     Dim r As Double, cx As Double, cy As Double, px As Double, py As Double, d As Double, a As Double
-    Dim cr As Byte, cg As Byte, cb As Byte
-    cr = clr And &HFF: cg = (clr \ &H100) And &HFF: cb = (clr \ &H10000) And &HFF
     r = h / 2
     If r > w / 2 Then r = w / 2
     cy = h / 2
+    edge = w * fraction
+    If track < 0 Then track = clr: edge = w
     ReDim raw(0 To h * (w * 4 + 1) - 1)
     i = 0
     For y = 0 To h - 1
@@ -77,11 +149,61 @@ Private Sub WriteCapsule(ByVal path As String, ByVal clr As Long, ByVal w As Lon
             a = r - d + 0.5
             If a < 0 Then a = 0
             If a > 1 Then a = 1
-            raw(i) = cr: raw(i + 1) = cg: raw(i + 2) = cb: raw(i + 3) = CByte(a * 255)
+            ' share of the pixel left of the fill's edge
+            t = edge - px + 0.5
+            If t < 0 Then t = 0
+            If t > 1 Then t = 1
+            PutPixel raw, i, Blend(track, clr, t), a
             i = i + 4
         Next
     Next
     WritePng path, w, h, raw
+End Sub
+
+' Card corner of side rr pixels with a border bw pixels wide (see CardPng).
+Private Sub WriteCorner(ByVal path As String, ByVal fill As Long, ByVal border As Long, ByVal back As Long, _
+                        ByVal rr As Long, ByVal bw As Long, ByVal corner As Long)
+    Dim raw() As Byte, x As Long, y As Long, i As Long, ox As Double, oy As Double
+    Dim d As Double, a As Double, t As Double
+    ' center of the arc's circle, in image coordinates
+    ox = IIf(corner = 1 Or corner = 4, rr, 0)
+    oy = IIf(corner = 1 Or corner = 2, rr, 0)
+    ReDim raw(0 To rr * (rr * 4 + 1) - 1)
+    i = 0
+    For y = 0 To rr - 1
+        raw(i) = 0: i = i + 1
+        For x = 0 To rr - 1
+            ' distance outside the arc (negative inside)
+            d = Sqr((x + 0.5 - ox) ^ 2 + (y + 0.5 - oy) ^ 2) - rr
+            a = 0.5 - d                               ' share inside the card
+            If a < 0 Then a = 0
+            If a > 1 Then a = 1
+            t = d + bw + 0.5                          ' share on the border
+            If t < 0 Then t = 0
+            If t > 1 Then t = 1
+            PutPixel raw, i, Blend(back, Blend(fill, border, t), a), 1
+            i = i + 4
+        Next
+    Next
+    WritePng path, rr, rr, raw
+End Sub
+
+' Color between c0 (t = 0) and c1 (t = 1).
+Private Function Blend(ByVal c0 As Long, ByVal c1 As Long, ByVal t As Double) As Long
+    Dim k As Long, v As Long, s As Long
+    For k = 0 To 2
+        s = 256 ^ k
+        v = v + CLng(((c0 \ s) And &HFF) * (1 - t) + ((c1 \ s) And &HFF) * t) * s
+    Next
+    Blend = v
+End Function
+
+' Write one RGBA pixel of color clr and opacity a (0-1) at raw(i).
+Private Sub PutPixel(raw() As Byte, ByVal i As Long, ByVal clr As Long, ByVal a As Double)
+    raw(i) = clr And &HFF
+    raw(i + 1) = (clr \ &H100) And &HFF
+    raw(i + 2) = (clr \ &H10000) And &HFF
+    raw(i + 3) = CByte(a * 255)
 End Sub
 
 ' ---------------------------------------------------------------------------

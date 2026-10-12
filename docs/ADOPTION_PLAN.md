@@ -40,7 +40,7 @@ SPM built these in PowerShell (`current/source/tools/form-helpers.ps1`,
 with kit tokens, not copied.
 
 ### K1. Rounded cards
-- [ ] **Source.** SPM `ui-current.ps1` draws `card-light.png`/`card-dark.png` (a 22px
+- [x] **Source.** SPM `ui-current.ps1` draws `card-light.png`/`card-dark.png` (a 22px
   radius rounded rectangle with a 2px border). `PaintForm` swaps them for controls tagged
   `StaticCard`. `form-helpers.ps1 Box` uses a disabled `Shape = 1` button as a rounded
   surface when it is 650 twips or taller.
@@ -56,9 +56,14 @@ with kit tokens, not copied.
 - **Done when** a test page shows a rounded card in every palette with no repaint flicker
   on hover. SPM's todo list reports flicker on cards, so check it specifically. The
   README catalog and guide §6.6 describe `Card` and `CardPng`.
+- **As built.** One image of the whole card would distort its corners when the card
+  stretches with the window, and would be megabytes per size. So the card is a square
+  `Box` with four small corner images, `CardPng(fill, border, back, rPx, corner)`, each
+  anchored to its corner. `back` is the color the card sits on. Shown on the demo's
+  Cards page (`examples/demo`).
 
 ### K2. Progress capsule
-- [ ] **Source.** SPM `modPills.ProgressPng` and `WriteCapsule(..., fraction)` draw a
+- [x] **Source.** SPM `modPills.ProgressPng` and `WriteCapsule(..., fraction)` draw a
   capsule filled to a percentage over a gray track.
 - **Change.** Add `ProgressPng(percent, fill, track, wPx, hPx)` to `modPng`, plus a
   `Progress nm, expr, x, y, w, h` builder (bound image,
@@ -68,7 +73,7 @@ with kit tokens, not copied.
 - **Done when** 0, 37 and 100 percent render correctly in light and dark.
 
 ### K3. Table upgrades in `BuildGrid` / `GridHeaders`
-- [ ] **Source.** SPM `form-helpers.ps1 ModernList` and `TableHeader`,
+- [x] **Source.** SPM `form-helpers.ps1 ModernList` and `TableHeader`,
   `responsive.TableSize`.
 - **Change.** Extend the column spec and builder. Existing callers must work unchanged.
   - **Header band:** `GridHeaders ..., [band:=True]` draws a filled `CLR_INSET` strip
@@ -89,9 +94,13 @@ with kit tokens, not copied.
     the `>` button, and `subGrid.RowClick` already does this, so document it as the rule.
 - **Done when** an example page shows each option. `subGrid.vba` stays shared by every
   grid, and the README catalog and guide §6.2 describe every option.
+- **As built.** Proportional fit is chosen at build time with `BuildGrid ..., fit:=True`
+  (the last column then keeps its own width), and the host calls `GridFit sf, prefix`
+  from `Form_Resize`. Columns never shrink below their design width. Shown on the
+  demo's Tables page.
 
 ### K4. List with detail panel
-- [ ] **Source.** SPM `presentation.ShowDetail`, `SelectFirstDetail` and the
+- [x] **Source.** SPM `presentation.ShowDetail`, `SelectFirstDetail` and the
   `tableCard`/`detailCard`/`subDetail`/`emptyDetail` layout in `responsive.V5Resize`.
 - **Change.** Add a page pattern to the guide (§6.5 or a new §6.8) and a runtime helper
   `ShowDetail hostForm, detailCtl, formName, where`. It saves a dirty detail first, swaps
@@ -101,9 +110,13 @@ with kit tokens, not copied.
   on the right, anchored.
 - **Done when** the example app has one list/detail page that works through palette
   switching and window resize.
+- **As built.** `ShowDetail host, detailCtl, formName, where, [emptyCtl]`,
+  `ClearDetail` and `SelectFirstRow` are in the new kit module `modKitUI`; guide §6.8
+  describes the page. `ShowDetail` only swaps the panel's form when it changes, and must
+  not be called from inside the detail form. Shown on the demo's List and detail page.
 
 ### K5. Print and export the current grid
-- [ ] **Source.** SPM `presentation.BuildPrintPreview` and `demo-core.ExportCurrentList`.
+- [x] **Source.** SPM `presentation.BuildPrintPreview` and `demo-core.ExportCurrentList`.
 - **Change.** Add a new kit module `modGridOut` with:
   - `PrintGrid gridForm, title, subtitle`: builds a temporary report from the grid's
     visible columns, captions and current filter with `NewReport` and `PRINT_*` colors,
@@ -113,32 +126,39 @@ with kit tokens, not copied.
   - Both raise through `RaiseAgain`, and neither leaves temp queries behind.
 - **Done when** printing and exporting a filtered grid gives exactly the filtered rows,
   with the on-screen captions.
+- **As built.** `ExportGrid` picks Excel when the path ends in `.xlsx`. The report is
+  kept as `zz_rptGrid` and replaced each time; the Excel export's temporary query
+  `zz_qryGridExport` is deleted afterwards.
 
 ### K6. Filter chips and tabs with counts
-- [ ] **Source.** SPM `program-workflow.V7Counts` and Stephen's SPM todo list ("Filter
+- [x] **Source.** SPM `program-workflow.V7Counts` and Stephen's SPM todo list ("Filter
   buttons should include counts", "move the filters and search bars to the right of the
   filter buttons").
 - **Change.** `TabStrip` and `StyleChip` take an optional count, shown as `Name (n)`.
   Add `SetCount ctl, n`, which keeps the base caption in `Tag`. Guide §6.6 shows the
   layout: chips on the left, then search and filters to their right, on one row.
 - **Done when** it is documented and shown in the example.
+- **As built.** `TabStrip` takes a count as a third part of a tab, `"key|Caption|0"`.
+  `StyleChip lbl, isOn, [n]` and `SetCount` are kit code now (modKitUI).
 
 ### K7. Kit housekeeping (from the audit)
-- [ ] `tools/make_themes.py` creates `modules/` and `themes/light/` when they are
+- [x] `tools/make_themes.py` creates `modules/` and `themes/light/` when they are
   missing. Today it crashes on a fresh app.
-- [ ] Guide references to `kit/README.md` point at the root `README.md`, or the catalog
-  moves to `kit/README.md`. Pick one.
-- [ ] Promote `SetVisible c, v` from SABER (`access/src/modules/modUI.bas`) into
+- [x] Guide references to `kit/README.md` point at the root `README.md`, or the catalog
+  moves to `kit/README.md`. Pick one. **Picked:** the catalog stays in the root
+  `README.md`, and the guide points there.
+- [x] Promote `SetVisible c, v` from SABER (`access/src/modules/modUI.bas`) into
   `kit/modules/modKitUtil.bas`. It moves focus to `txtFocusSink` before hiding the
   focused control, which avoids error 2165. The guide (§3 module table, §6.7) already
   relies on it, but the kit doesn't ship it. In the same PR, move it from the `modUI` row
   to `modKitUtil` in the guide's §3 module table and add it to the README catalog. Remove
   SABER's copy in S1 and use the kit one in SPM.
-- [ ] Guide §6.4 documents a **compact** size (28px button, 26px input) for toolbars and
+- [x] Guide §6.4 documents a **compact** size (28px button, 26px input) for toolbars and
   grid rows. SABER uses it heavily without it being documented.
-- [ ] Add a teal/navy palette matching SPM's current look (sidebar 10,42,73, primary
+- [x] Add a teal/navy palette matching SPM's current look (sidebar 10,42,73, primary
   0,132,151) to `PALETTES`, so SPM users can keep the look they know. It must pass the
-  contrast check.
+  contrast check. **As built:** "Teal Navy" (`tealnavy`). SPM's teal gives white text
+  4.4:1, so the palette uses 0,128,147, which passes.
 
 ---
 
@@ -154,6 +174,10 @@ new features in one pass.
     the classification banner in 75fda1d. Ask Stephen whether SABER keeps it. **Default:
     keep it as app code.**
   - Hard-coded `"SABER"` paths in `modPng` and `modDarkMode` are replaced by `APP_NAME`.
+  - `SetVisible` and `StyleChip` are kit code now (modKitUtil, modKitUI): delete them
+    from `modUI`. `StyleChip`'s new optional count argument keeps old calls working.
+  - `StatusVariant` takes a Variant (pill columns pass Null for empty values).
+  - Copy the new kit modules too: `modKitUI`, `modGridOut`.
 - [ ] Re-run `make_themes.py`, which now generates 7 palettes plus the contrast check.
 - **Done when** the diffs against `kit/` show header lines only, and the build passes.
 
@@ -248,6 +272,6 @@ the SPM todo list asks.
 
 | Phase | Tasks | Done |
 |---|---|---|
-| 1 Kit harvest | K1–K7 | 0 |
+| 1 Kit harvest | K1–K7 | 7 (awaiting the click-through on Stephen's machine) |
 | 2 SABER | S1–S4 | 0 |
 | 3 SPM | P1–P5 | 0 |

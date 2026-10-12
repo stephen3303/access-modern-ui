@@ -13,6 +13,10 @@ Private m_trace As String
 ' CSS pixels to twips.
 ' Printable width of a report page: 8.5 in less two 0.5 in margins (twips).
 Public Const REPORT_W As Long = 10800
+' Corner radius of rounded cards (px).
+Public Const CARD_RADIUS As Long = 12
+' Badge variants a status pill can take (BadgeColors).
+Private Const BADGE_VARIANTS As String = "success,warning,info,destructive,default,outline,secondary"
 
 Public Function px(ByVal n As Double) As Long
     px = CLng(n * 15)
@@ -386,53 +390,111 @@ End Function
 ' A table in the look of the Team Members list: a continuous form of
 ' read-only columns with row lines and a highlighted selected row, in place
 ' of a list box. cols holds one "field|caption|width px|options" per column;
-' options: "r" right-aligned, "c" centered, "b" bold, "m" muted. The last
+' options: "r" right-aligned, "c" centered, "b" bold, "m" muted, "p" a
+' rounded status pill colored by the app's StatusVariant(value). The last
 ' column takes the rest of the width (and stretches with the form); with
 ' rowLines > 1 it wraps onto that many lines. back is the color of what the
-' table sits on. The record source needs an id column. The rows share
-' forms\subGrid.vba; GridHeaders puts the captions on the parent form.
+' table sits on. zebra fills every other row with CLR_ROW2. rowPx sets the
+' row height (default: from rowLines). fit = True keeps the last column at
+' its own width, for tables the host scales with GridFit. The record source
+' needs an id column. The rows share forms\subGrid.vba; GridHeaders puts the
+' captions on the parent form. Each column's Tag holds "caption|left|width"
+' for GridFit and modGridOut.
 Public Sub BuildGrid(ByVal finalName As String, ByVal cols As Variant, ByVal w As Long, Optional ByVal rowLines As Long = 1, _
-                     Optional ByVal back As Long = CLR_SURFACE)
+                     Optional ByVal back As Long = CLR_SURFACE, Optional ByVal zebra As Boolean = False, _
+                     Optional ByVal rowPx As Long = 0, Optional ByVal fit As Boolean = False)
     Dim c As Control, i As Long, p() As String, x As Long, cw As Long, h As Long, last As Boolean, ty As Long, th As Long
-    h = px(12) + rowLines * px(18)
+    Dim opts As String
+    h = IIf(rowPx > 0, px(rowPx), px(12) + rowLines * px(18))
     NewForm "", 1, w, h
     F.Section(acDetail).BackColor = back
-    F.Section(acDetail).AlternateBackColor = back
+    F.Section(acDetail).AlternateBackColor = IIf(zebra, CLR_ROW2, back)
+    F.Tag = "grid:" & w
     Set c = RowBack("txtBg", 0, 0, w, h): Anchor c, 2, 0
     c.BackColor = back
     CF c, "[id]=[txtSel]", CLR_PRIMARY_SOFT, -1
+    ' Zebra rows show the section's alternating colors through the background;
+    ' the selected row's condition still fills it.
+    If zebra Then c.BackStyle = 0
     Set c = RO("txtSel", "", 0, 0, px(4), px(4)): c.Visible = False
     x = px(8)
     For i = 0 To UBound(cols)
         p = Split(cols(i), "|")
+        opts = ""
+        If UBound(p) >= 3 Then opts = p(3)
         last = (i = UBound(cols))
-        cw = IIf(last, w - x - px(8), px(Val(p(2))))
-        ty = IIf(last And rowLines > 1, px(6), (h - px(18)) \ 2)
-        th = IIf(last And rowLines > 1, h - px(12), px(18))
-        Set c = RO("txtCol" & i, p(0), x, ty, cw - px(8), th, 9, InStr(p(3), "b") > 0, _
-            IIf(InStr(p(3), "m") > 0, CLR_MUTED_FG, CLR_FG))
-        If last And rowLines > 1 Then c.TopMargin = 0
-        If InStr(p(3), "r") > 0 Then c.TextAlign = 3
-        If InStr(p(3), "c") > 0 Then c.TextAlign = 2
+        cw = IIf(last And Not fit, w - x - px(8), px(Val(p(2))))
+        If InStr(opts, "p") > 0 Then
+            Set c = RO("txtCol" & i, p(0), x, (h - px(20)) \ 2, cw - px(8), px(20), 8, True, CLR_FG)
+            c.TextAlign = 2
+        Else
+            ty = IIf(last And rowLines > 1, px(6), (h - px(18)) \ 2)
+            th = IIf(last And rowLines > 1, h - px(12), px(18))
+            Set c = RO("txtCol" & i, p(0), x, ty, cw - px(8), th, 9, InStr(opts, "b") > 0, _
+                IIf(InStr(opts, "m") > 0, CLR_MUTED_FG, CLR_FG))
+            If last And rowLines > 1 Then c.TopMargin = 0
+            If InStr(opts, "r") > 0 Then c.TextAlign = 3
+            If InStr(opts, "c") > 0 Then c.TextAlign = 2
+        End If
+        c.Tag = p(1) & "|" & x & "|" & cw
         c.OnClick = "=RowClick()"
         c.OnDblClick = "=RowDblClick()"
-        If last Then Anchor c, 2, 0
+        If last And Not fit Then Anchor c, 2, 0
+        ' After the click and anchor: the pill image copies the anchoring.
+        If InStr(opts, "p") > 0 Then PillCol c, p(0)
         x = x + cw
     Next
     Set c = Box("boxRowLine", 0, h - px(1), w, px(1), CLR_BORDER): Anchor c, 2, 0
     SaveForm finalName, "subGrid"
 End Sub
 
+' Status pill colors for a grid column: one condition per badge variant,
+' picked by the app's StatusVariant(value), drawn as a rounded pill.
+Private Sub PillCol(c As Control, ByVal field As String)
+    Dim v As Variant, col As Variant, first As Integer, ref As String
+    If Left$(field, 1) = "=" Then
+        ref = "(" & Mid$(field, 2) & ")"
+    ElseIf Left$(field, 1) = "[" Then
+        ref = field
+    Else
+        ref = "[" & field & "]"
+    End If
+    first = c.FormatConditions.Count
+    For Each v In Split(BADGE_VARIANTS, ",")
+        col = BadgeColors(CStr(v))
+        CF c, "StatusVariant(" & ref & ")=""" & v & """", col(0), col(1)
+    Next
+    RoundCF c, first
+End Sub
+
 ' Column captions for a BuildGrid table whose subform sits at (x, y + px(22)).
+' band = True draws them on a CLR_INSET strip w wide (default: the columns'
+' widths), which stretches with the window like the table. Each caption's
+' Tag holds "x|offset|width" for GridFit.
 Public Sub GridHeaders(ByVal prefix As String, ByVal cols As Variant, ByVal x As Long, ByVal y As Long, _
-                       Optional ByVal parentCtl As String = "")
-    Dim c As Control, i As Long, p() As String, cx As Long
+                       Optional ByVal parentCtl As String = "", Optional ByVal band As Boolean = False, _
+                       Optional ByVal w As Long = 0)
+    Dim c As Control, i As Long, p() As String, cx As Long, cy As Long, cw As Long, opts As String
+    If band Then
+        If w = 0 Then
+            w = px(16)
+            For i = 0 To UBound(cols)
+                w = w + px(Val(Split(cols(i), "|")(2)))
+            Next
+        End If
+        Set c = Box(prefix & "Band", x, y, w, px(22), CLR_INSET, -1, acDetail, parentCtl): Anchor c, 2, 0
+    End If
     cx = x + px(8)
+    cy = IIf(band, y + px(3), y)
     For i = 0 To UBound(cols)
         p = Split(cols(i), "|")
-        Set c = Lbl(prefix & i, UCase$(p(1)), cx, y, IIf(i = UBound(cols), px(200), px(Val(p(2))) - px(8)), px(16), 8, True, CLR_MUTED_FG, acDetail, parentCtl)
-        If InStr(p(3), "r") > 0 Then c.TextAlign = 3
-        If InStr(p(3), "c") > 0 Then c.TextAlign = 2
+        opts = ""
+        If UBound(p) >= 3 Then opts = p(3)
+        cw = IIf(i = UBound(cols), px(200), px(Val(p(2))) - px(8))
+        Set c = Lbl(prefix & i, UCase$(p(1)), cx, cy, cw, px(16), 8, True, CLR_MUTED_FG, acDetail, parentCtl)
+        If InStr(opts, "r") > 0 Then c.TextAlign = 3
+        If InStr(opts, "c") > 0 Or InStr(opts, "p") > 0 Then c.TextAlign = 2
+        c.Tag = x & "|" & (cx - x) & "|" & cw
         cx = cx + px(Val(p(2)))
     Next
 End Sub
@@ -617,6 +679,69 @@ Public Function Img(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal 
     Set Img = c
 End Function
 
+' Image control settings shared by the rounded images (pills, cards, progress).
+Private Sub ImageProps(c As Control)
+    c.Properties("PictureType") = 1      ' linked file
+    c.Properties("SizeMode") = 3         ' zoom (images match the control's aspect)
+    c.Properties("BackStyle") = 0
+    c.Properties("BorderStyle") = 0
+End Sub
+
+' Card: a CLR_SURFACE panel with a 1px CLR_BORDER border and rounded corners,
+' with a 10pt title and a dark-only accent bar beside it (title "" draws
+' neither). Access only draws square corners, so each corner is a small image
+' (box<nm>_c1 to _c4) showing CardPng over the square box; ThemeForm repaints
+' it with the palette. back is the color the card sits on. hAnchor / vAnchor
+' anchor the card (see Anchor) and the corners follow. square = True leaves
+' the corners square, for a card where a subform or another control that
+' repaints often would cover a corner (images under them flicker).
+' Controls: box<nm>, box<nm>_c1..4, bar<nm>, lbl<nm>Hdr.
+Public Sub Card(ByVal nm As String, ByVal title As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
+        Optional ByVal parentCtl As String = "", Optional ByVal hAnchor As Integer = 0, Optional ByVal vAnchor As Integer = 0, _
+        Optional ByVal back As Long = CLR_BG, Optional ByVal square As Boolean = False)
+    Dim c As Control, k As Long, r As Long, farX As Boolean, farY As Boolean
+    Set c = Box("box" & nm, x, y, w, h, CLR_SURFACE, CLR_BORDER, acDetail, parentCtl): Anchor c, hAnchor, vAnchor
+    If Not square Then
+        r = px(CARD_RADIUS)
+        For k = 1 To 4
+            farX = (k = 2 Or k = 3)
+            farY = (k >= 3)
+            Set c = Mk(acImage, "box" & nm & "_c" & k, IIf(farX, x + w - r, x), IIf(farY, y + h - r, y), r, r, acDetail, parentCtl)
+            ImageProps c
+            c.Properties("ControlSource") = "=CardPng(" & CLR_SURFACE & "," & CLR_BORDER & "," & back & "," & CARD_RADIUS & "," & k & ")"
+            Anchor c, EdgeAnchor(hAnchor, farX), EdgeAnchor(vAnchor, farY)
+        Next
+    End If
+    If Len(title) > 0 Then
+        Set c = Box("bar" & nm, x + px(8), y + px(10), px(3), px(20), CLR_PRIMARY, -1, acDetail, parentCtl)
+        DarkOnly c
+        Anchor c, IIf(hAnchor = 1, 1, 0), IIf(vAnchor = 1, 1, 0)
+        Set c = Lbl("lbl" & nm & "Hdr", title, x + px(14), y + px(10), w - px(28), px(20), 10, True, CLR_FG, acDetail, parentCtl)
+        Anchor c, hAnchor, IIf(vAnchor = 1, 1, 0)
+    End If
+End Sub
+
+' Anchor for a part on one edge of something anchored a: on the far side
+' (right or bottom) it follows a "both" anchor, on the near side it stays.
+Private Function EdgeAnchor(ByVal a As Integer, ByVal farSide As Boolean) As Integer
+    If a = 2 Then EdgeAnchor = IIf(farSide, 1, 0) Else EdgeAnchor = a
+End Function
+
+' Progress capsule: a CLR_BORDER track filled with CLR_PRIMARY to the
+' percentage expr gives (0-100; Null shows an empty track). expr is a field
+' or an expression, e.g. "[percent_done]" or "37". Bound, so it follows the
+' record in a continuous form, and ThemeForm repaints it. Don't anchor it to
+' stretch: the image keeps its shape.
+Public Function Progress(ByVal nm As String, ByVal expr As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
+        Optional ByVal parentCtl As String = "") As Control
+    Dim c As Control
+    If Left$(expr, 1) = "=" Then expr = Mid$(expr, 2)
+    Set c = Mk(acImage, nm, x, y, w, h, acDetail, parentCtl)
+    ImageProps c
+    c.Properties("ControlSource") = "=ProgressPng(" & expr & "," & CLR_PRIMARY & "," & CLR_BORDER & "," & w \ 15 & "," & h \ 15 & ")"
+    Set Progress = c
+End Function
+
 ' Page title + optional subtitle at the standard position.
 ' tip: explanation shown by a "?" beside the title (TitleTip). lblSubtitle is
 ' filled at run time by pages that show context under the title.
@@ -666,15 +791,24 @@ Public Sub ContextBanner(ByVal x As Long, ByVal y As Long, ByVal w As Long, Opti
     End If
 End Sub
 
-' Tab strip of labels with underline boxes. keys are "key|Caption".
+' Tab strip of labels with underline boxes. tabs are "key|Caption", or
+' "key|Caption|n" to show a count, "Caption (n)", which SetCount updates at
+' run time (the tab is sized for a three-digit count).
 Public Sub TabStrip(ByVal x As Long, ByVal y As Long, ByVal totalW As Long, ByVal handler As String, ParamArray tabs() As Variant)
-    Dim i As Long, k As String, cap As String, w As Long, c As Control, x0 As Long
+    Dim i As Long, k As String, cap As String, w As Long, c As Control, x0 As Long, p() As String
     x0 = x
     For i = 0 To UBound(tabs)
-        k = Split(tabs(i), "|")(0)
-        cap = Split(tabs(i), "|")(1)
-        w = px(Len(cap) * 7.5 + 28)
-        Set c = Link("tab_" & k, cap, x, y, w, px(26), "=" & handler & "(""" & k & """)", 10, CLR_MUTED_FG)
+        p = Split(tabs(i), "|")
+        k = p(0)
+        cap = p(1)
+        If UBound(p) >= 2 Then
+            w = px(Len(cap & " (000)") * 7.5 + 28)
+            Set c = Link("tab_" & k, cap & " (" & p(2) & ")", x, y, w, px(26), "=" & handler & "(""" & k & """)", 10, CLR_MUTED_FG)
+            c.Tag = cap
+        Else
+            w = px(Len(cap) * 7.5 + 28)
+            Set c = Link("tab_" & k, cap, x, y, w, px(26), "=" & handler & "(""" & k & """)", 10, CLR_MUTED_FG)
+        End If
         c.TextAlign = 2
         Box "ul_" & k, x, y + px(28), w, px(2), CLR_PRIMARY
         x = x + w + px(4)

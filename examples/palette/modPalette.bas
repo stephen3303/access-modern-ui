@@ -6,7 +6,7 @@ Option Explicit
 ' Palette 1 is the build palette (modTheme). PaletteOf maps a build color
 ' to palette i and returns any other color unchanged.
 
-Public Const PALETTE_COUNT As Long = 7
+Public Const PALETTE_COUNT As Long = 8
 
 ' Name saved in the registry for palette i.
 Public Function PaletteKey(ByVal i As Long) As String
@@ -16,8 +16,9 @@ Public Function PaletteKey(ByVal i As Long) As String
         Case 3: PaletteKey = "slate"
         Case 4: PaletteKey = "forest"
         Case 5: PaletteKey = "harbor"
-        Case 6: PaletteKey = "graphite"
-        Case 7: PaletteKey = "contrast"
+        Case 6: PaletteKey = "tealnavy"
+        Case 7: PaletteKey = "graphite"
+        Case 8: PaletteKey = "contrast"
     End Select
 End Function
 
@@ -29,15 +30,16 @@ Public Function PaletteName(ByVal i As Long) As String
         Case 3: PaletteName = "Slate"
         Case 4: PaletteName = "Forest"
         Case 5: PaletteName = "Harbor"
-        Case 6: PaletteName = "Graphite"
-        Case 7: PaletteName = "High Contrast"
+        Case 6: PaletteName = "Teal Navy"
+        Case 7: PaletteName = "Graphite"
+        Case 8: PaletteName = "High Contrast"
     End Select
 End Function
 
 ' True for palettes with dark surfaces (they also show the dark-only extras).
 Public Function PaletteIsDark(ByVal i As Long) As Boolean
     Select Case i
-        Case 2, 6: PaletteIsDark = True
+        Case 2, 7: PaletteIsDark = True
     End Select
 End Function
 
@@ -59,12 +61,15 @@ Public Function PaletteSwatch(ByVal i As Long, ByVal k As Long) As Long
         Case 51: PaletteSwatch = 4995855
         Case 52: PaletteSwatch = 9466894
         Case 53: PaletteSwatch = 16777215
-        Case 61: PaletteSwatch = 1315346
-        Case 62: PaletteSwatch = 9208450
-        Case 63: PaletteSwatch = 920588
-        Case 71: PaletteSwatch = 0
-        Case 72: PaletteSwatch = 12599296
-        Case 73: PaletteSwatch = 16777215
+        Case 61: PaletteSwatch = 4794890
+        Case 62: PaletteSwatch = 9666560
+        Case 63: PaletteSwatch = 16777215
+        Case 71: PaletteSwatch = 1315346
+        Case 72: PaletteSwatch = 9208450
+        Case 73: PaletteSwatch = 920588
+        Case 81: PaletteSwatch = 0
+        Case 82: PaletteSwatch = 12599296
+        Case 83: PaletteSwatch = 16777215
     End Select
 End Function
 
@@ -75,8 +80,9 @@ Public Function PaletteOf(ByVal c As Long, ByVal i As Long) As Long
         Case 3: PaletteOf = PalSlate(c)
         Case 4: PaletteOf = PalForest(c)
         Case 5: PaletteOf = PalHarbor(c)
-        Case 6: PaletteOf = PalGraphite(c)
-        Case 7: PaletteOf = PalContrast(c)
+        Case 6: PaletteOf = PalTealnavy(c)
+        Case 7: PaletteOf = PalGraphite(c)
+        Case 8: PaletteOf = PalContrast(c)
         Case Else: PaletteOf = c
     End Select
 End Function
@@ -202,6 +208,28 @@ Private Function PalHarbor(ByVal c As Long) As Long
         Case 11377805: PalHarbor = 10919303    ' CLR_NAV_MUTED
         Case 6109723: PalHarbor = 4995855      ' CLR_BRAND
         Case Else: PalHarbor = c
+    End Select
+End Function
+
+' Teal Navy
+Private Function PalTealnavy(ByVal c As Long) As Long
+    Select Case c
+        Case 16155195: PalTealnavy = 10720038    ' CLR_AVATAR
+        Case 16089659: PalTealnavy = 9666560     ' CLR_KPI1
+        Case 11824430: PalTealnavy = 9666560     ' CLR_PRIMARY
+        Case 16577516: PalTealnavy = 16184811    ' CLR_PRIMARY_SOFT
+        Case 15520703: PalTealnavy = 14670258    ' CLR_PRIMARY_LINE
+        Case 11758894: PalTealnavy = 9666560     ' CLR_LINK
+        Case 11824686: PalTealnavy = 9666560     ' CLR_BTN_BG
+        Case 10050341: PalTealnavy = 8022528     ' CLR_BTN_HOVER
+        Case 8407838: PalTealnavy = 6444544      ' CLR_BTN_PRESSED
+        Case 6044187: PalTealnavy = 4794890      ' CLR_SIDEBAR
+        Case 7098164: PalTealnavy = 6572591      ' CLR_SIDEBAR_LINE
+        Case 13550779: PalTealnavy = 13419450    ' CLR_NAV_FG
+        Case 7952445: PalTealnavy = 6967350      ' CLR_NAV_ACTIVE_BG
+        Case 11377805: PalTealnavy = 10785924    ' CLR_NAV_MUTED
+        Case 6109723: PalTealnavy = 4794890      ' CLR_BRAND
+        Case Else: PalTealnavy = c
     End Select
 End Function
 
