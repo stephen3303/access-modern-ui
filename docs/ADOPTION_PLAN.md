@@ -153,6 +153,13 @@ with kit tokens, not copied.
   relies on it, but the kit doesn't ship it. In the same PR, move it from the `modUI` row
   to `modKitUtil` in the guide's §3 module table and add it to the README catalog. Remove
   SABER's copy in S1 and use the kit one in SPM.
+- [x] Harden the focus helpers (error 2165 and 2164). `SetVisible` now tries first and
+  moves the focus only when Access refuses, so hiding a subform, tab control or option
+  group that holds the focus works too, and a form without `txtFocusSink` falls back to
+  its first free tab stop. New `SetEnabled c, v` does the same for disabling a focused
+  control. Tested on Stephen's machine on 12 Oct 2026: hiding the focused grid on the
+  demo Tables page worked 12 of 12 times in Navy and Midnight. Still untested: a button
+  disabling itself inside its own Click event.
 - [x] Guide §6.4 documents a **compact** size (28px button, 26px input) for toolbars and
   grid rows. SABER uses it heavily without it being documented.
 - [x] Add a teal/navy palette matching SPM's current look (sidebar 10,42,73, primary
@@ -175,7 +182,7 @@ new features in one pass.
     keep it as app code.**
   - Hard-coded `"SABER"` paths in `modPng` and `modDarkMode` are replaced by `APP_NAME`.
   - `SetVisible` and `StyleChip` are kit code now (modKitUtil, modKitUI): delete them
-    from `modUI`. `StyleChip`'s new optional count argument keeps old calls working.
+    from `modUI`, and replace `pgDetail`'s private `SetVis` with `SetVisible`. `StyleChip`'s new optional count argument keeps old calls working.
   - `StatusVariant` takes a Variant (pill columns pass Null for empty values).
   - Copy the new kit modules too: `modKitUI`, `modGridOut`.
 - [ ] Re-run `make_themes.py`, which now generates 7 palettes plus the contrast check.
