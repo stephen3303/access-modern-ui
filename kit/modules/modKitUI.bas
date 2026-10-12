@@ -57,7 +57,16 @@ Public Sub GridFit(sf As Control, Optional ByVal prefix As String = "")
         End If
         i = i + 1
     Loop
-    If newW < g.Width Then g.Width = newW
+    ' The row background and line span the columns; then narrow the form,
+    ' but never past a control's right edge (Access refuses with error 5).
+    If HasCtl(g, "txtBg") Then FitCtl g.Controls("txtBg"), 0, newW
+    If HasCtl(g, "boxRowLine") Then FitCtl g.Controls("boxRowLine"), 0, newW
+    If newW < g.Width Then
+        For Each c In g.Section(acDetail).Controls
+            If c.Left + c.Width > newW Then newW = c.Left + c.Width
+        Next
+        If newW < g.Width Then g.Width = newW
+    End If
 End Sub
 
 ' Move and size a control horizontally.

@@ -125,11 +125,12 @@ Private Function GridSql(gridForm As Form, cols As Collection, ByVal named As Bo
     src = Trim$(gridForm.RecordSource)
     If Right$(src, 1) = ";" Then src = Trim$(Left$(src, Len(src) - 1))
     If UCase$(Left$(src, 7)) = "SELECT " Then
-        ' The sort moves to the outer query.
+        ' The sort moves to the outer query when every field it names is one
+        ' the query returns; otherwise it stays inside.
         pos = InStrRev(UCase$(src), " ORDER BY ")
         If pos > 0 Then
-            ord = OuterOrder(Mid$(src, pos + 10))
-            src = Left$(src, pos - 1)
+            ord = OuterOrder(Mid$(src, pos + 10), gridForm)
+            If Len(ord) > 0 Then src = Left$(src, pos - 1)
         End If
         src = "(" & src & ") AS q"
     Else
@@ -147,13 +148,16 @@ Private Function GridSql(gridForm As Form, cols As Collection, ByVal named As Bo
     Next
     GridSql = "SELECT " & Mid$(sel, 3) & " FROM " & src
     If gridForm.FilterOn And Len(gridForm.Filter) > 0 Then GridSql = GridSql & " WHERE " & gridForm.Filter
-    If gridForm.OrderByOn And Len(gridForm.OrderBy) > 0 Then ord = OuterOrder(gridForm.OrderBy)
+    If gridForm.OrderByOn And Len(gridForm.OrderBy) > 0 Then ord = OuterOrder(gridForm.OrderBy, gridForm)
     If Len(ord) > 0 Then GridSql = GridSql & " ORDER BY " & ord
 End Function
 
 ' A sort clause for the outer query: "t.name DESC, [due]" -> "q.[name] DESC, q.[due]".
-' Terms with a function call are kept as they are.
-Private Function OuterOrder(ByVal clause As String) As String
+' Terms with a function call are kept as they are. Returns "" when a term
+' names a field the grid's record source does not return ("ORDER BY due_date"
+' with only Format(due_date) AS due selected), since the outer query can't
+' see it.
+Private Function OuterOrder(ByVal clause As String, gridForm As Form) As String
     Dim term As Variant, t As String, dirn As String, out As String
     For Each term In Split(clause, ",")
         t = Trim$(term)
@@ -162,11 +166,21 @@ Private Function OuterOrder(ByVal clause As String) As String
         If UCase$(Right$(t, 4)) = " ASC" Then t = Trim$(Left$(t, Len(t) - 4))
         If InStr(t, "(") = 0 Then
             If InStrRev(t, ".") > 0 Then t = Mid$(t, InStrRev(t, ".") + 1)
-            t = "q.[" & Replace(Replace(t, "[", ""), "]", "") & "]"
+            t = Replace(Replace(t, "[", ""), "]", "")
+            If Not HasField(gridForm, t) Then Exit Function
+            t = "q.[" & t & "]"
         End If
         out = out & ", " & t & dirn
     Next
     OuterOrder = Mid$(out, 3)
+End Function
+
+' True when the grid's record source returns a field named nm.
+Private Function HasField(gridForm As Form, ByVal nm As String) As Boolean
+    Dim fld As Object
+    For Each fld In gridForm.RecordsetClone.Fields
+        If StrComp(fld.Name, nm, vbTextCompare) = 0 Then HasField = True: Exit Function
+    Next
 End Function
 
 ' Delete the export query if it is there.

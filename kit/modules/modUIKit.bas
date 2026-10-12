@@ -410,7 +410,9 @@ Public Sub BuildGrid(ByVal finalName As String, ByVal cols As Variant, ByVal w A
     F.Section(acDetail).BackColor = back
     F.Section(acDetail).AlternateBackColor = IIf(zebra, CLR_ROW2, back)
     F.Tag = "grid:" & w
-    Set c = RowBack("txtBg", 0, 0, w, h): Anchor c, 2, 0
+    ' A fit table's host sizes these (GridFit); anchored, they would stretch
+    ' the form past the columns and stop GridFit narrowing it.
+    Set c = RowBack("txtBg", 0, 0, w, h): If Not fit Then Anchor c, 2, 0
     c.BackColor = back
     CF c, "[id]=[txtSel]", CLR_PRIMARY_SOFT, -1
     ' Zebra rows show the section's alternating colors through the background;
@@ -444,7 +446,7 @@ Public Sub BuildGrid(ByVal finalName As String, ByVal cols As Variant, ByVal w A
         If InStr(opts, "p") > 0 Then PillCol c, p(0)
         x = x + cw
     Next
-    Set c = Box("boxRowLine", 0, h - px(1), w, px(1), CLR_BORDER): Anchor c, 2, 0
+    Set c = Box("boxRowLine", 0, h - px(1), w, px(1), CLR_BORDER): If Not fit Then Anchor c, 2, 0
     SaveForm finalName, "subGrid"
 End Sub
 
