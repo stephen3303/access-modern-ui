@@ -89,7 +89,7 @@ Public Sub CenterTableCell(ByVal grid As Form, ByVal cell As Control)
         Case acTextBox, acComboBox
             cell.Height = CLng(cell.FontSize) * 27
             cell.Top = (grid.Section(acDetail).Height - cell.Height) \ 2
-            cell.TopMargin = 0: cell.BottomMargin = 0
+            cell.TopMargin = 0: cell.BottomMargin = 0: cell.LeftMargin = 90: cell.RightMargin = 90
         Case acImage, acCommandButton
             cell.Top = (grid.Section(acDetail).Height - cell.Height) \ 2
     End Select
@@ -105,6 +105,7 @@ Public Sub AlignGridHeaders(ByVal host As Form, ByVal subName As String, ByVal p
         Set heading = host.Controls(prefix & i)
         heading.Left = box.Left + cell.Left: heading.Width = cell.Width
         heading.TextAlign = cell.TextAlign: heading.Visible = cell.Visible
+        heading.LeftMargin = cell.LeftMargin: heading.RightMargin = cell.RightMargin
     Next
 End Sub
 
