@@ -363,8 +363,10 @@ End Sub
         56 for two lines. By default the height comes from `rowLines`.
       - `fit:=True` keeps the last column at its own width so `GridFit` can scale
         every column in proportion. Call `GridFit Me.sfList, "hdrList"` from the
-        host's `Form_Resize`; it also moves the captions `GridHeaders` drew with that
-        prefix. Columns never get narrower than designed.
+        host's `Form_Timer`, started by `Form_Resize` with `Me.TimerInterval = 20`
+        (inside the resize event Access refuses to resize the table's form, error 5);
+        it also moves the captions `GridHeaders` drew with that prefix. Columns never
+        get narrower than designed.
     - **Clicking a row opens it.** There are no `>` or Open buttons in rows: the row
       click selects the record and the host's `GridClick` shows it (in a detail panel,
       section 6.8, or a dialog).

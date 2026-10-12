@@ -17,7 +17,8 @@ Private Const SCROLL_W As Long = 300
 ' every column of the table shown in subform control sf to the control's
 ' current width, and move the captions GridHeaders drew on the parent with
 ' prefix. Columns never get narrower than designed. Call it from the host's
-' Form_Resize.
+' Form_Timer, started by Form_Resize (Me.TimerInterval = 20): inside the
+' resize event Access refuses to resize the table's form (error 5).
 Public Sub GridFit(sf As Control, Optional ByVal prefix As String = "")
     Dim host As Form, g As Form, c As Control, i As Long, t() As String
     Dim design As Long, avail As Long, ratio As Double, newW As Long

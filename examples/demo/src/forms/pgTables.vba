@@ -23,12 +23,19 @@ Err_Handler:
     HandleError "pgTables.Form_Load"
 End Sub
 
+' Access refuses to resize the table's form inside the resize event (error
+' 5), so fit the columns just after it.
 Private Sub Form_Resize()
+    Me.TimerInterval = 20
+End Sub
+
+Private Sub Form_Timer()
     On Error GoTo Err_Handler
+    Me.TimerInterval = 0
     GridFit Me.sfOptions, "hdrOpt"
     Exit Sub
 Err_Handler:
-    HandleError "pgTables.Form_Resize"
+    HandleError "pgTables.Form_Timer"
 End Sub
 
 ' Tab strip click.
