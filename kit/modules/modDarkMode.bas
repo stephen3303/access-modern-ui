@@ -125,6 +125,7 @@ Private Sub ThemeControl(c As Control)
             Next
         Case acImage
             ' Rounded pills: =PillPng(Switch(cond,color,...),w,h)
+            If c.Tag = "RoundedCard" Then ResizeRoundedCard c, c.Width, c.Height: Exit Sub
             src = Nz(c.Properties("ControlSource"), "")
             If InStr(src, "PillPng(") > 0 Then c.Properties("ControlSource") = PaletteColorsIn(src)
     End Select

@@ -21,7 +21,15 @@ Public Sub EnsureFolder(ByVal path As String)
     If FolderExists(path) Then Exit Sub
     parts = Split(path, "\")
     cur = parts(0)
-    For i = 1 To UBound(parts)
+    Dim first As Long
+    first = 1
+    If Left$(path, 2) = Chr$(92) & Chr$(92) Then
+        If UBound(parts) < 3 Then Err.Raise 5, , "A UNC folder needs a server and share"
+        cur = Chr$(92) & Chr$(92) & parts(2) & Chr$(92) & parts(3)
+        If Not FolderExists(cur) Then Err.Raise 76, , "Network share unavailable: " & cur
+        first = 4
+    End If
+    For i = first To UBound(parts)
         If Len(parts(i)) > 0 Then
             cur = cur & "\" & parts(i)
             If Not FolderExists(cur) Then MkDir cur

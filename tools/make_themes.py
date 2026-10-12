@@ -319,6 +319,7 @@ for p in PALETTES[1:]:
         lv, tv = to_long(lb), to_long(target)
         lines.append(f"        Case {lv}: {fn} = {tv}{' ' * max(1, 20 - len(str(lv)) - len(str(tv)))}' {key}")
     lines += [f"        Case Else: {fn} = c", "    End Select", "End Function"]
+os.makedirs(os.path.join(ROOT, "modules"), exist_ok=True)
 with open(os.path.join(ROOT, "modules", "modPalette.bas"), "w", newline="\r\n") as f:
     f.write("\n".join(lines) + "\n")
 print("wrote modPalette.bas")

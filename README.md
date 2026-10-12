@@ -23,6 +23,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 
 | Module | What it does |
 |---|---|
+| modTableUI | Responsive columns, matching headers, counted filters, uniform tag widths and opt-in pagination |
 | modUIKit | Build-time form and control builders (catalog below) |
 | modDarkMode | Palette engine: `ThemeForm` repaints each form on open, `Th()` gives runtime colors, and `SetPalette`/`ShowAppearance` switch palettes |
 | modPng | `PillPng`: anti-aliased capsule PNGs for rounded pills and badges, cached in `%LOCALAPPDATA%\<APP_NAME>\pills` |
@@ -124,3 +125,49 @@ Sizes are in twips. `px(n)` converts CSS pixels at 15 twips per pixel.
 | `Anchor c, h, v` | Anchoring. 0 is left/top, 1 is right/bottom, 2 is both. |
 | `VCenter` | Vertically center single-line text |
 | `Ev c, "OnClick", ...` | Point event properties at the form module's handlers |
+
+## Shared table policy
+
+Use pills for finite categories, statuses and filter tags. Leave names, free text,
+dates and numeric progress as plain text. Use TagWidth(values) or TableTagWidth(form,
+field) to measure the widest category, then use ColumnPillPng with that width for every
+pill in the same row or column. Text measurement comes from the app's MeasureText hook.
+
+BuildGrid keeps read-only cells out of the tab order. Non-clickable cells are disabled
+and locked; clickable cells move focus to txtFocusSink before the parent callback.
+subGrid resolves its hosting control by form instance, even when reused twice.
+
+Call ResizeGrid on resize, then AlignGridHeaders with the corresponding txtCol names.
+The column option t gives Action/Description fields three shares of extra width.
+CenterTableCell gives native bound values one centered line; open the record editor to
+read or edit longer values. Keep multiline editors outside the continuous table.
+
+RoundedCard / ResizeRoundedCard regenerate the background at the actual control size,
+so corners remain rounded when a panel expands. Native image/subform borders stay off.
+
+### Pagination is optional for each table
+
+GridFooter subName, prefix, keyField, enabled builds the parent footer. enabled defaults
+to False. A hosting subform Tag of Pagination:on enables it; unmarked tables retain
+their full height and normal scrolling. SetTablePagination changes this token without
+affecting other tags. Mark mainly full-height roster tables; omit it on short detail tables.
+
+Call LayoutTableFooter from the host load/resize handler after sizing the table. It
+reserves footer space only when enabled, preserves the scoped filter, and restores both
+height and all matching rows when disabled. The source must have a stable ORDER BY and
+a unique non-null key. Use TableFullFilter for exports and reports so every matching
+record is included, regardless of the visible page.
+
+Example build:
+    SubF "sfRoster", "subRoster", px(24), px(100), px(700), px(400)
+    GridFooter "sfRoster", "roster", "id", True
+
+Example host resize:
+    ResizeGrid Me.sfRoster.Form, Me.sfRoster.Width, columns
+    AlignGridHeaders Me, "sfRoster", "head", Array("txtCol0", "txtCol1")
+    LayoutTableFooter Me, "sfRoster", "roster", "id"
+
+Use CountedCaption("Transfer", 5) for one-line filter captions. Give a filter group
+the width of its widest measured caption and use one row when space permits.
+
+LayoutFilterRow measures the widest counted caption and gives each filter the same width. LayoutNumberedTimeline keeps circle and number dimensions fixed while distributing labels and connector lengths across the available width. See tests/README.md for the native Access checks.
