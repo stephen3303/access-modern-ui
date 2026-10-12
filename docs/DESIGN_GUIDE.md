@@ -121,7 +121,7 @@ them, and the shell (`frmMain`) last.
 | modUIKit (kit) | Build-time control builders (section 6) |
 | modKitUI (kit) | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
-| modKitUtil (kit) | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `SetVisible` |
+| modKitUtil (kit) | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `SetVisible`, `SetEnabled` |
 | modDarkMode (kit), modPalette (gen), modTheme (gen) | Palette engine (section 7) |
 | modPng (kit) | Draws anti-aliased PNGs for rounded pills, card corners and progress capsules |
 | modWrap | GDI text measurement (`MeasureText`) and word wrap for fixed-height rows |
@@ -522,7 +522,10 @@ Write app-specific helpers next to the builds that use them. Examples:
 - **Focus sink**: `NewForm` adds a 1×1 `txtFocusSink` with tab index 0. It takes the
   initial focus so Access doesn't highlight the first field. Move focus to it before
   hiding a focused control (`SetVisible`, which avoids error 2165) and in pill click
-  handlers (a focused pill paints square).
+  handlers (a focused pill paints square). Change `Visible` and `Enabled` at run time
+  only through `SetVisible` and `SetEnabled` (error 2164 for a focused control being
+  disabled). Both also cover a subform, tab control or option group that holds the
+  focus, and fall back to the first free tab stop on a form with no sink.
 - Read-only row text with no click handler is set to `Enabled = False` +
   `Locked = True`. That keeps its normal look while it can never take focus.
 - **Disabled controls ignore theme colors.** Lock controls instead of disabling them when
