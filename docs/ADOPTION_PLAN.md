@@ -131,8 +131,9 @@ with kit tokens, not copied.
 - [ ] Promote `SetVisible c, v` from SABER (`access/src/modules/modUI.bas`) into
   `kit/modules/modKitUtil.bas`. It moves focus to `txtFocusSink` before hiding the
   focused control, which avoids error 2165. The guide (§3 module table, §6.7) already
-  relies on it, but the kit doesn't ship it. Remove SABER's copy in S1 and use the kit
-  one in SPM.
+  relies on it, but the kit doesn't ship it. In the same PR, move it from the `modUI` row
+  to `modKitUtil` in the guide's §3 module table and add it to the README catalog. Remove
+  SABER's copy in S1 and use the kit one in SPM.
 - [ ] Guide §6.4 documents a **compact** size (28px button, 26px input) for toolbars and
   grid rows. SABER uses it heavily without it being documented.
 - [ ] Add a teal/navy palette matching SPM's current look (sidebar 10,42,73, primary
