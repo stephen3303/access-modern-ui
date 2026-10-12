@@ -8,6 +8,7 @@ It holds no app-specific tables, data or business rules, so you can start any Ac
 
 ```
 docs/DESIGN_GUIDE.md          how apps in this style are designed and built (read first)
+docs/ADOPTION_PLAN.md         moving SABER and Submarine Program Manager onto the kit (agent task list)
 kit/modules/*.bas             the reusable modules, loaded before the app's own
 kit/forms/dlgAppearance.vba   code-behind for the palette picker
 kit/forms/subGrid.vba         code-behind for BuildGrid tables
