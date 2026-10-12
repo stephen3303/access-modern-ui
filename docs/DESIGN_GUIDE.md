@@ -5,7 +5,10 @@ covers module layout, documentation, error handling, form design and color palet
 covers no specific app's tables or business rules, so you can apply it to any use case.
 
 The kit files it describes are in this repository (`kit/`, `tools/`, `examples/`). Paths
-below such as `access/src` describe the layout of an app built with the kit.
+below such as `access/src` describe the layout of an app built with the kit. The kit's API
+catalog and "What the app must provide" table are in this repository's root
+[README.md](../README.md); apps link to it rather than copying it. `examples/demo` is a small
+app that shows every builder working.
 
 ---
 
@@ -38,8 +41,9 @@ below such as `access/src` describe the layout of an app built with the kit.
 access/
   build.ps1                  drives Access via COM; loads modules, calls BuildAll
   kit/
-    README.md                kit API catalog + "what the app must provide"
-    modules/*.bas            reusable: modUIKit, modDarkMode, modPng, modCsv, modCrypto, modKitUtil
+    modules/*.bas            reusable: modUIKit, modKitUI, modDarkMode, modPng, modGridOut,
+                             modCsv, modCrypto, modKitUtil (copied unchanged from the kit)
+    forms/*.vba              kit code-behind: subGrid, dlgAppearance
   src/
     modules/*.bas            the app's own standard modules (incl. generated modPalette)
     themes/light/modTheme.bas   build palette constants (generated)
@@ -113,16 +117,19 @@ them, and the shell (`frmMain`) last.
 | modSchemaDDL | Table specs and back-end creation/upgrade (raise `SCHEMA_VERSION` + migrate) |
 | modBuild | `BuildAll` entry point and startup options |
 | modBuildUI, modBuildPages, modBuildPages2 | `Build_<form>` procedures, one per form, grouped by area |
-| modUI | Run-time UI helpers: `NavTo`, badges/pills painting, grid helpers, `SetVisible`, `ShowTip` |
+| modUI | Run-time UI helpers: `NavTo`, badges/pills painting, `ShowTip`, the app's hooks (`BadgeColors`, `StatusVariant`) |
 | modUIKit (kit) | Build-time control builders (section 6) |
+| modKitUI (kit) | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `SetCount`, `StyleChip` |
+| modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
+| modKitUtil (kit) | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `SetVisible` |
 | modDarkMode (kit), modPalette (gen), modTheme (gen) | Palette engine (section 7) |
-| modPng (kit) | Draws anti-aliased capsule PNGs for rounded pills |
+| modPng (kit) | Draws anti-aliased PNGs for rounded pills, card corners and progress capsules |
 | modWrap | GDI text measurement (`MeasureText`) and word wrap for fixed-height rows |
 | modCsv, modZip (kit / app) | CSV I/O, ZIP |
 | Domain modules | Business logic, one module per area; they enforce rules so they hold from any caller |
 
-**Kit/app contract.** Kit modules call names that the app must provide. List them in
-`kit/README.md`:
+**Kit/app contract.** Kit modules call names that the app must provide. The kit's
+README.md lists them:
 - `CLR_*`, `FONT_UI`, `THEME_DARK`
 - `PALETTE_COUNT`, `PaletteKey`, `PaletteName`, `PaletteIsDark`, `PaletteSwatch`,
   `PaletteOf`
@@ -132,7 +139,8 @@ them, and the shell (`frmMain`) last.
 - `frmMain` with `PageKey` and `Reopen pg`
 - `dlgAppearance`
 - Optional, only for the builders that use them: `BandLabels`,
-  `BandBack`, `BadgeColors`, `subGrid.vba`
+  `BandBack`, `BadgeColors`, `StatusVariant(value)` (pill columns), `subGrid.vba`, and
+  `GridClick(grid, dbl)` on every form that hosts a table
 
 **Rules live in modules, not forms.** Forms hide buttons the user can't use, but every
 rule is checked again in the module function the button calls. A validation failure the
@@ -186,10 +194,11 @@ Write documentation in three layers, all in plain, direct prose:
      - Versioning.
      - Access quirks.
      - Testing.
-   - `kit/README.md`: module table, "Starting a new app with the kit" steps, a "What the
-     app must provide" table, "Rules that keep palettes working", and a **builder catalog**
-     (signature → what it draws) grouped as Forms, Controls, Page furniture, Tables and
-     conditional colors, Layout helpers.
+   - The kit's own `README.md` (this repository's root, not copied into apps): module
+     table, "Starting a new app with the kit" steps, a "What the app must provide" table,
+     "Rules that keep palettes working", and a **builder catalog** (signature → what it
+     draws) grouped as Forms, Controls, Page furniture, Tables and conditional colors,
+     Layout helpers and Run time.
 4. **In-app help** (`src/help/help.txt`), loaded into a local table at build time:
    - The file format is described at the top of the file:
      - `=== key | Title` starts a topic. A dotted key (`page.tab`) is indented under its
@@ -325,7 +334,12 @@ End Sub
   - `Link`: clickable label.
   - `Box`: rectangle; pass -1 for no fill or no border.
   - `RowBack`: row background that paints but never takes focus.
-  - `Img`, `SubF`, `TabCtl`, `TabStrip`
+  - `Img`, `SubF`, `TabCtl`
+  - `TabStrip x, y, w, handler, "key|Caption", ...`: a tab given as `"key|Caption|n"`
+    shows a count, "Caption (n)", that `SetCount` changes at run time.
+  - `Card nm, title, x, y, w, h, [parentCtl], [hAnchor], [vAnchor], [back], [square]`:
+    a rounded card (section 6.6).
+  - `Progress nm, expr, x, y, w, h`: a rounded progress capsule (section 6.6).
 - **Page furniture**
   - `PageHeader title, tip`: 15pt bold title at y = 22px, 9pt muted subtitle at
     y = 52px, a "?" tip and a dark-only accent bar.
@@ -335,13 +349,38 @@ End Sub
   - `BuildGrid name, cols, w, [rowLines], [back]`: a styled read-only table. It is a
     continuous form, not a list box.
     - Each column is `"field|caption|widthPx|opts"`. Options: `r` right-aligned,
-      `c` centered, `b` bold, `m` muted.
+      `c` centered, `b` bold, `m` muted, `p` a status pill. A pill column draws the
+      value as a rounded badge whose variant comes from the app's
+      `StatusVariant(value)` (it gets a Variant, which may be Null, and returns a
+      `BadgeColors` variant or "" for no pill). Map statuses there, never as colors.
     - The last column takes the remaining width and stretches with the window.
     - Rows are separated by a 1px line, and the selected row is highlighted in
       `CLR_PRIMARY_SOFT`.
+    - Optional arguments, all off by default so existing tables don't change:
+      - `zebra:=True` fills every other row with `CLR_ROW2`. The selected row still
+        turns `CLR_PRIMARY_SOFT`.
+      - `rowPx:=n` sets the row height in px. Use 38 for a roomy one-line table and
+        56 for two lines. By default the height comes from `rowLines`.
+      - `fit:=True` keeps the last column at its own width so `GridFit` can scale
+        every column in proportion. Call `GridFit Me.sfList, "hdrList"` from the
+        host's `Form_Resize`; it also moves the captions `GridHeaders` drew with that
+        prefix. Columns never get narrower than designed.
+    - **Clicking a row opens it.** There are no `>` or Open buttons in rows: the row
+      click selects the record and the host's `GridClick` shows it (in a detail panel,
+      section 6.8, or a dialog).
     - All grids share one code-behind, `subGrid.vba`, which calls the parent's
       `GridClick(grid, dbl)`.
-  - `GridHeaders` puts the captions above the grid in 8pt bold muted uppercase.
+    - Each column's `Tag` holds its caption and design position, which `GridFit` and
+      modGridOut read.
+  - `GridHeaders prefix, cols, x, y, [parentCtl], [band], [w]` puts the captions above
+    the grid in 8pt bold muted uppercase. `band:=True` draws them on a 22px `CLR_INSET`
+    strip, `w` wide (default: the columns' widths), that stretches with the window.
+  - `PrintGrid gridForm, title, [subtitle]` and `ExportGrid gridForm, path` (modGridOut)
+    print or export a table as the user sees it: its visible columns with their
+    captions, and the rows its filter and sort show. `PrintGrid` builds a report
+    (`zz_rptGrid`) in `PRINT_*` colors, landscape when the columns are wider than
+    portrait. `ExportGrid` writes CSV, or Excel when the path ends in `.xlsx`. A filter
+    must name fields without a table prefix.
 - **Conditional colors**
   - `CF c, expr, back, fore, [bold]`
   - `BadgeCF c, field, value, variant, ...`
@@ -354,8 +393,6 @@ End Sub
 Write app-specific helpers next to the builds that use them. Examples:
 - `FieldLbl`: an 8pt bold muted uppercase caption above a field.
 - `ColHdr`
-- `Card nm, title, x, y, w, h`: a surface box with a border, a dark-only 3px accent bar
-  and a 10pt bold title.
 
 ### 6.3 Type scale (font `FONT_UI = "Segoe UI"`)
 
@@ -380,6 +417,9 @@ Write app-specific helpers next to the builds that use them. Examples:
 - Page padding: 32px left and right. Dialog padding: 24px.
 - Inputs are 30px tall. Buttons are 32px (34px for a full-width primary such as Sign in).
   Captions sit about 18px above their input.
+- **Compact** size, for toolbars, filter rows, and actions inside cards, panels and
+  table rows: buttons 28px and inputs (search boxes, filter combos) 26px to 28px, text
+  still 9pt. Use one size per row. No other heights: no 24, 26 or 30px buttons.
 - Vertical rhythm for stacked fields: 38px.
 - Cards and KPI tiles are separated by 12px gaps.
 - A KPI tile is 78px tall: a surface box with a 1px border, a 4px colored accent strip
@@ -435,14 +475,38 @@ Write app-specific helpers next to the builds that use them. Examples:
   - Pills painted in code: `PaintBadge` or `PillBack lbl, color`.
   - Badge variants (shadcn): `success`, `warning`, `info`, `destructive`, `default`,
     `outline`, `secondary`. `BadgeColors(variant)` returns `Array(back, fore)`.
-- **Cards**: `Box` with `CLR_SURFACE` fill and a 1px `CLR_BORDER` border. The selected or
-  in-context card turns `CLR_PRIMARY_SOFT` through a conditional format.
+- **Cards**: `Card` draws a `CLR_SURFACE` box with a 1px `CLR_BORDER` border, a 10pt 600
+  title at (x + 14px, y + 10px) and a dark-only 3px accent bar beside it. Its corners
+  are rounded (12px): each corner is a small image control showing `CardPng(fill,
+  border, back, r, corner)`, laid over the box's square corner. `back` is the color the
+  card sits on (default `CLR_BG`), which fills outside the arc. Anchor the card with
+  `hAnchor`/`vAnchor`; the corners follow, so a card that stretches with the window
+  keeps round corners.
+  - Keep content at least 12px in from the card's edge so nothing covers a corner. An
+    image under a subform flickers when the subform repaints, so a card whose corner a
+    subform must cover uses `square:=True`.
+  - Images never take focus or hover, so cards don't flicker when the mouse crosses
+    them. Don't build cards from disabled buttons (`Shape = 1`): they flicker on hover.
+  - A selected or in-context card turns `CLR_PRIMARY_SOFT` through a conditional
+    format on a square `Box` card.
 - **Tabs**: either a native `TabCtl` themed through `TabCtl()`, or a `TabStrip` of label
   links, each with a 2px `CLR_PRIMARY` underline (shown for the active tab) over a 1px
   `CLR_BORDER` baseline.
 - **Filter chips**: labels toggled between filled `CLR_PRIMARY` with white text and
-  transparent with muted text (`StyleChip`).
-- **Progress bar**: two boxes, a `CLR_BORDER` track and a `CLR_PRIMARY` fill, 6px tall.
+  transparent with muted text (`StyleChip lbl, isOn, [n]`). Chips and tabs show how many
+  rows each would list, "Blocked (3)": pass the count to `StyleChip`, or call
+  `SetCount ctl, n`, which keeps the caption without the count in the control's `Tag`.
+  Lay a filter row out on one line: chips on the left, then the search box and any filter
+  combos to their right, all compact size (section 6.4).
+
+  ```
+  [All (24)] [In progress (8)] [Blocked (4)] [Complete (4)]   [Search items...    ] [Category v]
+  ```
+- **Progress bar**: `Progress nm, expr, x, y, w, h` draws a rounded capsule, 8 to 10px
+  tall: a `CLR_BORDER` track filled with `CLR_PRIMARY` to `expr` percent (`ProgressPng`).
+  `expr` is a field such as `"[percent_done]"` or a number; values are clamped to 0-100
+  and Null shows an empty track. It is bound, so it follows the record in a continuous
+  form. Give it a fixed width: the image keeps its shape, so don't anchor it to stretch.
 - **Empty states**: a centered muted 10pt label shown in place of an empty list.
 - **Search box placeholder**: `Format = "@;""Search by ..."""`.
 - **Hierarchical trees and wrapped rows**:
@@ -470,6 +534,45 @@ Write app-specific helpers next to the builds that use them. Examples:
 - An unset conditional ForeColor falls back to black, so always carry the control's own
   fore color (`CF` does this).
 - A conditional BackColor only paints on an opaque control (`CF` sets `BackStyle = 1`).
+
+### 6.8 List and detail pages
+
+A page that lists records and shows the selected one beside the list:
+
+```
++--------------------------------------------------------------+------------------+
+| Title  (?)                                 [Export] [Print]  |                  |
+| [All (24)] [Open (8)] ...  [Search...         ]              |                  |
+| +-- Items ------------------------------------------+ +-- Details ----------+  |
+| | ITEM          OWNER       STATUS       DUE        | | ITEM                |  |
+| | Pump overhaul Rivera     (In progress) 01 Oct     | | [Pump overhaul   ]  |  |
+| | ...                                               | | ...          [Save] |  |
+| +---------------------------------------------------+ +---------------------+  |
+```
+
+- Two cards. The list card on the left holds `GridHeaders` and a `BuildGrid` table and
+  fills the width (anchored both ways). The detail card on the right is 360px wide, 12px
+  from the list card, anchored right and stretching down. It holds a subform
+  (`sfDetail`) inset 16px, and an empty-state label (`lblDetailEmpty`) that says what to
+  do, such as "Select an item to see its details."
+- The detail form is a single form bound to the table, built `CLR_SURFACE` to match the
+  card, with the dialog field layout (captions over inputs) and a Save button
+  bottom-right. Validation follows section 3.
+- `GridClick` shows the clicked row: `ShowDetail Me, "sfDetail", "subItem", "id=" & id`.
+  `ShowDetail` saves a changed record in the panel first, swaps the panel's form only
+  when it changes, filters it, and hides the empty state. Call it from the list or the
+  page, never from inside the detail form: swapping a subform while one of its own events
+  runs is unsafe (the same reason navigation is deferred, section 6.5).
+- Whenever the list changes (load, a chip, the search box), call `SelectFirstRow
+  Me.sfList`. It selects the first row and calls `GridClick` as a click would; when the
+  list is empty it returns Null, and the page calls `ClearDetail Me, "sfDetail"` to show
+  the empty state.
+- When the detail form saves, it tells the page (`Me.Parent.ItemSaved id`), which
+  requeries the list and keeps the row selected.
+- Header actions for the list (Print, Export) go top-right and use `PrintGrid` and
+  `ExportGrid` on the list's form, so they print exactly the rows shown.
+
+`examples/demo` builds this page as `pgList`.
 
 ---
 
@@ -604,6 +707,7 @@ Fixed colors (never repainted), used for semantic scales:
 | slate | Slate | light | 51,65,85 | 71,85,105 | neutral, low color |
 | forest | Forest | light | 31,61,43 | 47,125,79 | green accent |
 | harbor | Harbor | light | 15,59,76 | 14,116,144 | teal accent |
+| tealnavy | Teal Navy | light | 10,42,73 | 0,128,147 | Submarine Program Manager's look; its teal is a shade darker than SPM's 0,132,151 so white text passes 4.5:1 |
 | graphite | Graphite | dark | 18,18,20 | 130,130,140 | near-monochrome zinc |
 | contrast | High Contrast | light | 0,0,0 | 0,64,192 | black text and borders, 7:1 target |
 
@@ -639,6 +743,7 @@ The Appearance dialog grows by itself, because it is built from `PALETTE_COUNT`.
    and a `src/forms/pg<Name>.vba` where every handler uses the standard error handler.
 7. Copy the dialogs: `dlgAppearance`, and a non-modal `dlgHelp` with `help.txt` and the F1
    `AutoKeys` macro.
-8. Write `README.md`, `DEVELOPING.md` and `kit/README.md` using the structure in section 4.
+8. Write `README.md` and `DEVELOPING.md` using the structure in section 4, linking to the
+   kit's README for the builder catalog.
 9. Check every page in a light palette and a dark palette. There is no automated UI test,
    so rebuild with `-FrontEndOnly` and click through.
