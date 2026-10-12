@@ -34,6 +34,18 @@ Public Function IsFormOpen(ByVal name As String) As Boolean
     IsFormOpen = (SysCmd(acSysCmdGetObjectState, acForm, name) <> 0)
 End Function
 
+' Show or hide a control. Access raises error 2165 when hiding the control that
+' has the focus (e.g. a card list after its last card's action), so park the
+' focus on the form's txtFocusSink first.
+Public Sub SetVisible(c As Control, ByVal v As Boolean)
+    If Not v And c.Visible Then
+        On Error Resume Next
+        If c.Parent.ActiveControl.Name = c.Name Then c.Parent.txtFocusSink.SetFocus
+        On Error GoTo 0
+    End If
+    c.Visible = v
+End Sub
+
 ' Open a modal dialog and report whether it was confirmed.
 Public Function RunDialog(ByVal formName As String, Optional ByVal openArgs As String = "") As Boolean
     TempVars("DialogResult") = ""
