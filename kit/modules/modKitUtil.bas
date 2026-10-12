@@ -40,8 +40,11 @@ End Function
 ' Show or hide a control. Access raises error 2165 when hiding the control that
 ' has the focus, or a subform, tab control or option group that holds it (a
 ' button that hides itself, a tab switch that moved the focus onto the page).
-' Try first; only on 2165 move the focus away and try again.
+' Try first; only on 2165 move the focus away and try again. When nothing else
+' on the form can take the focus, disabling c drops it (Access allows that),
+' then c is hidden and its Enabled setting put back.
 Public Sub SetVisible(c As Control, ByVal v As Boolean)
+    Dim wasEnabled As Boolean
     If c.Visible = v Then Exit Sub
     On Error GoTo Focused
     c.Visible = v
@@ -51,8 +54,14 @@ Focused:
     Resume Park
 Park:
     On Error GoTo 0
-    ParkFocus c
-    c.Visible = v
+    If ParkFocus(c) Then
+        c.Visible = v
+    Else
+        wasEnabled = c.Enabled
+        c.Enabled = False
+        c.Visible = v
+        c.Enabled = wasEnabled
+    End If
 End Sub
 
 ' Enable or disable a control. Access raises error 2164 when disabling the
@@ -74,22 +83,23 @@ End Sub
 
 ' Move the focus out of c: to the form's txtFocusSink, or, when the form has
 ' none or it can't take the focus, to the first tab stop that c doesn't hold.
-Private Sub ParkFocus(c As Control)
+' False when nothing could take it.
+Private Function ParkFocus(c As Control) As Boolean
     Dim frm As Form, o As Control
     Set frm = OwnerForm(c)
     If c.Name <> "txtFocusSink" And HasFocusSink(frm) Then
         If Not Holds(c, frm.Controls("txtFocusSink")) Then
-            If TryFocus(frm.Controls("txtFocusSink")) Then Exit Sub
+            If TryFocus(frm.Controls("txtFocusSink")) Then ParkFocus = True: Exit Function
         End If
     End If
     For Each o In frm.Controls
         If o.Name <> c.Name Then
             If Not Holds(c, o) Then
-                If TryFocus(o) Then Exit Sub
+                If TryFocus(o) Then ParkFocus = True: Exit Function
             End If
         End If
     Next
-End Sub
+End Function
 
 ' The form a control sits on (its Parent can be a tab page, an option group or,
 ' for an attached label, another control).

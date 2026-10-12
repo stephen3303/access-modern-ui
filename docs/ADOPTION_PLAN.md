@@ -157,8 +157,9 @@ with kit tokens, not copied.
   moves the focus only when Access refuses, so hiding a subform, tab control or option
   group that holds the focus works too, and a form without `txtFocusSink` falls back to
   its first free tab stop. New `SetEnabled c, v` does the same for disabling a focused
-  control. Needs a click-through on Stephen's machine (hide a grid while one of its
-  rows has the focus; disable a button from its own click).
+  control. Tested on Stephen's machine on 12 Oct 2026: hiding the focused grid on the
+  demo Tables page worked 12 of 12 times in Navy and Midnight. Still untested: a button
+  disabling itself inside its own Click event.
 - [x] Guide §6.4 documents a **compact** size (28px button, 26px input) for toolbars and
   grid rows. SABER uses it heavily without it being documented.
 - [x] Add a teal/navy palette matching SPM's current look (sidebar 10,42,73, primary
