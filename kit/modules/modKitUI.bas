@@ -17,8 +17,7 @@ Private Const SCROLL_W As Long = 300
 ' every column of the table shown in subform control sf to the control's
 ' current width, and move the captions GridHeaders drew on the parent with
 ' prefix. Columns never get narrower than designed. Call it from the host's
-' Form_Timer, started by Form_Resize (Me.TimerInterval = 20): inside the
-' resize event Access refuses to resize the table's form (error 5).
+' Form_Resize.
 Public Sub GridFit(sf As Control, Optional ByVal prefix As String = "")
     Dim host As Form, g As Form, c As Control, i As Long, t() As String
     Dim design As Long, avail As Long, ratio As Double, newW As Long
@@ -33,9 +32,14 @@ Public Sub GridFit(sf As Control, Optional ByVal prefix As String = "")
     ratio = (avail - SCROLL_W) / (design - SCROLL_W)
     If ratio < 1 Then ratio = 1
     newW = CLng(design * ratio)
-    ' The form must be at least as wide as its columns: widen it first,
-    ' narrow it last.
-    If newW > g.Width Then g.Width = newW
+    ' Access ignores g.Width = n on a form shown in a subform: the form only
+    ' grows when a control's right edge pushes it, and moving a column past
+    ' its edge raises error 5. So widen the row background first (it pushes
+    ' the form out), place the columns, then shrink the background.
+    If newW > g.Width Then
+        If HasCtl(g, "txtBg") Then g.Controls("txtBg").Width = newW
+        If HasCtl(g, "boxRowLine") Then g.Controls("boxRowLine").Width = newW
+    End If
     Do
         Set c = Nothing
         On Error Resume Next
@@ -58,15 +62,13 @@ Public Sub GridFit(sf As Control, Optional ByVal prefix As String = "")
         End If
         i = i + 1
     Loop
-    ' The row background and line span the columns; then narrow the form,
-    ' but never past a control's right edge (Access refuses with error 5).
     If HasCtl(g, "txtBg") Then FitCtl g.Controls("txtBg"), 0, newW
     If HasCtl(g, "boxRowLine") Then FitCtl g.Controls("boxRowLine"), 0, newW
+    ' Narrowing the form is cosmetic (no empty strip to scroll to), and
+    ' Access may ignore it.
     If newW < g.Width Then
-        For Each c In g.Section(acDetail).Controls
-            If c.Left + c.Width > newW Then newW = c.Left + c.Width
-        Next
-        If newW < g.Width Then g.Width = newW
+        On Error Resume Next
+        g.Width = newW
     End If
 End Sub
 

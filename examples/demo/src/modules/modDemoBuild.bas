@@ -221,7 +221,7 @@ End Sub
 Private Sub Build_pgTables()
     Dim c As Control, x As Long, y As Long
     NewForm "", 0, PAGE_W, PAGE_H
-    Ev F, "OnLoad", "OnResize", "OnTimer"
+    Ev F, "OnLoad", "OnResize"
     PageHeader "Tables", "The first tab shows every table option; the second shows a table built the default way. " & _
         "Resize the window: the first table's columns grow in proportion.", CX
     TabStrip CX, px(84), CW(), "TabClick", "options|Table options|0", "plain|Default table|0"
