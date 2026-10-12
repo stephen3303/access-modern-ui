@@ -131,7 +131,7 @@ them, and the shell (`frmMain`) last.
 - `MeasureText`, `ShowTip`
 - `frmMain` with `PageKey` and `Reopen pg`
 - `dlgAppearance`
-- Optional, only for the builders that use them: `ClassificationColor`, `BandLabels`,
+- Optional, only for the builders that use them: `BandLabels`,
   `BandBack`, `BadgeColors`, `subGrid.vba`
 
 **Rules live in modules, not forms.** Forms hide buttons the user can't use, but every
@@ -329,7 +329,7 @@ End Sub
 - **Page furniture**
   - `PageHeader title, tip`: 15pt bold title at y = 22px, 9pt muted subtitle at
     y = 52px, a "?" tip and a dark-only accent bar.
-  - `TitleTip`, `AccentBar`/`DarkOnly`, `Banner`
+  - `TitleTip`, `AccentBar`/`DarkOnly`
   - `ContextBanner`: inset box with an icon, name, subline and optional pill.
 - **Tables**
   - `BuildGrid name, cols, w, [rowLines], [back]`: a styled read-only table. It is a
@@ -394,8 +394,6 @@ Write app-specific helpers next to the builds that use them. Examples:
 ### 6.5 Application shell
 
 - `frmMain` is a single form containing:
-  - A classification or status **banner** at the top and bottom (20px, full width,
-    anchored).
   - A **sidebar** on the left: 200px, collapsible to 60px icons-only, with the collapsed
     state saved in the registry. It contains:
     - The brand icon, name and subtitle.
@@ -516,8 +514,7 @@ Write app-specific helpers next to the builds that use them. Examples:
 ### 7.2 Rules
 
 - Never write `RGB()` or a numeric color in VBA. Use a `CLR_` role, or a `FIXED` constant
-  for semantic colors that must not change, such as status or grade colors and marking
-  banners.
+  for semantic colors that must not change, such as status colors.
 - Build forms in palette 1 only (`UseBuildPalette`).
 - To change a color: edit `make_themes.py`, run it, then rebuild with `-FrontEndOnly`.
 - Palette 1 must be the build palette with no overrides. Keep the keys `light` and
@@ -596,7 +593,6 @@ Fixed colors (never repainted), used for semantic scales:
 - amber 245,158,11
 - red 185,28,28
 - gray 107,114,128 (not evaluated or none)
-- marking banners: red 153,27,27, blue 29,78,216, yellow 161,98,7, green 21,128,61
 - destructive hover 185,28,28 and pressed 153,27,27
 
 ### 7.4 Palettes shipped
@@ -637,7 +633,7 @@ The Appearance dialog grows by itself, because it is built from `PALETTE_COUNT`.
    - Build subforms, then pages, then dialogs, then the shell.
    - Set startup options.
    - Return `"OK"` or the step that failed.
-5. Build the shell: banners, collapsible sidebar with `NavItem`s, `sfPage` host, deferred
+5. Build the shell: collapsible sidebar with `NavItem`s, `sfPage` host, deferred
    `QueueNav`/`ShowPage`/`RefreshNav`, and `PageKey`/`Reopen`.
 6. For each page, write a `Build_pg<Name>` using `PageHeader`, cards, grids and buttons,
    and a `src/forms/pg<Name>.vba` where every handler uses the standard error handler.

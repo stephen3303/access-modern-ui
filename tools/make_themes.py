@@ -101,7 +101,7 @@ P = {
 }
 
 # Colors that are the same in every palette: status band pills (a band always
-# reads the same), classification banners (a marking convention) and the
+# reads the same) and the
 # destructive button's hover shades. They are written as constants in
 # modTheme and reserved: build colors must differ from these so a palette
 # switch never repaints them.
@@ -112,10 +112,6 @@ FIXED = {
     "CLR_BAND_BELOW":          (245, 158, 11),   # amber-500
     "CLR_BAND_SIG_BELOW":      (185, 28, 28),    # red-700
     "CLR_BAND_NE":             (107, 114, 128),  # gray-500, Not Evaluated
-    "CLR_CLASS_SECRET":        (153, 27, 27),    # red-800
-    "CLR_CLASS_CONFIDENTIAL":  (29, 78, 216),    # blue-700
-    "CLR_CLASS_CUI":           (161, 98, 7),     # yellow-700
-    "CLR_CLASS_UNCLASSIFIED":  (21, 128, 61),    # green-700
     "CLR_DESTRUCTIVE_HOVER":   (185, 28, 28),
     "CLR_DESTRUCTIVE_PRESSED": (153, 27, 27),
 }

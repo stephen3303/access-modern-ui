@@ -595,19 +595,6 @@ Private Function PillImage(c As Control) As Control
     Set PillImage = im
 End Function
 
-' Classification banner label spanning the form width.
-Public Function Banner(ByVal nm As String, ByVal y As Long, ByVal w As Long, Optional ByVal vAnchor As Integer = 0, _
-                       Optional ByVal sec As Integer = acDetail) As Control
-    Dim c As Control
-    Set c = Lbl(nm, "CLASSIFICATION", 0, y, w, px(20), 8, True, CLR_WHITE, sec)
-    c.BackStyle = 1
-    c.BackColor = ClassificationColor("SECRET")
-    c.TextAlign = 2
-    c.FontWeight = 700
-    If Not m_isReport Then Anchor c, 2, vAnchor
-    Set Banner = c
-End Function
-
 ' Blue left accent bar used beside section titles in the dark theme.
 Public Sub AccentBar(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal h As Long, Optional ByVal parentCtl As String = "")
     DarkOnly Box(nm, x, y, px(3), h, CLR_PRIMARY, -1, acDetail, parentCtl)

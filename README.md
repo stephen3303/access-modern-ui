@@ -53,12 +53,11 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 | `ShowTip(frm, nm)` | the "?" marks from `TitleTip` | modUI |
 | `frmMain` with `PageKey` and `Reopen pg` | `SetPalette` (reopens the window) | frmMain |
 | `dlgAppearance` form | `ShowAppearance` | `Build_dlgAppearance` + dlgAppearance.vba |
-| `ClassificationColor(level)` | `Banner` | modGlobals |
 | `BandLabels()`, `BandBack(label)` | `BandCF` | modUI |
 | `BadgeColors(variant)` (returns `Array(back, fore)`) | `BadgeCF` | modUI |
 | `subGrid.vba` code-behind | `BuildGrid` tables | copy `kit\forms\subGrid.vba` to src\forms |
 
-An app that doesn't use `Banner`, `BandCF`, `BadgeCF` or `BuildGrid` doesn't need the names those rows list.
+An app that doesn't use `BandCF`, `BadgeCF` or `BuildGrid` doesn't need the names those rows list.
 
 ## Rules that keep palettes working
 
@@ -105,7 +104,6 @@ Sizes are in twips. `px(n)` converts CSS pixels at 15 twips per pixel.
 | `PageHeader title, tip` | Page title with a "?" explanation mark |
 | `TitleTip` | "?" mark placed after any title |
 | `AccentBar` | Left accent bar beside section titles (dark palettes only) |
-| `Banner` | Full-width banner (for example a classification marking) |
 | `ContextBanner` | Inset banner showing the current record, with an optional pill |
 
 **Tables and conditional colors**
