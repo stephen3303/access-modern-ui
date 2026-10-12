@@ -1,0 +1,697 @@
+Option Compare Database
+Option Explicit
+
+' Access UI kit - build-time helpers that create forms and styled
+' controls (a small stand-in for the Tailwind/shadcn components of the web UI).
+' Units are twips; px(n) converts CSS pixels (15 twips per px at 96 dpi).
+
+Public F As Object            ' form or report under construction
+Public g_SrcRoot As String
+Private m_isReport As Boolean
+Private m_trace As String
+
+' CSS pixels to twips.
+' Printable width of a report page: 8.5 in less two 0.5 in margins (twips).
+Public Const REPORT_W As Long = 10800
+
+Public Function px(ByVal n As Double) As Long
+    px = CLng(n * 15)
+End Function
+
+' Last build step recorded with Trace, reported when the build fails.
+Public Function BuildTrace() As String
+    BuildTrace = m_trace
+End Function
+
+Public Sub Trace(ByVal s As String)
+    m_trace = s
+End Sub
+
+' ---------------------------------------------------------------------------
+' Forms
+' ---------------------------------------------------------------------------
+
+' view: 0 = single, 1 = continuous
+Public Sub NewForm(ByVal recSrc As String, ByVal view As Integer, ByVal w As Long, ByVal h As Long)
+    Set F = CreateForm()
+    m_isReport = False
+    With F
+        .RecordSource = recSrc
+        .DefaultView = view
+        .AllowDatasheetView = False
+        .AllowLayoutView = False
+        .RecordSelectors = False
+        .NavigationButtons = False
+        .DividingLines = False
+        .ScrollBars = IIf(view = 1, 2, 0)
+        .AllowAdditions = False
+        .AllowDeletions = False
+        .Width = w
+        .Section(acDetail).Height = h
+        .Section(acDetail).BackColor = CLR_BG
+        .Section(acDetail).AlternateBackColor = CLR_BG
+        .AutoResize = False
+        .HasModule = True
+        .OnOpen = "=ThemeForm([Form])"     ' color palette (modDarkMode)
+    End With
+    ' Focus sink: takes the initial focus so Access does not highlight the
+    ' first text control (which hides its text, most visibly in the dark theme).
+    Dim sink As Control
+    Set sink = CreateControl(F.Name, acTextBox, acDetail, "", "", 0, 0, 15, 15)
+    sink.Name = "txtFocusSink"
+    sink.BackStyle = 0
+    sink.BorderStyle = 0
+    sink.TabIndex = 0
+End Sub
+
+' Read-only text in list rows that has no click action can't take focus, so
+' clicking it doesn't highlight the text or paint the box white. (Disabled +
+' locked keeps the normal look.) Clickable row text moves focus to
+' txtFocusSink in its click handler instead.
+Private Sub LockRowText()
+    Dim c As Control
+    For Each c In F.Controls
+        If c.ControlType = acTextBox Then
+            If c.Name <> "txtFocusSink" And c.Locked And Not c.TabStop And Len(c.OnClick) = 0 Then c.Enabled = False
+        End If
+    Next
+End Sub
+
+' Modal pop-up dialog form that sizes to its design.
+Public Sub NewDialog(ByVal caption As String, ByVal w As Long, ByVal h As Long)
+    NewForm "", 0, w, h
+    With F
+        .Caption = caption
+        .PopUp = True
+        .Modal = True
+        .BorderStyle = 3
+        .AutoCenter = True
+        .AutoResize = True
+        .MinMaxButtons = 0
+        .ControlBox = True
+        .CloseButton = True
+        .Section(acDetail).BackColor = CLR_DIALOG
+        .Section(acDetail).AlternateBackColor = CLR_DIALOG
+    End With
+End Sub
+
+' Save the form under its final name, attaching code-behind from src\forms\<name>.vba.
+Public Sub SaveForm(ByVal finalName As String, Optional ByVal codeName As String = "")
+    Dim tmp As String, codeFile As String, code As String
+    Trace finalName
+    codeFile = g_SrcRoot & "\forms\" & IIf(Len(codeName) > 0, codeName, finalName) & ".vba"
+    If FileExists(codeFile) Then
+        code = Replace(Replace(ReadTextFile(codeFile), vbCrLf, vbLf), vbLf, vbCrLf)
+        With F.Module
+            If .CountOfLines > 0 Then .DeleteLines 1, .CountOfLines
+            .AddFromString code
+        End With
+    End If
+    If Not m_isReport Then
+        If F.DefaultView = 1 Then LockRowText
+    End If
+    tmp = F.Name
+    If m_isReport Then
+        DoCmd.Close acReport, tmp, acSaveYes
+        On Error Resume Next
+        DoCmd.DeleteObject acReport, finalName
+        On Error GoTo 0
+        DoCmd.Rename finalName, acReport, tmp
+    Else
+        DoCmd.Close acForm, tmp, acSaveYes
+        On Error Resume Next
+        DoCmd.DeleteObject acForm, finalName
+        On Error GoTo 0
+        DoCmd.Rename finalName, acForm, tmp
+    End If
+    Set F = Nothing
+End Sub
+
+' Start a report; controls added with the helpers below go onto it.
+Public Sub NewReport(ByVal recSrc As String, ByVal w As Long)
+    Set F = CreateReport()
+    m_isReport = True
+    With F
+        .RecordSource = recSrc
+        .Width = w
+        .HasModule = True
+        ' Previews open in their own window with a title bar and Close button:
+        ' the ribbon and document tabs are hidden, so a docked preview has no
+        ' visible way to close it.
+        .PopUp = True
+        .AutoCenter = True
+        ' Letter portrait with equal half-inch margins; reports are built
+        ' REPORT_W wide so the body fills the page between them.
+        .Printer.PaperSize = acPRPSLetter
+        .Printer.Orientation = acPRORPortrait
+        .Printer.LeftMargin = 720
+        .Printer.RightMargin = 720
+        .Printer.TopMargin = 720
+        .Printer.BottomMargin = 720
+    End With
+End Sub
+
+' ---------------------------------------------------------------------------
+' Controls
+' ---------------------------------------------------------------------------
+
+' Create a control on the form or report under construction.
+Private Function Mk(ByVal kind As Integer, ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, _
+                    ByVal h As Long, ByVal sec As Integer, ByVal parentCtl As String) As Control
+    Dim c As Control
+    If m_isReport Then
+        Set c = CreateReportControl(F.Name, kind, sec, parentCtl, "", x, y, w, h)
+    Else
+        Set c = CreateControl(F.Name, kind, sec, parentCtl, "", x, y, w, h)
+    End If
+    c.Name = nm
+    Set Mk = c
+End Function
+
+' Vertically center single-line text: Access has no vertical alignment, so pad
+' the top by half the free space. Taller (multi-line) controls stay top-aligned.
+Public Sub VCenter(c As Control, ByVal h As Long, ByVal size As Integer, Optional ByVal force As Boolean = False)
+    Dim lineH As Long, m As Long
+    lineH = CLng(size * 20 * 1.36)
+    If h >= lineH * 1.9 And Not force Then Exit Sub
+    m = (h - lineH) \ 2 - 10
+    If m < 0 Then m = 0
+    On Error Resume Next
+    c.TopMargin = m
+    c.BottomMargin = 0
+End Sub
+
+' UI font, size, weight and color.
+Private Sub Font(c As Control, ByVal size As Integer, ByVal bold As Boolean, ByVal fore As Long)
+    c.FontName = FONT_UI
+    c.FontSize = size
+    c.FontWeight = IIf(bold, 600, 400)
+    c.ForeColor = fore
+End Sub
+
+' Label (transparent background).
+Public Function Lbl(ByVal nm As String, ByVal cap As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
+        Optional ByVal size As Integer = 10, Optional ByVal bold As Boolean = False, Optional ByVal fore As Long = CLR_FG, _
+        Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control
+    Dim c As Control
+    Set c = Mk(acLabel, nm, x, y, w, h, sec, parentCtl)
+    c.Caption = cap
+    c.BackStyle = 0
+    c.BorderStyle = 0
+    Font c, size, bold, fore
+    VCenter c, h, size
+    Set Lbl = c
+End Function
+
+' Text box. src is a field name or an expression starting with "=".
+Public Function Txt(ByVal nm As String, ByVal src As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
+        Optional ByVal size As Integer = 10, Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control
+    Dim c As Control
+    Set c = Mk(acTextBox, nm, x, y, w, h, sec, parentCtl)
+    If Len(src) > 0 Then c.ControlSource = src
+    Font c, size, False, CLR_FG
+    c.BorderStyle = 1
+    c.BorderColor = CLR_INPUT_BORDER
+    c.SpecialEffect = 0
+    c.BackStyle = 1
+    c.BackColor = CLR_INPUT_BG
+    c.LeftMargin = 60
+    c.TopMargin = 30
+    VCenter c, h, size
+    Set Txt = c
+End Function
+
+' Background box for a continuous-form row: paints (with conditional colors)
+' but can never take focus. Disabled + locked keeps the normal appearance.
+Public Function RowBack(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long) As Control
+    Dim c As Control
+    Set c = RO(nm, "", x, y, w, h)
+    c.Enabled = False
+    c.Locked = True
+    c.BackStyle = 1
+    c.BackColor = CLR_SURFACE
+    Set RowBack = c
+End Function
+
+' Read-only text: no border, transparent, not a tab stop.
+Public Function RO(ByVal nm As String, ByVal src As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
+        Optional ByVal size As Integer = 10, Optional ByVal bold As Boolean = False, Optional ByVal fore As Long = CLR_FG, _
+        Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control
+    Dim c As Control
+    Set c = Mk(acTextBox, nm, x, y, w, h, sec, parentCtl)
+    If Len(src) > 0 Then c.ControlSource = src
+    Font c, size, bold, fore
+    c.BorderStyle = 0
+    c.BackStyle = 0
+    c.SpecialEffect = 0
+    If Not m_isReport Then
+        c.Locked = True
+        c.TabStop = False
+    End If
+    VCenter c, h, size
+    Set RO = c
+End Function
+
+' Combo box with a row source (SQL or value list).
+Public Function Cbo(ByVal nm As String, ByVal src As String, ByVal rowSrc As String, ByVal x As Long, ByVal y As Long, _
+        ByVal w As Long, ByVal h As Long, Optional ByVal cols As Integer = 1, Optional ByVal widths As String = "", _
+        Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control
+    Dim c As Control
+    Set c = Mk(acComboBox, nm, x, y, w, h, sec, parentCtl)
+    If Len(src) > 0 Then c.ControlSource = src
+    If Left$(rowSrc, 6) = "SELECT" Or Len(rowSrc) = 0 Then
+        c.RowSourceType = "Table/Query"
+    Else
+        c.RowSourceType = "Value List"
+    End If
+    c.RowSource = rowSrc
+    c.ColumnCount = cols
+    If Len(widths) > 0 Then c.ColumnWidths = widths
+    c.BoundColumn = 1
+    c.LimitToList = True
+    c.ListRows = 16
+    c.AllowValueListEdits = False
+    Font c, 10, False, CLR_FG
+    c.BorderStyle = 1
+    c.BorderColor = CLR_INPUT_BORDER
+    c.SpecialEffect = 0
+    c.BackColor = CLR_INPUT_BG
+    VCenter c, h, 10
+    Set Cbo = c
+End Function
+
+' List box.
+Public Function Lst(ByVal nm As String, ByVal rowSrc As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
+        ByVal cols As Integer, ByVal widths As String, Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control
+    Dim c As Control
+    Set c = Mk(acListBox, nm, x, y, w, h, sec, parentCtl)
+    c.RowSourceType = IIf(Left$(rowSrc, 6) = "SELECT" Or Len(rowSrc) = 0, "Table/Query", "Value List")
+    c.RowSource = rowSrc
+    c.ColumnCount = cols
+    c.ColumnWidths = widths
+    c.ColumnHeads = True
+    c.BoundColumn = 1
+    Font c, 9, False, CLR_FG
+    c.BorderStyle = 1
+    c.BorderColor = CLR_BORDER
+    c.SpecialEffect = 0
+    c.BackColor = CLR_INPUT_BG
+    Set Lst = c
+End Function
+
+' Check box with its caption label.
+Public Function Chk(ByVal nm As String, ByVal src As String, ByVal x As Long, ByVal y As Long, _
+        Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control
+    Dim c As Control
+    Set c = Mk(acCheckBox, nm, x, y, 260, 260, sec, parentCtl)
+    If Len(src) > 0 Then c.ControlSource = src Else c.DefaultValue = "False"
+    c.SpecialEffect = 0
+    Set Chk = c
+End Function
+
+' kind: primary | outline | ghost | destructive | nav
+Public Function Btn(ByVal nm As String, ByVal cap As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
+        Optional ByVal kind As String = "primary", Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control
+    Dim c As Control
+    Set c = Mk(acCommandButton, nm, x, y, w, h, sec, parentCtl)
+    c.Caption = cap
+    c.UseTheme = True
+    c.FontName = FONT_UI
+    c.FontSize = 9
+    c.FontWeight = 600
+    c.BorderStyle = 1
+    Select Case kind
+        Case "primary"
+            c.BackColor = CLR_BTN_BG: c.HoverColor = CLR_BTN_HOVER: c.PressedColor = CLR_BTN_PRESSED
+            c.ForeColor = CLR_BTN_FG: c.HoverForeColor = CLR_BTN_FG: c.PressedForeColor = CLR_BTN_FG
+            c.BorderColor = CLR_BTN_BG
+        Case "destructive"
+            c.BackColor = CLR_DESTRUCTIVE: c.HoverColor = CLR_DESTRUCTIVE_HOVER: c.PressedColor = CLR_DESTRUCTIVE_PRESSED
+            c.ForeColor = CLR_WHITE: c.HoverForeColor = CLR_WHITE: c.PressedForeColor = CLR_WHITE
+            c.BorderColor = CLR_DESTRUCTIVE
+        Case "ghost"
+            c.BackColor = CLR_OUT_BG: c.HoverColor = CLR_OUT_HOVER: c.PressedColor = CLR_BORDER
+            c.ForeColor = CLR_OUT_FG: c.HoverForeColor = CLR_OUT_FG: c.PressedForeColor = CLR_OUT_FG
+            c.BorderStyle = 0
+        Case Else ' outline
+            c.BackColor = CLR_OUT_BG: c.HoverColor = CLR_OUT_HOVER: c.PressedColor = CLR_BORDER
+            c.ForeColor = CLR_OUT_FG: c.HoverForeColor = CLR_OUT_FG: c.PressedForeColor = CLR_OUT_FG
+            c.BorderColor = CLR_OUT_BORDER
+    End Select
+    ' Rounded rectangle (Access 2010+ themed buttons).
+    On Error Resume Next
+    c.Properties("Shape") = 1
+    On Error GoTo 0
+    c.OnClick = "[Event Procedure]"
+    Set Btn = c
+End Function
+
+' Rectangle. back / borderClr = -1 for none.
+Public Function Box(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
+        ByVal back As Long, Optional ByVal borderClr As Long = -1, Optional ByVal sec As Integer = acDetail, _
+        Optional ByVal parentCtl As String = "") As Control
+    Dim c As Control
+    Set c = Mk(acRectangle, nm, x, y, w, h, sec, parentCtl)
+    c.SpecialEffect = 0
+    If back = -1 Then
+        c.BackStyle = 0
+    Else
+        c.BackStyle = 1
+        c.BackColor = back
+    End If
+    If borderClr = -1 Then
+        c.BorderStyle = 0
+    Else
+        c.BorderStyle = 1
+        c.BorderColor = borderClr
+    End If
+    Set Box = c
+End Function
+
+' Subform control showing the form srcObj.
+Public Function SubF(ByVal nm As String, ByVal srcObj As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
+        Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control
+    Dim c As Control
+    Set c = Mk(acSubform, nm, x, y, w, h, sec, parentCtl)
+    c.SourceObject = srcObj
+    c.BorderStyle = 0
+    c.SpecialEffect = 0
+    Set SubF = c
+End Function
+
+' ---------------------------------------------------------------------------
+' Styled tables
+' ---------------------------------------------------------------------------
+
+' A table in the look of the Team Members list: a continuous form of
+' read-only columns with row lines and a highlighted selected row, in place
+' of a list box. cols holds one "field|caption|width px|options" per column;
+' options: "r" right-aligned, "c" centered, "b" bold, "m" muted. The last
+' column takes the rest of the width (and stretches with the form); with
+' rowLines > 1 it wraps onto that many lines. back is the color of what the
+' table sits on. The record source needs an id column. The rows share
+' forms\subGrid.vba; GridHeaders puts the captions on the parent form.
+Public Sub BuildGrid(ByVal finalName As String, ByVal cols As Variant, ByVal w As Long, Optional ByVal rowLines As Long = 1, _
+                     Optional ByVal back As Long = CLR_SURFACE)
+    Dim c As Control, i As Long, p() As String, x As Long, cw As Long, h As Long, last As Boolean, ty As Long, th As Long
+    h = px(12) + rowLines * px(18)
+    NewForm "", 1, w, h
+    F.Section(acDetail).BackColor = back
+    F.Section(acDetail).AlternateBackColor = back
+    Set c = RowBack("txtBg", 0, 0, w, h): Anchor c, 2, 0
+    c.BackColor = back
+    CF c, "[id]=[txtSel]", CLR_PRIMARY_SOFT, -1
+    Set c = RO("txtSel", "", 0, 0, px(4), px(4)): c.Visible = False
+    x = px(8)
+    For i = 0 To UBound(cols)
+        p = Split(cols(i), "|")
+        last = (i = UBound(cols))
+        cw = IIf(last, w - x - px(8), px(Val(p(2))))
+        ty = IIf(last And rowLines > 1, px(6), (h - px(18)) \ 2)
+        th = IIf(last And rowLines > 1, h - px(12), px(18))
+        Set c = RO("txtCol" & i, p(0), x, ty, cw - px(8), th, 9, InStr(p(3), "b") > 0, _
+            IIf(InStr(p(3), "m") > 0, CLR_MUTED_FG, CLR_FG))
+        If last And rowLines > 1 Then c.TopMargin = 0
+        If InStr(p(3), "r") > 0 Then c.TextAlign = 3
+        If InStr(p(3), "c") > 0 Then c.TextAlign = 2
+        c.OnClick = "=RowClick()"
+        c.OnDblClick = "=RowDblClick()"
+        If last Then Anchor c, 2, 0
+        x = x + cw
+    Next
+    Set c = Box("boxRowLine", 0, h - px(1), w, px(1), CLR_BORDER): Anchor c, 2, 0
+    SaveForm finalName, "subGrid"
+End Sub
+
+' Column captions for a BuildGrid table whose subform sits at (x, y + px(22)).
+Public Sub GridHeaders(ByVal prefix As String, ByVal cols As Variant, ByVal x As Long, ByVal y As Long, _
+                       Optional ByVal parentCtl As String = "")
+    Dim c As Control, i As Long, p() As String, cx As Long
+    cx = x + px(8)
+    For i = 0 To UBound(cols)
+        p = Split(cols(i), "|")
+        Set c = Lbl(prefix & i, UCase$(p(1)), cx, y, IIf(i = UBound(cols), px(200), px(Val(p(2))) - px(8)), px(16), 8, True, CLR_MUTED_FG, acDetail, parentCtl)
+        If InStr(p(3), "r") > 0 Then c.TextAlign = 3
+        If InStr(p(3), "c") > 0 Then c.TextAlign = 2
+        cx = cx + px(Val(p(2)))
+    Next
+End Sub
+
+' Tab control; each page is "name|caption".
+Public Function TabCtl(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, ParamArray pages() As Variant) As Control
+    Dim c As Control, i As Long
+    Set c = Mk(acTabCtl, nm, x, y, w, h, acDetail, "")
+    Do While c.Pages.Count < UBound(pages) + 1
+        c.Pages.Add
+    Loop
+    For i = 0 To UBound(pages)
+        c.Pages(i).Name = Split(pages(i), "|")(0)
+        c.Pages(i).Caption = Split(pages(i), "|")(1)
+    Next
+    c.FontName = FONT_UI
+    c.FontSize = 10
+    c.BackStyle = 0
+    c.UseTheme = True
+    On Error Resume Next
+    c.BackColor = CLR_SURFACE
+    c.BorderColor = CLR_BORDER
+    c.ForeColor = CLR_MUTED_FG
+    c.HoverColor = CLR_OUT_HOVER
+    c.HoverForeColor = CLR_FG
+    c.PressedColor = CLR_PRIMARY_SOFT
+    c.PressedForeColor = CLR_FG
+    On Error GoTo 0
+    Set TabCtl = c
+End Function
+
+' Clickable text "link" or tab label.
+Public Function Link(ByVal nm As String, ByVal cap As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
+        ByVal onClickExpr As String, Optional ByVal size As Integer = 10, Optional ByVal fore As Long = CLR_PRIMARY, _
+        Optional ByVal parentCtl As String = "") As Control
+    Dim c As Control
+    Set c = Lbl(nm, cap, x, y, w, h, size, False, fore, acDetail, parentCtl)
+    c.OnClick = onClickExpr
+    Set Link = c
+End Function
+
+' ---------------------------------------------------------------------------
+' Behaviour
+' ---------------------------------------------------------------------------
+
+' Point event properties (e.g. "OnClick") at the form module's handlers.
+Public Sub Ev(c As Object, ParamArray props() As Variant)
+    Dim i As Long
+    For i = 0 To UBound(props)
+        c.Properties(props(i)) = "[Event Procedure]"
+    Next
+End Sub
+
+' h/v: 0 = left/top, 1 = right/bottom, 2 = both
+Public Sub Anchor(c As Control, ByVal h As Integer, ByVal v As Integer)
+    c.HorizontalAnchor = h
+    c.VerticalAnchor = v
+End Sub
+
+' Add an expression-based conditional format. back / fore = -1 keep the
+' control's own color.
+Public Function CF(c As Control, ByVal expr As String, ByVal back As Long, ByVal fore As Long, _
+                   Optional ByVal bold As Boolean = False) As Object
+    Dim fc As Object
+    Set fc = c.FormatConditions.Add(acExpression, , expr)
+    If back <> -1 Then
+        ' A conditional back color only paints on an opaque control.
+        If c.BackStyle = 0 Then c.BackStyle = 1: c.BackColor = CLR_SURFACE
+        fc.BackColor = back
+    ElseIf c.BackStyle = 1 Then
+        fc.BackColor = c.BackColor
+    End If
+    ' An unset conditional fore color falls back to black, so carry the control's own.
+    If fore <> -1 Then fc.ForeColor = fore Else fc.ForeColor = c.ForeColor
+    fc.FontBold = bold
+    Set CF = fc
+End Function
+
+' Band color conditions on a control whose value is "<score> <label>" or a label,
+' drawn as a rounded pill. guard/dflt: see RoundCF.
+Public Sub BandCF(c As Control, ByVal fieldExpr As String, Optional ByVal guard As String = "", Optional ByVal dflt As Long = -1)
+    Dim b As Variant, first As Integer
+    first = c.FormatConditions.Count
+    For Each b In BandLabels()
+        CF c, fieldExpr & "=""" & b & """", BandBack(CStr(b)), CLR_WHITE
+    Next
+    RoundCF c, first, -1, guard, dflt
+End Sub
+
+' Badge colors for a status-like field, pairs of (value, variant), drawn as a rounded pill.
+Public Sub BadgeCF(c As Control, ByVal fieldExpr As String, ParamArray pairs() As Variant)
+    Dim i As Long, col As Variant, first As Integer
+    first = c.FormatConditions.Count
+    For i = 0 To UBound(pairs) Step 2
+        col = BadgeColors(CStr(pairs(i + 1)))
+        CF c, fieldExpr & "=""" & pairs(i) & """", col(0), col(1)
+    Next
+    RoundCF c, first
+End Sub
+
+' ---------------------------------------------------------------------------
+' Rounded pills. Access only draws square corners, so a pill is an image
+' control (<name>_bg) showing a capsule PNG (modPng) behind a transparent
+' text control. Call RoundCF last: CF() would make the control opaque again.
+' ---------------------------------------------------------------------------
+
+' Image behind c for conditional colors: conditions firstCond..lastCond pick the
+' pill color; dflt (if set) when none match; guard (if set) must hold for any pill.
+Public Sub RoundCF(c As Control, Optional ByVal firstCond As Integer = 0, Optional ByVal lastCond As Integer = -1, _
+                   Optional ByVal guard As String = "", Optional ByVal dflt As Long = -1)
+    Dim i As Integer, expr As String, im As Control
+    If m_isReport Then Exit Sub
+    If lastCond < 0 Then lastCond = c.FormatConditions.Count - 1
+    For i = firstCond To lastCond
+        With c.FormatConditions(i)
+            expr = expr & "," & .Expression1 & "," & .BackColor
+        End With
+    Next
+    If dflt <> -1 Then expr = expr & ",True," & dflt
+    If Len(expr) = 0 Then Exit Sub
+    If Len(guard) > 0 Then expr = ",Not (" & guard & "),Null" & expr
+    Set im = PillImage(c)
+    im.Properties("ControlSource") = "=PillPng(Switch(" & Mid$(expr, 2) & ")," & c.Width \ 15 & "," & c.Height \ 15 & ")"
+    c.BackStyle = 0
+    ' A focused text box paints a square over its pill: unclickable pills never
+    ' take focus (disabled + locked keeps the normal look); click handlers move
+    ' focus to txtFocusSink.
+    If Len(c.OnClick) = 0 Then
+        c.Enabled = False
+        c.Locked = True
+    End If
+End Sub
+
+' Image behind a label painted at run time (PaintBadge / PaintPill / band picker).
+Public Sub PillLabel(c As Control)
+    If m_isReport Then Exit Sub
+    PillImage c
+End Sub
+
+' Image control <name>_bg behind c, the same size, for a rounded pill.
+Private Function PillImage(c As Control) As Control
+    Dim im As Control, parentCtl As String, x As Control
+    On Error Resume Next
+    If TypeOf c.Parent Is Page Then parentCtl = c.Parent.Name
+    On Error GoTo 0
+    Set im = Mk(acImage, c.Name & "_bg", c.Left, c.Top, c.Width, c.Height, c.Section, parentCtl)
+    im.Properties("PictureType") = 1      ' linked file
+    im.Properties("SizeMode") = 3         ' zoom (images match the control's aspect)
+    im.Properties("BackStyle") = 0
+    im.Properties("BorderStyle") = 0
+    im.Properties("HorizontalAnchor") = c.HorizontalAnchor
+    im.Properties("VerticalAnchor") = c.VerticalAnchor
+    ' Created last, the image is on top: bring the text back in front of it.
+    For Each x In F.Controls
+        x.InSelection = False
+    Next
+    c.InSelection = True
+    DoCmd.RunCommand acCmdBringToFront
+    c.InSelection = False
+    Set PillImage = im
+End Function
+
+' Classification banner label spanning the form width.
+Public Function Banner(ByVal nm As String, ByVal y As Long, ByVal w As Long, Optional ByVal vAnchor As Integer = 0, _
+                       Optional ByVal sec As Integer = acDetail) As Control
+    Dim c As Control
+    Set c = Lbl(nm, "CLASSIFICATION", 0, y, w, px(20), 8, True, CLR_WHITE, sec)
+    c.BackStyle = 1
+    c.BackColor = ClassificationColor("SECRET")
+    c.TextAlign = 2
+    c.FontWeight = 700
+    If Not m_isReport Then Anchor c, 2, vAnchor
+    Set Banner = c
+End Function
+
+' Blue left accent bar used beside section titles in the dark theme.
+Public Sub AccentBar(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal h As Long, Optional ByVal parentCtl As String = "")
+    DarkOnly Box(nm, x, y, px(3), h, CLR_PRIMARY, -1, acDetail, parentCtl)
+End Sub
+
+' Hidden in light palettes; ThemeForm shows it in dark ones.
+Public Sub DarkOnly(c As Control)
+    c.Tag = "darkonly"
+    c.Visible = False
+End Sub
+
+' Unbound image control (picture set at run time).
+Public Function Img(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long) As Control
+    Dim c As Control
+    Set c = Mk(acImage, nm, x, y, w, h, acDetail, "")
+    c.Properties("SizeMode") = 3
+    c.Properties("PictureType") = 1
+    c.Properties("BorderStyle") = 0
+    c.Properties("BackStyle") = 0
+    Set Img = c
+End Function
+
+' Page title + optional subtitle at the standard position.
+' tip: explanation shown by a "?" beside the title (TitleTip). lblSubtitle is
+' filled at run time by pages that show context under the title.
+Public Sub PageHeader(ByVal title As String, ByVal tip As String, Optional ByVal x As Long = 480)
+    AccentBar "barTitle", x - px(14), px(24), px(48)
+    Lbl "lblTitle", title, x, px(22), px(560), px(30), 15, True
+    Lbl "lblSubtitle", "", x, px(52), px(700), px(20), 9, False, CLR_MUTED_FG
+    If Len(tip) > 0 Then TitleTip "tipTitle", tip, Replace(title, "&&", "&"), x, px(22), px(30), 15, ""
+End Sub
+
+' "?" help mark placed just after a title's text (title drawn at x, y with
+' height h and the given font size, bold). Hovering shows tip; clicking shows
+' it in a message (ShowTip).
+Public Function TitleTip(ByVal nm As String, ByVal tip As String, ByVal title As String, ByVal x As Long, ByVal y As Long, _
+        ByVal h As Long, ByVal size As Integer, Optional ByVal parentCtl As String = "") As Control
+    Dim c As Control
+    Set c = Lbl(nm, ChrW(&HE9CE), x + TextW(title, size), y, px(20), h, IIf(size > 12, 12, 10), False, CLR_MUTED_FG, acDetail, parentCtl)
+    c.FontName = "Segoe MDL2 Assets"
+    c.TextAlign = 2
+    c.ControlTipText = Left$(tip, 255)
+    c.Tag = tip
+    c.OnClick = "=ShowTip([Form],""" & nm & """)"
+    Set TitleTip = c
+End Function
+
+' Width (twips) of a bold title as drawn by Lbl, plus a small gap.
+Private Function TextW(ByVal s As String, ByVal size As Integer) As Long
+    TextW = MeasureText(s, size, 600) + 30
+End Function
+
+' "Radio" context banner (bg-muted/50 border) at y with given width.
+Public Sub ContextBanner(ByVal x As Long, ByVal y As Long, ByVal w As Long, Optional ByVal withPill As Boolean = True)
+    Dim c As Control
+    Set c = Box("boxCtx", x, y, w, px(46), CLR_INSET, CLR_BORDER)
+    Anchor c, 2, 0
+    Set c = Lbl("lblCtxIcon", ChrW(&HE81D), x + px(10), y + px(14), px(18), px(18), 10, False, CLR_PRIMARY)
+    c.FontName = "Segoe MDL2 Assets"
+    Set c = Lbl("lblCtxName", "", x + px(34), y + px(5), w - px(260), px(19), 10, True)
+    Anchor c, 2, 0
+    Set c = Lbl("lblCtxSub", "", x + px(34), y + px(24), w - px(260), px(17), 8, False, CLR_MUTED_FG)
+    Anchor c, 2, 0
+    If withPill Then
+        Set c = Lbl("lblCtxPill", "", x + w - px(220), y + px(13), px(210), px(20), 9, True, CLR_WHITE)
+        c.TextAlign = 2
+        Anchor c, 1, 0
+        PillLabel c
+    End If
+End Sub
+
+' Tab strip of labels with underline boxes. keys are "key|Caption".
+Public Sub TabStrip(ByVal x As Long, ByVal y As Long, ByVal totalW As Long, ByVal handler As String, ParamArray tabs() As Variant)
+    Dim i As Long, k As String, cap As String, w As Long, c As Control, x0 As Long
+    x0 = x
+    For i = 0 To UBound(tabs)
+        k = Split(tabs(i), "|")(0)
+        cap = Split(tabs(i), "|")(1)
+        w = px(Len(cap) * 7.5 + 28)
+        Set c = Link("tab_" & k, cap, x, y, w, px(26), "=" & handler & "(""" & k & """)", 10, CLR_MUTED_FG)
+        c.TextAlign = 2
+        Box "ul_" & k, x, y + px(28), w, px(2), CLR_PRIMARY
+        x = x + w + px(4)
+    Next
+    Set c = Box("boxTabLine", x0, y + px(30), totalW, px(1), CLR_BORDER)
+    Anchor c, 2, 0
+End Sub
