@@ -153,6 +153,9 @@ PALETTES = [
     dict(key="slate", name="Slate", base=0, over=accent_light((51, 65, 85), (71, 85, 105))),
     dict(key="forest", name="Forest", base=0, over=accent_light((31, 61, 43), (47, 125, 79))),
     dict(key="harbor", name="Harbor", base=0, over=accent_light((15, 59, 76), (14, 116, 144))),
+    # Submarine Program Manager's look: navy sidebar, teal accent. SPM's teal
+    # (0, 132, 151) is a shade darker here so white text on it passes 4.5:1.
+    dict(key="tealnavy", name="Teal Navy", base=0, over=accent_light((10, 42, 73), (0, 128, 147))),
     dict(key="graphite", name="Graphite", base=1, over={
         "CLR_BG": (12, 12, 14), "CLR_SURFACE": (24, 24, 27), "CLR_INSET": (9, 9, 11),
         "CLR_DIALOG": (24, 24, 27), "CLR_ROW1": (39, 39, 42), "CLR_ROW2": (31, 31, 34),
@@ -319,6 +322,7 @@ for p in PALETTES[1:]:
         lv, tv = to_long(lb), to_long(target)
         lines.append(f"        Case {lv}: {fn} = {tv}{' ' * max(1, 20 - len(str(lv)) - len(str(tv)))}' {key}")
     lines += [f"        Case Else: {fn} = c", "    End Select", "End Function"]
+os.makedirs(os.path.join(ROOT, "modules"), exist_ok=True)
 with open(os.path.join(ROOT, "modules", "modPalette.bas"), "w", newline="\r\n") as f:
     f.write("\n".join(lines) + "\n")
 print("wrote modPalette.bas")
