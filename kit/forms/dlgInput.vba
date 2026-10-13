@@ -15,7 +15,7 @@ Private Sub Form_Load()
     Me.Caption = IIf(Len(KitInputTitle()) > 0, KitInputTitle(), APP_NAME)
     Me.txtPrompt = KitInputPrompt()
     ' The mask goes on before the starting text, so that is never shown plain.
-    If KitInputMasked() Then Me.txtValue.InputMask = "Password"
+    If KitInputMasked() Then Me.txtValue.InputMask = SECRET_MASK
     If Len(KitInputDefault()) > 0 Then Me.txtValue = KitInputDefault()
 
     ' Shrink to the prompt: move the input and buttons up under it, then the
