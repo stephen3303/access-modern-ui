@@ -217,11 +217,14 @@ Fail:
     GridMark = v
 End Function
 
-' Text for a rich text box: the characters HTML reserves escaped, line breaks as <br>.
+' Text for a rich text box: the characters HTML reserves escaped, line breaks
+' as <br>, and runs of spaces and tabs kept (HTML would collapse them).
 Private Function HtmlText(ByVal s As String) As String
     s = Replace(s, "&", "&amp;")
     s = Replace(s, "<", "&lt;")
     s = Replace(s, ">", "&gt;")
+    s = Replace(s, vbTab, "    ")
+    s = Replace(s, "  ", " &nbsp;")
     s = Replace(s, vbCrLf, "<br>")
     HtmlText = Replace(s, vbLf, "<br>")
 End Function
