@@ -177,8 +177,10 @@ Public Function TestKit(ByVal root As String) As String
     Check host.sfRing.Form.ringC.BorderColor = CLR_INPUT_BORDER, "Subform input kept its ring while its Save button had the focus"
     host.ringB.Locked = True: host.ringA.SetFocus: host.ringB.SetFocus
     Check host.ringB.BorderColor = CLR_INPUT_BORDER, "Locked input shows a focus ring"
-    grid.txtCol0.SetFocus: grid.RowClick
-    Check Screen.ActiveControl.Name = "txtFocusSink", "Row click left text focused"
+    ' The ring checks leave the focus on a host control; move it into the grid
+    ' first, or Screen.ActiveControl stays on the host.
+    host.sfRows.SetFocus: grid.txtCol0.SetFocus: grid.RowClick
+    Check Screen.ActiveControl.Name = "txtFocusSink", "Row click left text focused (" & Screen.ActiveControl.Name & ")"
     Check host.callbackGrid = "sfRows", "Grid callback used wrong parent"
     Check CLng(grid.txtSel) = CLng(grid!id), "Row click lost record selection"
     host.sfReuse.Form.RecordSource = "SELECT * FROM test_rows ORDER BY id"
