@@ -22,7 +22,7 @@ Measure:
         measured = PillTextWidth(host.Controls(CStr(name)).Caption, size, px(16))
         If measured > width Then width = measured
     Next
-    If width * count + px(4) * (count - 1) > available Then
+    If width * count + Sp(SP_ITEM_GAP) * (count - 1) > available Then
         If size > 7 Then size = size - 1: GoTo Measure
         Err.Raise 5, , "Filter captions need a wider row"
     End If
@@ -31,7 +31,7 @@ Measure:
         Set c = host.Controls(CStr(name))
         c.Left = x: c.Top = top: c.Width = width: c.Height = px(30)
         c.FontSize = size: c.TextAlign = 2
-        x = x + width + px(4)
+        x = x + width + Sp(SP_ITEM_GAP)
     Next
 End Sub
 

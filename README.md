@@ -85,6 +85,19 @@ An app that doesn't use `BandCF`, `BadgeCF` or `BuildGrid` doesn't need the name
 
 Sizes are in twips. `px(n)` converts CSS pixels at 15 twips per pixel.
 
+**Spacing**
+
+The designer can choose how roomy layouts are. Call `SetSpacing` once at the start of the build, before any form is created. Without it the scale is 1 and every layout builds exactly as before.
+
+| Helper | What it does |
+|---|---|
+| `SetSpacing "compact"` / `"default"` / `"comfortable"` | Scale gaps and padding by 0.75, 1 or 1.25. A number from 0.5 to 2 also works. The choice is saved in the database (property `KitSpacing`), so run-time layouts match the build. |
+| `Sp(n)` | A gap or padding of `n` CSS px at the chosen spacing, in twips, rounded to whole px. Use `Sp` for space and `px` for control sizes. |
+| `SP_PAGE` 32, `SP_DIALOG` 24, `SP_CARD_INSET` 16, `SP_CARD_GAP` 12, `SP_ROW_GAP` 8, `SP_ITEM_GAP` 4 | The guide's spacing tokens, for `Sp(SP_CARD_GAP)` and so on. |
+| `SpacingScale()` | The scale in use. |
+
+Control heights and font sizes never scale. `TabStrip` and `LayoutFilterRow` already space their items with `Sp(SP_ITEM_GAP)`.
+
 **Forms**
 
 | Builder | What it does |

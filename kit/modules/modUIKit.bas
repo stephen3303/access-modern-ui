@@ -21,9 +21,84 @@ Public Const DATEBOX_W As Long = 1800
 Public Const DATEFIELD_W As Long = 2310
 ' Badge variants a status pill can take (BadgeColors).
 Private Const BADGE_VARIANTS As String = "success,warning,info,destructive,default,outline,secondary"
+' Spacing tokens (CSS px, guide 6.4) for Sp(), so a layout written with them
+' follows the spacing the designer picked with SetSpacing.
+Public Const SP_PAGE As Long = 32         ' page padding, left and right
+Public Const SP_DIALOG As Long = 24       ' dialog padding
+Public Const SP_CARD_INSET As Long = 16   ' controls inside a card, from its edge
+Public Const SP_CARD_GAP As Long = 12     ' between cards and KPI tiles
+Public Const SP_ROW_GAP As Long = 8       ' input bottom to the next caption or row
+Public Const SP_ITEM_GAP As Long = 4      ' between chips, filter pills and tabs
+' Database property that keeps the spacing chosen at build time for run-time layouts.
+Private Const SPACING_PROP As String = "KitSpacing"
+Private m_spacing As Double               ' 0 until read or set
 
 Public Function px(ByVal n As Double) As Long
     px = CLng(n * 15)
+End Function
+
+' ---------------------------------------------------------------------------
+' Spacing
+' ---------------------------------------------------------------------------
+
+' The designer picks how roomy layouts are, once, before building forms:
+'   SetSpacing "compact"      0.75  (tighter, for dense data entry)
+'   SetSpacing "default"      1     (the guide's 6.4 values)
+'   SetSpacing "comfortable"  1.25
+' or a scale from 0.5 to 2 (SetSpacing 1.1). Without a call the scale is 1,
+' so existing layouts (SPM, SABER) build exactly as before. Only the space
+' between and around controls scales; control sizes (30px inputs, 32px
+' buttons) and font sizes stay as the guide sets them.
+' The choice is saved in the database, so run-time layouts such as
+' LayoutFilterRow match the build. Raises error 5 for an unknown name or a
+' scale out of range.
+Public Sub SetSpacing(ByVal spacing As Variant)
+    Dim factor As Double, db As DAO.Database, prop As DAO.Property, n As Long, d As String
+    Select Case LCase$(Trim$(CStr(spacing)))
+        Case "compact": factor = 0.75
+        Case "default", "": factor = 1
+        Case "comfortable": factor = 1.25
+        Case Else
+            If Not IsNumeric(spacing) Then Err.Raise 5, , "Spacing must be compact, default, comfortable or a scale: " & spacing
+            factor = CDbl(spacing)
+            If factor < 0.5 Or factor > 2 Then Err.Raise 5, , "Spacing scale must be from 0.5 to 2: " & spacing
+    End Select
+    Set db = CurrentDb
+    On Error Resume Next
+    db.Properties(SPACING_PROP) = factor
+    If Err.Number = 3270 Then         ' property not found: create it
+        Err.Clear
+        Set prop = db.CreateProperty(SPACING_PROP, dbDouble, factor)
+        db.Properties.Append prop
+    End If
+    If Err.Number <> 0 Then
+        n = Err.Number: d = Err.Description
+        On Error GoTo 0
+        Err.Raise n, , "Could not save the spacing: " & d
+    End If
+    On Error GoTo 0
+    m_spacing = factor
+End Sub
+
+' The spacing scale in use: the one SetSpacing saved, else 1.
+Public Function SpacingScale() As Double
+    Dim db As DAO.Database
+    If m_spacing = 0 Then
+        m_spacing = 1
+        Set db = CurrentDb
+        On Error Resume Next
+        m_spacing = CDbl(db.Properties(SPACING_PROP))
+        If m_spacing < 0.5 Or m_spacing > 2 Then m_spacing = 1
+        On Error GoTo 0
+    End If
+    SpacingScale = m_spacing
+End Function
+
+' A gap or padding of n CSS px at the chosen spacing, in twips, rounded to
+' whole px so edges stay crisp. Use it for space, px() for control sizes:
+'   x = x + w + Sp(SP_ITEM_GAP)
+Public Function Sp(ByVal n As Double) As Long
+    Sp = px(Int(n * SpacingScale() + 0.5))
 End Function
 
 ' Last build step recorded with Trace, reported when the build fails.
@@ -947,7 +1022,7 @@ Public Sub TabStrip(ByVal x As Long, ByVal y As Long, ByVal totalW As Long, ByVa
         End If
         c.TextAlign = 2
         Box "ul_" & k, x, y + px(28), w, px(2), CLR_PRIMARY
-        x = x + w + px(4)
+        x = x + w + Sp(SP_ITEM_GAP)
     Next
     Set c = Rule("boxTabLine", x0, y + px(30), totalW, 0, CLR_BORDER)
     Anchor c, 2, 0
