@@ -349,11 +349,13 @@ Public Function KitInputBox(ByVal prompt As String, Optional ByVal title As Stri
     DoCmd.OpenForm "dlgInput", WindowMode:=acDialog
     m_inOpen = False
     KitInputBox = m_inAnswer
+    ClearInput                     ' don't keep a typed PIN or password in memory
     Exit Function
 Failed:
     ' Only this question's own dialog failed to open; a question already
     ' showing (Plain from the first line) keeps m_inOpen set until it closes.
     m_inOpen = False
+    ClearInput
     If masked Then
         LogError "modKitUI.KitInputBox", "masked input dialog did not open: " & Err.Description
         KitInputBox = Null
@@ -387,6 +389,12 @@ End Function
 
 Public Sub SetKitInputAnswer(ByVal answer As Variant)
     m_inAnswer = answer
+End Sub
+
+' Forget the last question and its answer once KitInputBox has returned it.
+Private Sub ClearInput()
+    m_inPrompt = "": m_inTitle = "": m_inDefault = "": m_inMasked = False
+    m_inAnswer = Null
 End Sub
 
 ' ---------------------------------------------------------------------------
