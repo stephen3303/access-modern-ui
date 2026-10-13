@@ -29,6 +29,7 @@ $fe = Join-Path $OutDir "$($AppName)_FE.accdb"
 . (Join-Path $root 'VbaLineNumbers.ps1')
 $stage = Join-Path $env:TEMP "$($AppName)_src"
 Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path $stage) { throw "Can't clear the staging folder $stage (a file in it is open?)" }
 Copy-Item $src $stage -Recurse
 if (-not $NoLineNumbers) { Add-VbaLineNumbersToFolder (Join-Path $stage 'forms') }
 

@@ -58,10 +58,12 @@ function Add-VbaLineNumbers([string]$Text) {
 }
 
 # Number every .bas and .vba file in a folder in place. Only call it on a
-# staged copy, never on the source folder.
+# staged copy, never on the source folder. Written as UTF-8 without a BOM, as
+# SaveForm reads them (ReadTextFile), so non-ASCII text survives.
 function Add-VbaLineNumbersToFolder([string]$Folder) {
+    $utf8 = New-Object Text.UTF8Encoding $false
     foreach ($f in @(Get-ChildItem $Folder -Include *.bas, *.vba -Recurse)) {
         $text = Add-VbaLineNumbers ([IO.File]::ReadAllText($f.FullName))
-        [IO.File]::WriteAllText($f.FullName, $text, [Text.Encoding]::ASCII)
+        [IO.File]::WriteAllText($f.FullName, $text, $utf8)
     }
 }
