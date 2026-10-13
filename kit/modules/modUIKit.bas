@@ -181,6 +181,7 @@ Public Sub NewDialog(ByVal caption As String, ByVal w As Long, ByVal h As Long)
         .CloseButton = True
         .Section(acDetail).BackColor = CLR_DIALOG
         .Section(acDetail).AlternateBackColor = CLR_DIALOG
+        .OnClose = "=BackdropOnClose()"    ' clears a dim a VBA reset left (modBackdrop)
     End With
 End Sub
 

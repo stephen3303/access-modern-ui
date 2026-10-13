@@ -332,5 +332,22 @@ Public Function TestKit(ByVal root As String) As String
     Check CenteredStart(-300, 300, 400, 0, 1920) = 0, "Dialog left past the work area's left edge"
     Check CenteredStart(0, 1000, 1200, 0, 1000) = 0, "Oversized dialog hides its title bar"
     Check ErrorLineSource() = "test line 8", "Error log did not record the failing line (Erl)"
+    ' Backdrop: nested dims share one layer, and a dialog that fails to open
+    ' leaves the app undimmed.
+    ' One call per line: "DimApp:" at the start of a line is a line label, not a call.
+    DimApp
+    DimApp
+    UndimApp
+    Check AppDimmed(), "Inner dialog removed the outer dialog's dim"
+    UndimApp
+    Check Not AppDimmed(), "Dim left on after its last dialog"
+    On Error Resume Next
+    RunDialog "dlgNoSuchForm"
+    badName = Err.Number
+    On Error GoTo 0
+    Check badName <> 0, "RunDialog hid a missing dialog"
+    Check Not AppDimmed(), "Dim left on after a dialog failed to open"
+    BackdropOnClose
+    Check Not AppDimmed(), "A dialog closing with no dim waiting changed the count"
     TestKit = checks & " kit checks passed"
 End Function

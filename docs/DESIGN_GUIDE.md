@@ -42,7 +42,7 @@ access/
   build.ps1                  drives Access via COM; loads modules, calls BuildAll
   kit/
     modules/*.bas            reusable: modUIKit, modKitUI, modDarkMode, modPng, modGridOut,
-                             modCsv, modCrypto, modKitUtil (copied unchanged from the kit)
+                             modCsv, modCrypto, modKitUtil, modBackdrop (copied unchanged from the kit)
     forms/*.vba              kit code-behind: subGrid, dlgAppearance, dlgDatePick
   src/
     modules/*.bas            the app's own standard modules (incl. generated modPalette)
@@ -126,6 +126,7 @@ them, and the shell (`frmMain`) last.
 | modKitUI (kit) | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSwitch`, `ToggleFocus`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `CheckRequired`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
 | modKitUtil (kit) | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `CenterOnApp`, `SetVisible`, `SetEnabled` |
+| modBackdrop (kit) | `DimApp`, `UndimApp`: the dimmed backdrop behind modal dialogs |
 | modDarkMode (kit), modPalette (gen), modTheme (gen) | Palette engine (section 7) |
 | modPng (kit) | Draws anti-aliased PNGs for rounded pills, card corners, progress capsules and toggle switches |
 | modWrap | GDI text measurement (`MeasureText`) and word wrap for fixed-height rows |
@@ -338,7 +339,9 @@ End Sub
 - **Forms**
   - `NewForm recSrc, view(0 single/1 continuous), w, h`
   - `NewDialog caption, w, h`: pop-up, modal, auto-center, dialog border, `CLR_DIALOG`
-    background.
+    background, and `OnClose = "=BackdropOnClose()"`, which removes a dim a VBA reset
+    left behind (a dialog with its own `Form_Close` calls `BackdropOnClose` from it). A reset
+    between `DimApp` and the dialog opening leaves the dim on until the next kit dialog opens or closes.
   - `NewReport recSrc, w`: Letter portrait, 0.5 in margins, `REPORT_W = 10800`, pop-up
     preview.
   - `SaveForm`, `Trace`
@@ -542,6 +545,14 @@ Write app-specific helpers next to the builds that use them. Examples:
 - **Dialogs**:
   - `RunDialog(name, openArgs)` opens the form with `acDialog` and returns True when the
     dialog set `TempVars("DialogResult") = "ok"`.
+  - While a dialog is open the app behind it is dimmed, like a web modal: a see-through
+    layer of `CLR_SIDEBAR` (45%) over the Access window. `RunDialog` and `KitMsgBox` do
+    this themselves and remove the dim when the dialog closes, or fails to open.
+    `RunDialog name, openArgs, False` opens one undimmed. A modal form opened any other way
+    calls `DimApp` before it and `UndimApp` after, on the error path too. The date picker
+    is a small drop-down, so it isn't dimmed.
+  - A dialog that wires its own close handler (`Ev F, "OnClose"`) replaces
+    `=BackdropOnClose()` from `NewDialog`, so its `Form_Close` calls `BackdropOnClose` itself.
   - Other results come back in named TempVars.
   - Dialog input comes through `OpenArgs`.
   - Every dialog's `Form_Load` ends with `CenterOnApp Me`, after anything that changes

@@ -54,6 +54,9 @@ watching for Visual Basic error dialogs as well as the error log:
   the palette's primary color when on and its muted text color when off; a ring shows while
   it has the focus, inside the panel. The table gained a column, so build without
   `-UiOnly` once.
+- Dialogs: Appearance in the sidebar and the buttons on Cards and progress dim the whole
+  Access window behind their dialog; the dim goes when the dialog closes, and the dialog
+  itself is not dimmed.
 
 ## Files
 

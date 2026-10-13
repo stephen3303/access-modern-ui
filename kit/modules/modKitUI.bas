@@ -673,7 +673,9 @@ Public Function KitMsgBox(ByVal msg As String, Optional ByVal style As VbMsgBoxS
     m_msgTitle = title
     m_msgAnswer = 0
     m_msgOpen = True
+    DimApp                          ' the app behind is dimmed, as for RunDialog
     DoCmd.OpenForm "dlgMessage", WindowMode:=acDialog
+    UndimApp
     m_msgOpen = False
     If m_msgAnswer = 0 Then        ' closed some other way: as Esc
         m_msgAnswer = Choose(btns + 1, vbOK, vbCancel, vbCancel, vbCancel, vbNo, vbCancel)
@@ -683,6 +685,9 @@ Public Function KitMsgBox(ByVal msg As String, Optional ByVal style As VbMsgBoxS
 Failed:
     ' Only this message's own dialog failed to open; a message already showing
     ' (Plain from the first line) keeps m_msgOpen set until it closes.
+    ' m_msgOpen is set just before DimApp (which never raises), so it also says
+    ' this message's dim is still on.
+    If m_msgOpen Then UndimApp
     m_msgOpen = False
 Plain:
     KitMsgBox = MsgBox(msg, style, title)
