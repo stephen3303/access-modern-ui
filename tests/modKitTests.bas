@@ -23,6 +23,7 @@ Public Function TestKit(ByVal root As String) As String
     SaveForm "subRing"
     NewForm "", 0, px(700), px(700)
     GridHeaders "head", cols, px(24), px(60)
+    GridHeaders "sortHead", cols, px(24), px(40), sortSf:="sfRows"
     SubF "sfRows", "Form.subTest", px(24), px(82), px(600), px(180)
     SubF "sfReuse", "Form.subTest", px(24), px(320), px(600), px(180)
     GridFooter "sfRows", "pager", "id"
@@ -112,6 +113,22 @@ Public Function TestKit(ByVal root As String) As String
     SetVisible host.pillBound, True
     Check host.pillBound.Visible And host.pillBound_bg.Visible, "Shown bound pill lost its image"
     grid.RecordSource = "SELECT * FROM test_rows ORDER BY id"
+    ' Click-to-sort captions: ascending with an up arrow, then reversed; the arrow moves with the column.
+    Check host.head1.OnClick = "" And Right$(host.head1.Tag, 1) = "|", "Unsortable caption has a sort click"
+    Check host.sortHead1.OnClick = "=GridSort([Form],""sfRows"",""sortHead"",1)", "Sortable caption has no sort click"
+    GridSort host, "sfRows", "sortHead", 1
+    Check grid.OrderByOn And grid.OrderBy Like "*description], [[]id]", "First caption click did not sort ascending"
+    Check host.sortHead1.Caption = "DESCRIPTION " & ChrW(&H25B2), "Ascending caption lacks its arrow"
+    GridSort host, "sfRows", "sortHead", 1
+    Check grid.OrderBy Like "*description] DESC, [[]id]", "Second caption click did not reverse the sort"
+    Check host.sortHead1.Caption = "DESCRIPTION " & ChrW(&H25BC), "Descending caption lacks its arrow"
+    With grid.RecordsetClone
+        .MoveFirst
+        Check !description = "Description 9", "Rows are not in descending order"
+    End With
+    GridSort host, "sfRows", "sortHead", 0
+    Check host.sortHead0.Caption = "CATEGORY " & ChrW(&H25B2) And host.sortHead1.Caption = "DESCRIPTION", "Arrow stayed on the old column"
+    grid.OrderBy = "": grid.OrderByOn = False
     height = host.sfRows.Height
     LayoutTableFooter host, "sfRows", "pager", "id"
     Check Not host.pagerCount.Visible, "Unmarked table has footer"
@@ -149,6 +166,15 @@ Public Function TestKit(ByVal root As String) As String
     Loop
     Check ids.Count = 20, "Pager omitted records"
     Check Not host.pagerNext.Enabled, "Last page permits advance"
+    ' Sorting a paginated table starts again at page 1 of the whole filtered set.
+    GridSort host, "sfRows", "sortHead", 1
+    With grid.RecordsetClone
+        .MoveFirst
+        Check !description = "Description 10", "Sorted pager kept the old order's page"
+    End With
+    Check host.pagerCount.Caption Like "Showing 1-* of 20", "Sorted pager did not return to page 1"
+    grid.OrderBy = "": grid.OrderByOn = False
+    LayoutTableFooter host, "sfRows", "pager", "id"
     SetTablePagination host.sfRows, False
     LayoutTableFooter host, "sfRows", "pager", "id"
     Check host.sfRows.Tag = "AppTag", "Opt-out lost app tag"

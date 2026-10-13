@@ -5,7 +5,7 @@ Option Explicit
 ' filter apply to whichever table the tab strip shows; the chips and tabs
 ' show how many items each would list.
 
-Private Const ITEMS_SQL As String = "SELECT id, name, owner, category, status, Format(due_date,'dd mmm yyyy') AS due " & _
+Private Const ITEMS_SQL As String = "SELECT id, name, owner, category, status, Format(due_date,'dd mmm yyyy') AS due, due_date " & _
     "FROM demo_item ORDER BY due_date"
 
 Private m_tab As String

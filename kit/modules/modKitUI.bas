@@ -11,6 +11,10 @@ Option Explicit
 Private Const SCROLL_W As Long = 300
 ' Widest a form can be: 22 inches (twips).
 Private Const MAX_FORM_W As Long = 31680
+' Arrows a sorted GridHeaders caption shows (GridSort): up ascending, down
+' descending (Unicode code points, for ChrW).
+Private Const SORT_UP As Long = &H25B2
+Private Const SORT_DOWN As Long = &H25BC
 ' The DateBox the date picker (dlgDatePick) is open for (PickDate).
 Private m_dateTarget As Control
 ' The message the message dialog (dlgMessage) is showing (KitMsgBox), and the
@@ -160,6 +164,50 @@ Public Sub GridScrollAll(frm As Form)
             End If
         End If
     Next
+End Sub
+
+' Caption click on a sortable GridHeaders table (its sortSf): sort the table
+' in subform control sfName on host by caption prefix & col's sort field,
+' ascending, or descending when that caption already shows the ascending
+' arrow. The sorted caption shows the SORT_UP or SORT_DOWN arrow (on its
+' left when the caption is right-aligned, so the text stays over the
+' numbers) and the others lose theirs. The arrow is the sort state: a host
+' that sorts the table in code should do it through GridSort.
+' The sort is the form's OrderBy, which PrintGrid and ExportGrid follow. A
+' paginated table (GridFooter) goes back to its first page in the new order.
+' Ties keep id order. The selected row stays selected (txtSel keeps its id).
+' A failure is shown (HandleError), as for any click; code that sorts a
+' table and must know it failed should check the table's OrderBy after.
+Public Function GridSort(host As Form, ByVal sfName As String, ByVal prefix As String, ByVal col As Long)
+    Dim g As Form, cap As Control, t() As String, key As String, desc As Boolean, i As Long
+    On Error GoTo Fail
+    Set cap = host.Controls(prefix & col)
+    t = Split(cap.Tag & "|||", "|")
+    key = Trim$(t(3))
+    If Len(key) = 0 Then Exit Function
+    If Left$(key, 1) <> "[" Then key = "[" & key & "]"
+    desc = InStr(cap.Caption, ChrW(SORT_UP)) > 0
+    Set g = host.Controls(sfName).Form
+    g.OrderBy = key & IIf(desc, " DESC", "") & IIf(key = "[id]", "", ", [id]")
+    g.OrderByOn = True
+    RestartTablePages host, sfName      ' a paginated table shows the old order's page
+    Do While HasCtl(host, prefix & i)
+        SortArrow host.Controls(prefix & i), IIf(i = col, IIf(desc, ChrW(SORT_DOWN), ChrW(SORT_UP)), "")
+        i = i + 1
+    Loop
+    Exit Function
+Fail:
+    HandleError "modKitUI.GridSort", prefix & col
+End Function
+
+' Put arrow (or none, "") on a GridHeaders caption in place of the one it has.
+Private Sub SortArrow(cap As Control, ByVal arrow As String)
+    Dim s As String
+    s = Trim$(Replace(Replace(cap.Caption, ChrW(SORT_UP), ""), ChrW(SORT_DOWN), ""))
+    If Len(arrow) > 0 Then
+        If cap.TextAlign = 3 Then s = arrow & " " & s Else s = s & " " & arrow
+    End If
+    If cap.Caption <> s Then cap.Caption = s
 End Sub
 
 ' Select the first row of a BuildGrid table and tell the host, as a click

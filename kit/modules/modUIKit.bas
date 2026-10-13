@@ -609,6 +609,7 @@ Public Sub BuildGrid(ByVal finalName As String, ByVal cols As Variant, ByVal w A
     F.Tag = "grid:" & w
     F.ScrollBars = 0                        ' GridScroll shows it when the rows overflow
     F.OnCurrent = "=GridScroll([Form])"
+    F.OrderByOnLoad = False                 ' a sort saved with the form would show no arrow (GridSort)
     ' A fit table's host sizes these (GridFit); anchored, they would stretch
     ' the form past the columns and stop GridFit narrowing it.
     Set c = RowBack("txtBg", 0, 0, w, h): If Not fit Then Anchor c, 2, 0
@@ -676,12 +677,18 @@ End Sub
 
 ' Column captions for a BuildGrid table whose subform sits at (x, y + px(22)).
 ' band = True draws them on a CLR_INSET strip w wide (default: the columns'
-' widths), which stretches with the window like the table. Each caption's
-' Tag holds "x|offset|width" for GridFit.
+' widths), which stretches with the window like the table. sortSf names the
+' table's subform control on the same form: then clicking a caption sorts the
+' table by that column (GridSort), and a second click reverses it. A column
+' sorts by its field, or by a fifth part "field|caption|width|options|sort
+' field" (e.g. the date behind a formatted text column; the record source must
+' return it). A column whose field is an expression ("=...") and has no sort
+' field doesn't sort. Each caption's Tag holds "x|offset|width|sort field"
+' for GridFit and GridSort.
 Public Sub GridHeaders(ByVal prefix As String, ByVal cols As Variant, ByVal x As Long, ByVal y As Long, _
                        Optional ByVal parentCtl As String = "", Optional ByVal band As Boolean = False, _
-                       Optional ByVal w As Long = 0)
-    Dim c As Control, i As Long, p() As String, cx As Long, cy As Long, cw As Long, opts As String
+                       Optional ByVal w As Long = 0, Optional ByVal sortSf As String = "")
+    Dim c As Control, i As Long, p() As String, cx As Long, cy As Long, cw As Long, opts As String, key As String
     If band Then
         If w = 0 Then
             w = px(16)
@@ -701,7 +708,13 @@ Public Sub GridHeaders(ByVal prefix As String, ByVal cols As Variant, ByVal x As
         Set c = Lbl(prefix & i, UCase$(p(1)), cx, cy, cw, px(16), 8, True, CLR_MUTED_FG, acDetail, parentCtl)
         If InStr(opts, "r") > 0 Then c.TextAlign = 3
         If InStr(opts, "c") > 0 Or InStr(opts, "p") > 0 Then c.TextAlign = 2
-        c.Tag = x & "|" & (cx - x) & "|" & cw
+        key = ""
+        If Len(sortSf) > 0 Then
+            If UBound(p) >= 4 Then key = p(4)
+            If Len(key) = 0 And Left$(p(0), 1) <> "=" Then key = p(0)
+            If Len(key) > 0 Then c.OnClick = "=GridSort([Form],""" & sortSf & """,""" & prefix & """," & i & ")"
+        End If
+        c.Tag = x & "|" & (cx - x) & "|" & cw & "|" & key
         cx = cx + px(Val(p(2)))
     Next
 End Sub
