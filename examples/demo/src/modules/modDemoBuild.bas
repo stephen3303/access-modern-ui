@@ -97,6 +97,7 @@ Private Sub BuildUserInterface()
     Build_pgTables
     Build_pgList
     Build_dlgAppearance
+    BuildMessageDialog             ' the kit's dlgMessage, for KitMsgBox
     Build_frmMain
 End Sub
 

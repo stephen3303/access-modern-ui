@@ -30,6 +30,7 @@ try {
  $formDir=Join-Path $OutputDirectory 'kit/forms'
  New-Item -ItemType Directory -Force -Path $formDir | Out-Null
  Copy-Item (Join-Path $repo 'kit/forms/subGrid.vba') $formDir
+ Copy-Item (Join-Path $repo 'kit/forms/dlgMessage.vba') $formDir
  Copy-Item (Join-Path $PSScriptRoot 'testHost.vba') $formDir
  $arg=[string]$OutputDirectory
  $result=$access.Run('TestKit',[ref]$arg)
