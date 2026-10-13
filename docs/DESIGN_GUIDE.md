@@ -119,11 +119,11 @@ them, and the shell (`frmMain`) last.
 | modBuildUI, modBuildPages, modBuildPages2 | `Build_<form>` procedures, one per form, grouped by area |
 | modUI | Run-time UI helpers: `NavTo`, badges/pills painting, `ShowTip`, the app's hooks (`BadgeColors`, `StatusVariant`) |
 | modUIKit (kit) | Build-time control builders (section 6) |
-| modKitUI (kit) | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `KitMsgBox`, `KitInputBox`, `CheckRequired`, `SetCount`, `StyleChip` |
+| modKitUI (kit) | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSwitch`, `ToggleFocus`, `KitMsgBox`, `KitInputBox`, `CheckRequired`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
 | modKitUtil (kit) | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `CenterOnApp`, `SetVisible`, `SetEnabled` |
 | modDarkMode (kit), modPalette (gen), modTheme (gen) | Palette engine (section 7) |
-| modPng (kit) | Draws anti-aliased PNGs for rounded pills, card corners and progress capsules |
+| modPng (kit) | Draws anti-aliased PNGs for rounded pills, card corners, progress capsules and toggle switches |
 | modWrap | GDI text measurement (`MeasureText`) and word wrap for fixed-height rows |
 | modCsv, modZip (kit / app) | CSV I/O, ZIP |
 | Domain modules | Business logic, one module per area; they enforce rules so they hold from any caller |
@@ -340,12 +340,19 @@ End Sub
     30px outline calendar button 4px to its right that opens the kit's date picker
     (`PickDate`, `dlgDatePick`, built by `BuildDatePicker`): a month of day cells with
     previous and next arrows, the box's date highlighted, today in bold, and Today,
-    Clear and Cancel. Access's own picker is off: it shows only on focus, and
+    Clear and Cancel. US federal holidays (`FederalHoliday`, on their observed day)
+    are underlined in `CLR_DANGER_TEXT` and app dates (`MarkDate`, such as deadlines)
+    in `CLR_WARN_TEXT`, which wins when a day is both; the tooltip names every mark.
+    Days outside the month stay `CLR_MUTED_FG` with the underline and tooltip.
+    Access's own picker is off: it shows only on focus, and
     `acCmdShowDatePicker` is refused once it is off. The pair is 154px
     (`DATEFIELD_W`), so it fits a half-width field column.
   - `RO`: read-only text, borderless, transparent, no tab stop. Show read-only dates
     left-aligned (`TextAlign = 1`) so they line up with text values.
   - `Cbo`, `Lst`, `Chk`
+  - `Toggle nm, src, x, y, [w], [h], [onChange]`: an on/off switch for a yes/no field
+    (section 6.6). Use it for settings and flags that take effect at once; keep `Chk`
+    for a choice saved with the rest of a form.
   - `Btn ... kind`: `primary`, `outline`, `ghost`, `destructive` or `nav`, each with
     themed hover and pressed colors and `Shape = 1` for rounded corners.
   - `Link`: clickable label.
@@ -514,6 +521,17 @@ Write app-specific helpers next to the builds that use them. Examples:
     dialog high or on another monitor.
 - **List subforms** (continuous forms of cards or rows) call back to their host with
   `Me.Parent.<PublicProc>`.
+- **New version notice**: once the app has opened (after sign-in checks, before the
+  first page), call `CheckForUpdate APP_VERSION, <release folder>`.
+  - The release folder is wherever users copy the app from. The release script writes
+    `version.txt` there, holding the release's version (`1.2.0`) on its first line.
+  - A newer version gets one information `KitMsgBox` naming both versions and the folder,
+    once per session. The app keeps running; nothing is copied for the user.
+  - Pass `advice` (third argument) when "copy the new version from the folder" is the
+    wrong next step, for example when the app's data lives inside its own file.
+  - A blank folder or a missing file skips the check. A read failure is logged with
+    `LogError` and never shown, so an offline share can't stop the app opening. An
+    unreachable network folder can still delay opening by about 20 seconds.
 
 ### 6.6 Visual components
 
@@ -566,6 +584,21 @@ Write app-specific helpers next to the builds that use them. Examples:
   `expr` is a field such as `"[percent_done]"` or a number; values are clamped to 0-100
   and Null shows an empty track. It is bound, so it follows the record in a continuous
   form. Give it a fixed width: the image keeps its shape, so don't anchor it to stretch.
+- **Toggle switch**: `Toggle` draws a 44 x 24px rounded track with a round knob
+  (`TogglePng`): `CLR_PRIMARY` with the knob on the right when on, `CLR_MUTED_FG`
+  with it on the left when off, the knob `CLR_SURFACE`, so the track and knob keep well
+  over 3:1 against the surface and each other in Navy and Midnight. Center the track on its row: in a
+  30px input row it sits 3px down. Access has no switch, so it is a hidden check box
+  `<nm>_val` bound to the field (the value), the track image `<nm>_bg` bound to it, and a
+  transparent button `<nm>` on top that takes clicks, the Tab stop and Space
+  (`ToggleSwitch`). A transparent button draws no focus, so a `CLR_PRIMARY` ring
+  (`<nm>_ring`, 2px wide, 2px outside the track) shows while it has the focus, and an input's
+  `FocusRing` comes off as it does for a button; leave 4px clear around the track for it. A value set in code fires no `AfterUpdate`, so pass
+  `onChange`, a Public Sub in the form's code-behind, to act on a change (for example,
+  save the record at once). A misspelled `onChange` shows error 438 on the first click.
+  Hide it with `SetVisible` on `<nm>`, and the track goes too; `SetEnabled` on `<nm>`
+  stops clicks and the Tab stop but doesn't dim the track. Use it on single forms only:
+  in a continuous form the ring shows on every row.
 - **Empty states**: a centered muted 10pt label shown in place of an empty list.
 - **Search box placeholder**: `Format = "@;""Search by ..."""`.
 - **Hierarchical trees and wrapped rows**:

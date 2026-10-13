@@ -46,14 +46,15 @@ Private Sub CreateTables()
     Dim db As DAO.Database
     Set db = CurrentDb
     db.Execute "CREATE TABLE demo_item (id COUNTER PRIMARY KEY, name TEXT(120), owner TEXT(60), " & _
-        "category TEXT(30), status TEXT(30), percent_done LONG, due_date DATETIME, notes LONGTEXT)", dbFailOnError
+        "category TEXT(30), status TEXT(30), percent_done LONG, due_date DATETIME, notes LONGTEXT, flagged YESNO)", dbFailOnError
     db.Execute "CREATE TABLE error_log (id COUNTER PRIMARY KEY, logged_at DATETIME, error_number LONG, " & _
         "description LONGTEXT, err_source TEXT(255), source TEXT(255), call_trail LONGTEXT, context LONGTEXT, " & _
         "page TEXT(32), active_form TEXT(64), active_control TEXT(64), username TEXT(150), windows_user TEXT(64), " & _
         "computer TEXT(64), fe_build TEXT(32), access_version TEXT(32))", dbFailOnError
 End Sub
 
-' 24 fictional items with every status and a spread of progress.
+' 24 fictional items with every status and a spread of progress; every
+' fourth is flagged for review.
 Private Sub SeedItems()
     Dim names As Variant, owners As Variant, cats As Variant, sts As Variant, i As Long, pct As Long, st As String
     names = Array("Fire main pump overhaul", "Sonar dome inspection", "Galley exhaust fan repair", _
@@ -75,10 +76,11 @@ Private Sub SeedItems()
             Case "Cancelled": pct = 10
             Case Else: pct = (i * 37) Mod 95 + 5
         End Select
-        CurrentDb.Execute "INSERT INTO demo_item (name, owner, category, status, percent_done, due_date, notes) VALUES (" & _
+        CurrentDb.Execute "INSERT INTO demo_item (name, owner, category, status, percent_done, due_date, notes, flagged) VALUES (" & _
             Q(names(i)) & "," & Q(owners(i Mod 6)) & "," & Q(cats((i \ 2) Mod 6)) & "," & Q(st) & "," & pct & "," & _
             "#" & Format$(DateSerial(2026, 10, 1) + i * 3, "mm/dd/yyyy") & "#," & _
-            Q("Demonstration item " & (i + 1) & ". Fictional data for testing the kit.") & ")", dbFailOnError
+            Q("Demonstration item " & (i + 1) & ". Fictional data for testing the kit.") & "," & _
+            IIf(i Mod 4 = 0, "True", "False") & ")", dbFailOnError
     Next
 End Sub
 
@@ -99,6 +101,7 @@ Private Sub BuildUserInterface()
     Build_dlgAppearance
     BuildMessageDialog             ' the kit's dlgMessage, for KitMsgBox
     BuildInputDialog               ' the kit's dlgInput, for KitInputBox
+    BuildDatePicker                ' the kit's dlgDatePick, for DateBox
     Build_frmMain
 End Sub
 
@@ -153,10 +156,12 @@ Private Sub SearchBox(ByVal x As Long, ByVal y As Long, ByVal w As Long)
     Ev c, "OnChange"
 End Sub
 
-' Detail panel form for pgList: one item, editable.
+' Detail panel form for pgList: one item, editable. The Flagged switch
+' (Toggle) saves the record as soon as it changes.
 Private Sub Build_subItem()
     Dim c As Control, x2 As Long, hw As Long
     NewForm "demo_item", 0, px(328), px(362)
+    Ev F, "AfterUpdate"
     F.Section(acDetail).BackColor = CLR_SURFACE
     F.Section(acDetail).AlternateBackColor = CLR_SURFACE
     hw = px(156): x2 = px(172)
@@ -171,11 +176,14 @@ Private Sub Build_subItem()
     Ev c, "AfterUpdate"
     Progress "imgPct", "[percent_done]", 0, px(170), px(328), px(10)
     FieldLbl "lblDue", "DUE", 0, px(190), hw
-    Set c = Txt("txtDue", "due_date", 0, px(208), hw, px(30))
-    c.Format = "dd mmm yyyy"
+    DateBox "txtDue", "due_date", 0, px(208), px(30)
     FieldLbl "lblNotes", "NOTES", 0, px(246), px(328)
     Set c = Txt("txtNotes", "notes", 0, px(264), px(328), px(60))
     c.EnterKeyBehavior = True
+    ' Compact 36 x 20px switch centered on the 28px Save row, 4px in so its focus
+    ' ring stays inside the form; its label toggles it too.
+    Toggle "tglFlag", "flagged", px(4), px(338), px(36), px(20), "FlagChanged"
+    Link "lblFlag", "Flagged for review", px(48), px(334), px(176), px(28), "=ToggleSwitch([Form],""tglFlag"")", 9, CLR_FG
     Btn "btnSave", "Save", px(232), px(334), px(96), px(28)
     SaveForm "subItem"
 End Sub

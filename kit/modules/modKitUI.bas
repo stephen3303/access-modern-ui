@@ -4,9 +4,9 @@ Option Explicit
 ' Access UI kit - run-time helpers for pages built with modUIKit: tables that
 ' scale their columns (GridFit), list/detail pages (SelectFirstRow,
 ' ShowDetail, ClearDetail), tabs and filter chips with counts (SetCount,
-' StyleChip), focus rings on inputs (FocusRing), and messages and questions
-' in the kit's look (KitMsgBox, KitInputBox). Colors set here go through Th()
-' so they follow the palette.
+' StyleChip), focus rings on inputs (FocusRing), toggle switches (ToggleSwitch,
+' ToggleFocus), and messages and questions in the kit's look (KitMsgBox,
+' KitInputBox). Colors set here go through Th() so they follow the palette.
 
 ' Width the table's vertical scroll bar takes (twips).
 Private Const SCROLL_W As Long = 300
@@ -18,6 +18,8 @@ Private Const SORT_UP As Long = &H25B2
 Private Const SORT_DOWN As Long = &H25BC
 ' The DateBox the date picker (dlgDatePick) is open for (PickDate).
 Private m_dateTarget As Control
+' Dates the app marks on the date picker (MarkDate): label by "d" & date serial.
+Private m_marks As Collection
 ' The message the message dialog (dlgMessage) is showing (KitMsgBox), and the
 ' button chosen in it.
 Private m_msgOpen As Boolean
@@ -321,6 +323,88 @@ Public Sub SetDateTarget(ByVal v As Variant)
     m_dateTarget.Value = v
 End Sub
 
+' Mark day d on the date picker with label lbl (a deadline, a drill, a pay
+' day). A second label on the same day is added after "; ". Marks last until
+' ClearMarkedDates or the app closes, so set them before the picker opens, for
+' example at startup from the app's own deadlines table.
+Public Sub MarkDate(ByVal d As Date, ByVal lbl As String)
+    Dim k As String, cur As String
+    If m_marks Is Nothing Then Set m_marks = New Collection
+    k = "d" & CLng(Int(d))
+    cur = MarkedDate(d)
+    If Len(cur) > 0 Then
+        m_marks.Remove k
+        lbl = cur & "; " & lbl
+    End If
+    m_marks.Add lbl, k
+End Sub
+
+' Remove every MarkDate mark.
+Public Sub ClearMarkedDates()
+    Set m_marks = Nothing
+End Sub
+
+' The app's label for day d (MarkDate), or "" when it has none.
+Public Function MarkedDate(ByVal d As Date) As String
+    If m_marks Is Nothing Then Exit Function
+    On Error Resume Next
+    MarkedDate = m_marks("d" & CLng(Int(d)))
+    Err.Clear
+End Function
+
+' The US federal holiday on day d (5 U.S.C. 6103), or "" when there is none.
+' Fixed-date holidays are given on the day they are observed: a Saturday
+' holiday on the Friday before, a Sunday one on the Monday after, with
+' " (observed)" added. So New Year's Day can fall on 31 December. These are
+' the rules since 1978 (Veterans Day back on 11 November); earlier dates
+' return "".
+Public Function FederalHoliday(ByVal d As Date) As String
+    Dim y As Integer, nm As String
+    d = Int(d)
+    y = Year(d)
+    If y < 1978 Then Exit Function
+    nm = ObservedHoliday(d, DateSerial(y + 1, 1, 1), "New Year's Day")
+    If Len(nm) = 0 Then nm = ObservedHoliday(d, DateSerial(y, 1, 1), "New Year's Day")
+    If Len(nm) = 0 And y >= 2021 Then nm = ObservedHoliday(d, DateSerial(y, 6, 19), "Juneteenth National Independence Day")
+    If Len(nm) = 0 Then nm = ObservedHoliday(d, DateSerial(y, 7, 4), "Independence Day")
+    If Len(nm) = 0 Then nm = ObservedHoliday(d, DateSerial(y, 11, 11), "Veterans Day")
+    If Len(nm) = 0 Then nm = ObservedHoliday(d, DateSerial(y, 12, 25), "Christmas Day")
+    If Len(nm) > 0 Then FederalHoliday = nm: Exit Function
+    ' The Monday and Thursday holidays never move.
+    If d = NthWeekday(y, 1, vbMonday, 3) And y >= 1986 Then
+        nm = "Birthday of Martin Luther King, Jr."
+    ElseIf d = NthWeekday(y, 2, vbMonday, 3) Then
+        nm = "Washington's Birthday"
+    ElseIf d = NthWeekday(y, 6, vbMonday, 1) - 7 Then
+        nm = "Memorial Day"                     ' the last Monday in May
+    ElseIf d = NthWeekday(y, 9, vbMonday, 1) Then
+        nm = "Labor Day"
+    ElseIf d = NthWeekday(y, 10, vbMonday, 2) Then
+        nm = "Columbus Day"
+    ElseIf d = NthWeekday(y, 11, vbThursday, 4) Then
+        nm = "Thanksgiving Day"
+    End If
+    FederalHoliday = nm
+End Function
+
+' nm when d is the day holiday hol is observed on, else "".
+Private Function ObservedHoliday(ByVal d As Date, ByVal hol As Date, ByVal nm As String) As String
+    Dim obs As Date
+    obs = hol
+    Select Case Weekday(hol, vbSunday)
+        Case vbSaturday: obs = hol - 1
+        Case vbSunday: obs = hol + 1
+    End Select
+    If d = obs Then ObservedHoliday = nm & IIf(obs <> hol, " (observed)", "")
+End Function
+
+' The n-th weekday wd (vbMonday ...) of month m in year y.
+Private Function NthWeekday(ByVal y As Integer, ByVal m As Integer, ByVal wd As VbDayOfWeek, ByVal n As Integer) As Date
+    Dim first As Date
+    first = DateSerial(y, m, 1)
+    NthWeekday = first + ((wd - Weekday(first, vbSunday) + 7) Mod 7) + (n - 1) * 7
+End Function
+
 ' ---------------------------------------------------------------------------
 ' Focus ring
 ' ---------------------------------------------------------------------------
@@ -412,6 +496,46 @@ Private Sub ClearRing()
     m_ringHwnd = 0
     m_ringName = ""
 End Sub
+
+' ---------------------------------------------------------------------------
+' Toggle switches
+' ---------------------------------------------------------------------------
+
+' Click, or Space, on a Toggle switch nm (modUIKit.Toggle): flips its value
+' (<nm>_val, and so its field), redraws the track and calls the form's
+' onChange sub if the switch has one. Does nothing while the value is locked
+' or disabled, or the form is read-only (AllowEdits off, unless on a record
+' being added), like PickDate.
+Public Function ToggleSwitch(frm As Form, ByVal nm As String)
+    Dim v As Control, onChange As String
+    On Error GoTo Fail
+    Set v = frm.Controls(nm & "_val")
+    If Not v.Enabled Or v.Locked Then Exit Function
+    ' Nested, so an unbound settings form never reads NewRecord.
+    If Not frm.AllowEdits Then
+        If Not (frm.NewRecord And frm.AllowAdditions) Then Exit Function
+    End If
+    v.Value = Not CBool(Nz(v.Value, False))
+    frm.Controls(nm & "_bg").Requery            ' an unbound image recalculates
+    onChange = Nz(frm.Controls(nm).Tag, "")
+    If Len(onChange) > 0 Then CallByName frm, onChange, VbMethod
+    Exit Function
+Fail:
+    HandleError "modKitUI.ToggleSwitch", nm
+End Function
+
+' Focus moving onto (hasFocus True) or off a Toggle switch nm: shows or hides
+' its focus ring, since a transparent button draws no focus of its own, and
+' takes an input's ring off (FocusRing) like the kit's buttons do. A failure
+' is logged, not shown, so moving the focus never stops on a message.
+Public Function ToggleFocus(frm As Form, ByVal nm As String, ByVal hasFocus As Boolean)
+    On Error GoTo Fail
+    If hasFocus Then ClearRing
+    SetVisible frm.Controls(nm & "_ring"), hasFocus
+    Exit Function
+Fail:
+    LogError "modKitUI.ToggleFocus", nm
+End Function
 
 ' ---------------------------------------------------------------------------
 ' Messages
