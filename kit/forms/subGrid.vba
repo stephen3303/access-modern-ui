@@ -31,9 +31,11 @@ Private Function GridName() As String
     Dim c As Control
     For Each c In Me.Parent.Controls
         If c.ControlType = acSubform Then
-            If c.SourceObject = Me.Name Then
+            If Len(c.SourceObject) > 0 Then
+              If c.Form Is Me Then
                 GridName = c.Name
                 Exit Function
+              End If
             End If
         End If
     Next

@@ -28,9 +28,11 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 
 | Module | What it does |
 |---|---|
+| modTableUI | Responsive columns, matching headers, counted filters, uniform tag widths and opt-in pagination |
+| modTextUI | Standalone measured single-line text fitting and header captions with full-text tooltips |
 | modUIKit | Build-time form and control builders (catalog below) |
 | modDarkMode | Palette engine: `ThemeForm` repaints each form on open, `Th()` gives runtime colors, and `SetPalette`/`ShowAppearance` switch palettes |
-| modPng | Anti-aliased PNGs for rounded shapes: `PillPng` (pills and badges), `CardPng` (card corners), `ProgressPng` (progress capsules), cached in `%LOCALAPPDATA%\<APP_NAME>\pills` |
+| modPng | Anti-aliased PNGs for rounded shapes: `PillPng` (pills and badges), `CardPng` (card corners), `ProgressPng` (progress capsules), `ColumnPillPng` (uniform-width pills in a table column), `RoundedCardPng` (whole resizable card backgrounds), cached in `%LOCALAPPDATA%\<APP_NAME>\pills` |
 | modKitUI | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `SetCount`, `StyleChip` (catalog below) |
 | modGridOut | `PrintGrid` and `ExportGrid`: print or export a table as the user sees it |
 | modCsv | UTF-8 text files, RFC 4180 CSV read/write, query-to-CSV export |
@@ -56,7 +58,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 | `PALETTE_COUNT`, `PaletteKey`, `PaletteName`, `PaletteIsDark`, `PaletteSwatch`, `PaletteOf` | modDarkMode, dlgAppearance | modPalette (generated) |
 | `APP_NAME` | modPng | modGlobals |
 | `HandleError`, `LogError`, `RaiseAgain` | modDarkMode, modCsv | modErrors (`examples/modules`) |
-| `MeasureText(s, size, weight)` (text width in twips) | `TitleTip`/`PageHeader` | modWrap |
+| `MeasureText(s, size, weight)` (Segoe UI text width in twips; size in points, weight 400 normal / 700 bold) | modTextUI, modPng, `TitleTip`/`PageHeader` | modWrap |
 | `ShowTip(frm, nm)` | the "?" marks from `TitleTip` | modUI |
 | `frmMain` with `PageKey` and `Reopen pg` | `SetPalette` (reopens the window) | frmMain |
 | `dlgAppearance` form | `ShowAppearance` | `Build_dlgAppearance` + dlgAppearance.vba |
@@ -150,3 +152,80 @@ Sizes are in twips. `px(n)` converts CSS pixels at 15 twips per pixel.
 | `SetEnabled c, v` | Enable or disable a control, moving the focus away when it has the focus (avoids error 2164) |
 | `PrintGrid gridForm, title [, subtitle]` | Print preview of a table's rows as shown, with its captions; landscape when wide |
 | `ExportGrid gridForm, path` | Write a table's rows as shown to CSV, or to Excel when `path` ends in `.xlsx`. Returns the row count. |
+
+## Shared table policy
+
+### Text fitting without table dependencies
+
+`modTextUI` can be imported alone. Its only application hook is
+`MeasureText(text, size, weight)`, which must measure Segoe UI text in twips.
+Access's normal form/control types and `Nz` are also required.
+
+Apps without an existing measurement hook can import the optional Windows adapter
+`kit/adapters/modTextMeasure.bas`. It measures Segoe UI through GDI, supports
+32-bit and 64-bit Access, and returns twips using a canonical 96 DPI font.
+Import it **instead of** an existing `MeasureText` implementation to avoid a
+duplicate public name. Adapters are outside `kit/modules` and are not imported
+automatically. The native test's `-UseGdiMeasurement` switch imports this adapter,
+removes its test stand-in, and checks proportional character widths before
+running the complete fixture.
+
+- `FitSingleLineText(value, width [, size = 9, weight = 400])` replaces line breaks
+  with spaces and returns measured text with an ellipsis when it does not fit.
+  Width is the available text area in twips, excluding control margins. A null
+  value or a width too small for the ellipsis returns an empty string. Keep the
+  original bound value intact and available in the record editor.
+- `FitHeaderText(heading, fullCaption [, preferredSize = 9, minimumSize = 8])`
+  fits the caption to the control's inner width, reducing the font to the supplied
+  minimum before ellipsizing. Pass the original caption on every resize so a
+  wider column restores its complete text and preferred font. The native tooltip
+  retains up to 255 characters of the full caption. Use a Segoe UI label or button
+  with margin properties.
+
+Native `ControlTipText` is shared across repeated instances of a continuous form
+control. It cannot reliably reveal each hovered row's bound value. Use header
+tooltips for captions and the record editor for complete row values.
+
+Use pills for finite categories, statuses and filter tags. Leave names, free text,
+dates and numeric progress as plain text. Use TagWidth(values) or TableTagWidth(form,
+field) to measure the widest category, then use ColumnPillPng with that width for every
+pill in the same row or column. Text measurement comes from the app's MeasureText hook.
+
+BuildGrid keeps read-only cells out of the tab order. Non-clickable cells are disabled
+and locked; clickable cells move focus to txtFocusSink before the parent callback.
+subGrid resolves its hosting control by form instance, even when reused twice.
+
+Call ResizeGrid on resize, then AlignGridHeaders with the corresponding txtCol names.
+The column option t gives Action/Description fields three shares of extra width.
+CenterTableCell gives native bound values one centered line; open the record editor to
+read or edit longer values. Keep multiline editors outside the continuous table.
+
+RoundedCard / ResizeRoundedCard regenerate the background (RoundedCardPng) at the actual control size,
+so corners remain rounded when a panel expands. Native image/subform borders stay off.
+
+### Pagination is optional for each table
+
+GridFooter subName, prefix, keyField, enabled builds the parent footer. enabled defaults
+to False. A hosting subform Tag of Pagination:on enables it; unmarked tables retain
+their full height and normal scrolling. SetTablePagination changes this token without
+affecting other tags. Mark mainly full-height roster tables; omit it on short detail tables.
+
+Call LayoutTableFooter from the host load/resize handler after sizing the table. It
+reserves footer space only when enabled, preserves the scoped filter, and restores both
+height and all matching rows when disabled. The source must have a stable ORDER BY and
+a unique non-null key. Use TableFullFilter for exports and reports so every matching
+record is included, regardless of the visible page.
+
+Example build:
+    SubF "sfRoster", "subRoster", px(24), px(100), px(700), px(400)
+    GridFooter "sfRoster", "roster", "id", True
+
+Example host resize:
+    ResizeGrid Me.sfRoster.Form, Me.sfRoster.Width, columns
+    AlignGridHeaders Me, "sfRoster", "head", Array("txtCol0", "txtCol1")
+    LayoutTableFooter Me, "sfRoster", "roster", "id"
+
+Use CountedCaption("Transfer", 5) for one-line filter captions. Give a filter group
+the width of its widest measured caption and use one row when space permits.
+
+LayoutFilterRow measures the widest counted caption and gives each filter the same width. LayoutNumberedTimeline keeps circle and number dimensions fixed while distributing labels and connector lengths across the available width. See tests/README.md for the native Access checks.

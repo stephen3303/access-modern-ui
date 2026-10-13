@@ -120,28 +120,31 @@ End Function
 
 ' Capsule (fully rounded ends) in color clr on a transparent background. With
 ' a track color (track >= 0) only the left fraction is clr and the rest is
-' track, as in a progress bar.
+' track, as in a progress bar. capsuleWidth (> 0) draws a narrower capsule
+' centered on the w-wide canvas, so pills in one column share a width.
 Private Sub WriteCapsule(ByVal path As String, ByVal clr As Long, ByVal track As Long, ByVal fraction As Double, _
-                         ByVal w As Long, ByVal h As Long)
-    Dim raw() As Byte, x As Long, y As Long, i As Long, edge As Double, t As Double
+                         ByVal w As Long, ByVal h As Long, Optional ByVal capsuleWidth As Double = 0)
+    Dim raw() As Byte, x As Long, y As Long, i As Long, edge As Double, t As Double, inset As Double
     Dim r As Double, cx As Double, cy As Double, px As Double, py As Double, d As Double, a As Double
+    If capsuleWidth <= 0 Or capsuleWidth > w Then capsuleWidth = w
+    inset = (w - capsuleWidth) / 2
     r = h / 2
-    If r > w / 2 Then r = w / 2
+    If r > capsuleWidth / 2 Then r = capsuleWidth / 2
     cy = h / 2
-    edge = w * fraction
-    If track < 0 Then track = clr: edge = w
+    edge = capsuleWidth * fraction
+    If track < 0 Then track = clr: edge = capsuleWidth
     ReDim raw(0 To h * (w * 4 + 1) - 1)
     i = 0
     For y = 0 To h - 1
         raw(i) = 0: i = i + 1                         ' filter: none
         py = y + 0.5
         For x = 0 To w - 1
-            px = x + 0.5
+            px = x + 0.5 - inset
             ' distance from the pixel center to the capsule's center segment
             If px < r Then
                 cx = r
-            ElseIf px > w - r Then
-                cx = w - r
+            ElseIf px > capsuleWidth - r Then
+                cx = capsuleWidth - r
             Else
                 cx = px
             End If
@@ -310,4 +313,58 @@ Private Function Crc32(b() As Byte, ByVal start As Long, ByVal ln As Long) As Lo
         c = (((c And &HFFFFFF00) \ &H100) And &HFFFFFF) Xor m_crc((c Xor b(i)) And &HFF)
     Next
     Crc32 = c Xor &HFFFFFFFF
+End Function
+
+' Measured Segoe UI width with padding; callers supply MeasureText via modWrap.
+Public Function PillTextWidth(ByVal value As Variant, Optional ByVal fontSize As Long = 9, Optional ByVal padding As Long = 480) As Long
+    PillTextWidth = MeasureText(Nz(value, ""), fontSize, 400) + padding
+End Function
+Public Function PillTextPng(ByVal clr As Variant, ByVal value As Variant, ByVal wPx As Long, ByVal hPx As Long, Optional ByVal uniformWidth As Long = 0) As Variant
+    Dim fit As Long, path As String
+    PillTextPng = Null
+    If IsNull(clr) Or wPx < 2 Then Exit Function
+    fit = PillTextWidth(value) \ 15
+    If uniformWidth > 0 Then fit = uniformWidth \ 15
+    If fit < hPx Then fit = hPx
+    If fit > wPx Then fit = wPx
+    path = PillDir() & "\text_" & Hex$(CLng(clr)) & "_" & fit & "_" & wPx & "_" & hPx & ".png"
+    If Len(Dir(path)) = 0 Then WriteCapsule path, CLng(clr), -1, 1, wPx * 2, hPx * 2, fit * 2
+    PillTextPng = path
+End Function
+
+' Whole rounded card background of w x h pixels, redrawn at the control's
+' size (modUIKit.RoundedCard). CardPng draws the corners of a Card instead.
+Public Function RoundedCardPng(ByVal w As Long, ByVal h As Long, ByVal back As Long, ByVal border As Long) As String
+    Dim path As String, raw() As Byte, x As Long, y As Long, at As Long
+    Dim dx As Double, dy As Double, distance As Double, radius As Double, alpha As Double, color As Long
+    path = PillDir() & "\card_" & w & "_" & h & "_" & Hex$(back) & "_" & Hex$(border) & ".png"
+    If Len(Dir(path)) > 0 Then RoundedCardPng = path: Exit Function
+    radius = 9
+    ReDim raw(0 To h * (w * 4 + 1) - 1)
+    For y = 0 To h - 1
+        at = at + 1
+        For x = 0 To w - 1
+            dx = Abs(x + 0.5 - w / 2) - (w / 2 - radius - 1)
+            dy = Abs(y + 0.5 - h / 2) - (h / 2 - radius - 1)
+            If dx < 0 Then dx = 0
+            If dy < 0 Then dy = 0
+            distance = Sqr(dx * dx + dy * dy)
+            alpha = radius - distance + 0.5
+            If alpha > 1 Then alpha = 1
+            If alpha < 0 Then alpha = 0
+            color = back
+            If distance > radius - 1.3 Then color = border
+            raw(at) = color And &HFF
+            raw(at + 1) = (color \ 256) And &HFF
+            raw(at + 2) = (color \ 65536) And &HFF
+            raw(at + 3) = CByte(alpha * 255): at = at + 4
+        Next
+    Next
+    WritePng path, w, h, raw: RoundedCardPng = path
+End Function
+
+
+' Fixed capsule width on a wider transparent cell canvas.
+Public Function ColumnPillPng(ByVal color As Variant, ByVal width As Long, ByVal height As Long, ByVal uniformWidth As Long) As Variant
+    ColumnPillPng = PillTextPng(color, Null, width, height, uniformWidth)
 End Function

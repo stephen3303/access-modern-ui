@@ -816,3 +816,32 @@ Public Sub TabStrip(ByVal x As Long, ByVal y As Long, ByVal totalW As Long, ByVa
     Set c = Box("boxTabLine", x0, y + px(30), totalW, px(1), CLR_BORDER)
     Anchor c, 2, 0
 End Sub
+
+' Footer controls live in the parent, below the table; pagination defaults off.
+Public Sub GridFooter(ByVal subName As String, ByVal prefix As String, ByVal keyField As String, Optional ByVal enabled As Boolean = False)
+    Dim c As Control, i As Long, suffix As String, delta As Long, slot As Long
+    SetTablePagination F.Controls(subName), enabled
+    Set c = Lbl(prefix & "Count", "", 0, 0, px(200), px(26), 9)
+    c.Tag = "TableFooter:" & prefix: c.Visible = enabled
+    For i = 0 To 4
+        suffix = Choose(i + 1, "Previous", "Page0", "Page1", "Page2", "Next")
+        delta = 0: slot = -1
+        If i = 0 Then delta = -1
+        If i = 4 Then delta = 1
+        If i > 0 And i < 4 Then slot = i - 1
+        Set c = Btn(prefix & suffix, Choose(i + 1, "<", "1", "2", "3", ">"), 0, 0, px(30), px(26), "outline")
+        c.Tag = "TableFooter:" & prefix: c.Visible = enabled
+        c.OnClick = "=MoveTablePage([Form],""" & subName & """,""" & prefix & """,""" & keyField & """," & delta & "," & slot & ")"
+    Next
+End Sub
+' Responsive rounded card surface, with an invisible native image border.
+Public Function RoundedCard(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long) As Control
+    Dim c As Control
+    Set c = Img(nm, x, y, w, h)
+    c.Tag = "RoundedCard": c.Picture = RoundedCardPng(w \ 15, h \ 15, CLR_SURFACE, CLR_BORDER)
+    Set RoundedCard = c
+End Function
+Public Sub ResizeRoundedCard(ByVal c As Control, ByVal w As Long, ByVal h As Long)
+    c.Width = w: c.Height = h: c.BorderStyle = 0
+    c.Picture = RoundedCardPng(w \ 15, h \ 15, Th(CLR_SURFACE), Th(CLR_BORDER))
+End Sub

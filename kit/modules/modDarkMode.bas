@@ -126,6 +126,7 @@ Private Sub ThemeControl(c As Control)
         Case acImage
             ' Rounded images (modPng): =PillPng(Switch(cond,color,...),w,h),
             ' =CardPng(fill,border,back,r,corner), =ProgressPng(pct,fill,track,w,h)
+            If c.Tag = "RoundedCard" Then ResizeRoundedCard c, c.Width, c.Height: Exit Sub
             src = Nz(c.Properties("ControlSource"), "")
             If InStr(src, "Png(") > 0 Then c.Properties("ControlSource") = PaletteColorsIn(src)
     End Select

@@ -750,3 +750,13 @@ The Appearance dialog grows by itself, because it is built from `PALETTE_COUNT`.
    kit's README for the builder catalog.
 9. Check every page in a light palette and a dark palette. There is no automated UI test,
    so rebuild with `-FrontEndOnly` and click through.
+
+## 9. Shared table refinements
+
+The table policy and API in the root README extend the original grid builders:
+categorical pills use the widest measured category; centered rows and their headers
+share the actual runtime column geometry; long text receives additional column width.
+A short table scrolls without a footer unless its host is marked Pagination:on.
+Full-height rosters can opt into counted footer paging. Reports and exports always use
+TableFullFilter rather than the current page's ID filter. Resized rounded cards regenerate
+their image to avoid clipping the border. Keep progress, dates and free text out of pills.
