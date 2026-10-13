@@ -99,6 +99,7 @@ Private Sub BuildUserInterface()
     Build_pgList
     Build_dlgAppearance
     BuildMessageDialog             ' the kit's dlgMessage, for KitMsgBox
+    BuildDatePicker                ' the kit's dlgDatePick, for DateBox
     Build_frmMain
 End Sub
 
@@ -157,7 +158,7 @@ End Sub
 Private Sub Build_subItem()
     Dim c As Control, x2 As Long, hw As Long
     NewForm "demo_item", 0, px(328), px(362)
-    Ev F, "OnCurrent"
+    Ev F, "OnCurrent", "AfterUpdate"
     F.Section(acDetail).BackColor = CLR_SURFACE
     F.Section(acDetail).AlternateBackColor = CLR_SURFACE
     hw = px(156): x2 = px(172)
@@ -172,8 +173,7 @@ Private Sub Build_subItem()
     Ev c, "AfterUpdate"
     Progress "imgPct", "[percent_done]", 0, px(170), px(328), px(10)
     FieldLbl "lblDue", "DUE", 0, px(190), hw
-    Set c = Txt("txtDue", "due_date", 0, px(208), hw, px(30))
-    c.Format = "dd mmm yyyy"
+    DateBox "txtDue", "due_date", 0, px(208), px(30)
     FieldLbl "lblCode", "ACCESS CODE", x2, px(190), hw
     SecretBox "txtCode", "access_code", x2, px(208), hw, px(30)
     FieldLbl "lblNotes", "NOTES", 0, px(246), px(328)

@@ -5,6 +5,15 @@ Option Explicit
 ' before it shows another; Save checks the required fields (item and
 ' owner), saves now and refreshes the list.
 
+' A saved item may have a new due date: redo the date picker's marks.
+Private Sub Form_AfterUpdate()
+    On Error GoTo Err_Handler
+    MarkDueDates
+    Exit Sub
+Err_Handler:
+    HandleError "subItem.Form_AfterUpdate"
+End Sub
+
 ' Each item opens with its access code hidden, even if the last one's was shown.
 Private Sub Form_Current()
     On Error GoTo Err_Handler

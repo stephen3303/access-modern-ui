@@ -46,7 +46,7 @@ Public Function TestKit(ByVal root As String) As String
     c.Name = "plainTxt"                    ' takes the focus with no ring hooks of its own
     Txt "reqA", "", 0, px(660), px(80), px(30)
     Txt "reqB", "", px(100), px(660), px(80), px(30)
-    SecretBox "secret", "", px(200), px(660), px(160), px(30)
+    SecretBox "secret", "", px(400), px(700), px(160), px(30)     ' clear of the ring, required and toggle fields
     SaveForm "frmTest", "testHost"
     DoCmd.OpenForm "frmTest"
     Set host = Forms("frmTest"): Set grid = host.sfRows.Form
@@ -114,7 +114,7 @@ Public Function TestKit(ByVal root As String) As String
     SetVisible host.pillBound, True
     Check host.pillBound.Visible And host.pillBound_bg.Visible, "Shown bound pill lost its image"
     ' SecretBox: hidden on open, the eye shows then hides it, HideSecrets hides it again.
-    Check host.secret.Width = px(126) And host.eye_secret.Left = px(330), "Secret field pair is not 160px"
+    Check host.secret.Width = px(126) And host.eye_secret.Left = px(530), "Secret field pair is not 160px"
     Check host.secret.InputMask = SECRET_MASK, "Secret field opens shown"
     ToggleSecret host, "secret"
     Check host.secret.InputMask = "" And host.eye_secret.ControlTipText = "Hide", "Eye did not show the secret"
@@ -253,6 +253,39 @@ Public Function TestKit(ByVal root As String) As String
     On Error GoTo 0
     DoCmd.Close acForm, F.Name, acSaveNo
     Check badView = 5, "SecretBox accepted a continuous form"
+    Check CompareVersions("1.10.0", "1.9.2") = 1, "Version parts compared as text"
+    Check CompareVersions("v1.2", "1.2.0") = 0, "Missing version part not read as 0"
+    Check CompareVersions("1.0.0", "1.0.1-beta") = -1, "Version suffix not ignored"
+    Check ReleasedVersion("") = "", "Blank release folder read a version"
+    text = CurrentProject.Path & "\version-test"          ' the run's own folder (native-smoke.ps1)
+    EnsureFolder text
+    WriteTextFile text & "\" & KIT_VERSION_FILE, vbCrLf & " 1.4.0 " & vbCrLf & "notes"
+    Check ReleasedVersion(text & "\") = "1.4.0", "Release folder version misread"
+    Kill text & "\" & KIT_VERSION_FILE: RmDir text
+    Check ReleasedVersion(text) = "", "Missing version file read a version"
+    Check FederalHoliday(#10/12/2026#) = "Columbus Day", "Columbus Day 2026 missing"
+    Check FederalHoliday(#5/25/2026#) = "Memorial Day", "Memorial Day 2026 missing"
+    Check FederalHoliday(#11/26/2026#) = "Thanksgiving Day", "Thanksgiving 2026 missing"
+    Check FederalHoliday(#7/3/2026#) = "Independence Day (observed)", "Saturday holiday not observed on Friday"
+    Check FederalHoliday(#7/4/2026#) = "", "Saturday holiday also marked on its own day"
+    Check FederalHoliday(#12/31/2021#) = "New Year's Day (observed)", "New Year's Day 2022 not observed on 31 December"
+    Check FederalHoliday(#6/19/2020#) = "", "Juneteenth marked before 2021"
+    Check FederalHoliday(#10/13/2026 3:00:00 PM#) = "", "Ordinary day marked as a holiday"
+    Check FederalHoliday(#7/5/2027#) = "Independence Day (observed)", "Sunday holiday not observed on Monday"
+    Check FederalHoliday(#1/1/2026#) = "New Year's Day", "New Year's Day 2026 missing"
+    Check FederalHoliday(#1/19/2026#) = "Birthday of Martin Luther King, Jr.", "MLK Day 2026 missing"
+    Check FederalHoliday(#2/16/2026#) = "Washington's Birthday", "Washington's Birthday 2026 missing"
+    Check FederalHoliday(#6/19/2026#) = "Juneteenth National Independence Day", "Juneteenth 2026 missing"
+    Check FederalHoliday(#9/7/2026#) = "Labor Day", "Labor Day 2026 missing"
+    Check FederalHoliday(#11/11/2026#) = "Veterans Day", "Veterans Day 2026 missing"
+    Check FederalHoliday(#12/25/2026#) = "Christmas Day", "Christmas Day 2026 missing"
+    Check FederalHoliday(#11/11/1977#) = "", "Holiday rules applied before 1978"
+    ClearMarkedDates
+    MarkDate #10/20/2026 9:00:00 AM#, "Report due"
+    MarkDate #10/20/2026#, "Drill"
+    Check MarkedDate(#10/20/2026#) = "Report due; Drill", "Marked date labels differ"
+    ClearMarkedDates
+    Check MarkedDate(#10/20/2026#) = "", "ClearMarkedDates left a mark"
     ' Dialog placement (CenterOnApp): centred on the Access window, pulled back
     ' inside the monitor's work area, and never above or left of it.
     Check CenteredStart(0, 1000, 400, 0, 1000) = 300, "Dialog not centred on Access"

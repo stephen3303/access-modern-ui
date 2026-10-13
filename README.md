@@ -35,11 +35,12 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 | modUIKit | Build-time form and control builders (catalog below) |
 | modDarkMode | Palette engine: `ThemeForm` repaints each form on open (and, on Windows 11, colors pop-up title bars and borders through `ThemeTitleBar`), `Th()` gives runtime colors, and `SetPalette`/`ShowAppearance` switch palettes |
 | modPng | Anti-aliased PNGs for rounded shapes: `PillPng` (pills and badges), `CardPng` (card corners), `ProgressPng` (progress capsules), `ColumnPillPng` (uniform-width pills in a table column), `RoundedCardPng` (whole resizable card backgrounds), cached in `%LOCALAPPDATA%\<APP_NAME>\pills` |
-| modKitUI | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `CheckRequired`, `SetCount`, `StyleChip` (catalog below) |
+| modKitUI | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `CheckRequired`, `SetCount`, `StyleChip` (catalog below) |
 | modGridOut | `PrintGrid` and `ExportGrid`: print or export a table as the user sees it |
 | modCsv | UTF-8 text files, RFC 4180 CSV read/write, query-to-CSV export |
 | modCrypto | SHA-256 through Windows CNG, salted password hashing |
 | modKitUtil | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `CenterOnApp`, `SetVisible`, `SetEnabled` |
+| modKitUpdate | `CheckForUpdate current, folder, [advice]`: at startup, tells the user when the release folder's `version.txt` names a newer version (`ReleasedVersion`, `CompareVersions`) |
 
 ## Starting a new app with the kit
 
@@ -58,8 +59,8 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 |---|---|---|
 | `CLR_*` roles, `FONT_UI`, `THEME_DARK` | modUIKit | modTheme (generated) |
 | `PALETTE_COUNT`, `PaletteKey`, `PaletteName`, `PaletteIsDark`, `PaletteSwatch`, `PaletteOf` | modDarkMode, dlgAppearance | modPalette (generated) |
-| `APP_NAME` | modPng | modGlobals |
-| `HandleError`, `LogError`, `RaiseAgain` | modDarkMode, modCsv, modKitUI | modErrors (`examples/modules`) |
+| `APP_NAME` | modPng, modKitUpdate | modGlobals |
+| `HandleError`, `LogError`, `RaiseAgain` | modDarkMode, modCsv, modKitUI, modKitUpdate | modErrors (`examples/modules`) |
 | `MeasureText(s, size, weight)` (Segoe UI text width in twips; size in points, weight 400 normal / 700 bold) | modTextUI, modPng, `TitleTip`/`PageHeader` | modWrap |
 | `ShowTip(frm, nm)` | the "?" marks from `TitleTip` | modUI |
 | `frmMain` with `PageKey` and `Reopen pg` | `SetPalette` (reopens the window) | frmMain |
@@ -172,6 +173,8 @@ Control heights and font sizes never scale. `TabStrip` and `LayoutFilterRow` alr
 | `ShowDetail host, detailCtl, formName, where [, emptyCtl]` | List/detail pages: show the matching record in the detail subform, saving a changed one first, and hide the empty state |
 | `ClearDetail host, detailCtl [, emptyCtl]` | Empty the detail subform and show the empty state |
 | `PickDate frm, nm` | A `DateBox` calendar button's click: open the kit's date picker (`dlgDatePick`) for box `nm` and write the chosen date into it (not while the box is disabled or locked, or its form is read-only) |
+| `MarkDate d, label` / `ClearMarkedDates` | Mark an app date (a deadline, a drill) on the date picker with a tooltip label; a second label on the same day is added after "; ". Set marks before the picker opens, for example at startup from the app's deadlines table. |
+| `FederalHoliday d` | The US federal holiday on day `d`, on its observed day (a Saturday holiday on Friday, a Sunday one on Monday, "(observed)" added), or "". The date picker marks these on its own. |
 | `ToggleSecret frm, nm` | A `SecretBox` eye button's click: show box `nm`'s text if hidden, hide it if shown, and put the focus back in the box |
 | `HideSecrets frm` | Hide every `SecretBox` on a form again. Call it from the form's `Form_Current` so the next record opens hidden. |
 | `FocusRing frm, nm, isOn` | The GotFocus (`True`) and LostFocus (`False`) that `Txt` and `Cbo` set: a `CLR_PRIMARY` border on the field being typed in, and the border it had before (a required field's red outline too) when it loses the focus. Only the border color changes, so nothing moves. Not on locked fields, read-only forms or continuous-form rows. One field is ringed at a time. A form that handles a kit input's GotFocus or LostFocus itself calls it from that handler. |
