@@ -35,11 +35,11 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 | modUIKit | Build-time form and control builders (catalog below) |
 | modDarkMode | Palette engine: `ThemeForm` repaints each form on open (and, on Windows 11, colors pop-up title bars and borders through `ThemeTitleBar`), `Th()` gives runtime colors, and `SetPalette`/`ShowAppearance` switch palettes |
 | modPng | Anti-aliased PNGs for rounded shapes: `PillPng` (pills and badges), `CardPng` (card corners), `ProgressPng` (progress capsules), `ColumnPillPng` (uniform-width pills in a table column), `RoundedCardPng` (whole resizable card backgrounds), cached in `%LOCALAPPDATA%\<APP_NAME>\pills` |
-| modKitUI | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `KitMsgBox`, `SetCount`, `StyleChip` (catalog below) |
+| modKitUI | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `KitMsgBox`, `CheckRequired`, `SetCount`, `StyleChip` (catalog below) |
 | modGridOut | `PrintGrid` and `ExportGrid`: print or export a table as the user sees it |
 | modCsv | UTF-8 text files, RFC 4180 CSV read/write, query-to-CSV export |
 | modCrypto | SHA-256 through Windows CNG, salted password hashing |
-| modKitUtil | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `SetVisible`, `SetEnabled` |
+| modKitUtil | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `CenterOnApp`, `SetVisible`, `SetEnabled` |
 
 ## Starting a new app with the kit
 
@@ -59,7 +59,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 | `CLR_*` roles, `FONT_UI`, `THEME_DARK` | modUIKit | modTheme (generated) |
 | `PALETTE_COUNT`, `PaletteKey`, `PaletteName`, `PaletteIsDark`, `PaletteSwatch`, `PaletteOf` | modDarkMode, dlgAppearance | modPalette (generated) |
 | `APP_NAME` | modPng | modGlobals |
-| `HandleError`, `LogError`, `RaiseAgain` | modDarkMode, modCsv | modErrors (`examples/modules`) |
+| `HandleError`, `LogError`, `RaiseAgain` | modDarkMode, modCsv, modKitUI | modErrors (`examples/modules`) |
 | `MeasureText(s, size, weight)` (Segoe UI text width in twips; size in points, weight 400 normal / 700 bold) | modTextUI, modPng, `TitleTip`/`PageHeader` | modWrap |
 | `ShowTip(frm, nm)` | the "?" marks from `TitleTip` | modUI |
 | `frmMain` with `PageKey` and `Reopen pg` | `SetPalette` (reopens the window) | frmMain |
@@ -103,7 +103,7 @@ Control heights and font sizes never scale. `TabStrip` and `LayoutFilterRow` alr
 | Builder | What it does |
 |---|---|
 | `NewForm recSrc, view, w, h` | Start a form. `view` is 0 for single, 1 for continuous. Sets `ThemeForm` as its Open hook. |
-| `NewDialog caption, w, h` | Modal pop-up dialog that sizes to its design |
+| `NewDialog caption, w, h` | Modal pop-up dialog that sizes to its design. Its code-behind's `Form_Load` should end with `CenterOnApp Me` (the builder can't add it). |
 | `NewReport recSrc, w` | Start a report. Reports use the `PRINT_` colors and are never repainted. |
 | `SaveForm name [, codeName]` | Save under the final name and attach `src\forms\<name>.vba` as the code-behind |
 | `Trace s` / `BuildTrace` | Record build steps, so a failed build reports where it stopped |
@@ -173,6 +173,7 @@ Control heights and font sizes never scale. `TabStrip` and `LayoutFilterRow` alr
 | `FocusRing frm, nm, isOn` | The GotFocus (`True`) and LostFocus (`False`) that `Txt` and `Cbo` set: a `CLR_PRIMARY` border on the field being typed in, and the border it had before (a required field's red outline too) when it loses the focus. Only the border color changes, so nothing moves. Not on locked fields, read-only forms or continuous-form rows. One field is ringed at a time. A form that handles a kit input's GotFocus or LostFocus itself calls it from that handler. |
 | `FocusRingEnter frm, nm` / `FocusRingClear` | The Enter and Exit that `SubF` sets, so a field inside a subform loses its ring when the focus leaves the subform and gets it back on return (Access fires no LostFocus or GotFocus for it then). `FocusRingClear` is also the GotFocus of `Btn`, `Chk`, `Lst` and the focus sink. |
 | `KitMsgBox msg [, style, title]` | `MsgBox` in the kit's look, centred over Access (a `MsgBox` is centred on the monitor, so on a large or second screen it opens outside Access). Takes OK, OK/Cancel, Yes/No and Yes/No/Cancel, the four icons and `vbDefaultButton2`/`3`, and returns what `MsgBox` would. Anything else, or a dialog that isn't built yet, falls back to `MsgBox`. Use it in the app's `Notify` and `HandleError`. |
+| `CheckRequired frm, fields` | Save check: outline every empty required input in `CLR_DESTRUCTIVE`, list them in one `KitMsgBox` and focus the first. `fields` is `"txtName=Item;txtOwner=Owner"` in tab order. Returns True when all are filled; a filled input gets its normal border back. `RequiredMissing` does the same without the message and returns the list. |
 | `SetCount ctl, n` | Show a count after a tab or chip caption, "Name (n)" |
 | `StyleChip lbl, isOn [, n]` | Filter chip on or off, with an optional count |
 | `SetVisible c, v` | Show or hide a control, moving the focus away when it or a control inside it has the focus (avoids error 2165) |

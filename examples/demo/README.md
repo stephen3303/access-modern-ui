@@ -35,6 +35,8 @@ watching for Visual Basic error dialogs as well as the error log:
 - Focus ring: clicking or tabbing into the search box, the category filter or a detail
   field turns its border the palette's primary color, and leaving it restores the border,
   with no flicker and the text not moving.
+- Dialogs: Appearance and the card buttons' messages open centred over Access, on its
+  monitor, with Access restored, maximized, or moved partly off the edge of a screen.
 - List and detail: the first row opens on load and after each filter; a click shows that
   row; editing and saving updates the list; a search with no match shows both empty
   states; Print previews and Export writes exactly the rows shown, with the captions.
