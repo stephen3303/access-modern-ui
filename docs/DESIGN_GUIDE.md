@@ -261,11 +261,11 @@ error's number and description, so a stale trail is never attached to an unrelat
 
 `LogError` and `RaiseAgain` add the failing line (`Erl`, from the build's line numbers)
 to the procedure name: `pgAdmin.btnSave_Click line 42` is line 42 of
-`src/forms/pgAdmin.vba`. An error passed up by `RaiseAgain` has its line on the call
-trail entry instead, and the entry point is logged without one. Lines VBA won't take a
-number on (`Case`, `Else`, `ElseIf`, `Loop`, `Next`, a line starting with a label) are
-logged at the numbered line before them, e.g. a failing `Case 1: DoThing` at its
-`Select Case` line.
+`src/forms/pgAdmin.vba`. `Erl` is per procedure, so for an error passed up by
+`RaiseAgain` each trail entry and the entry point name the line of their own call.
+Lines VBA won't take a number on (`Case`, `Else`, `ElseIf`, `Loop`, `Next`, a line
+starting with a label) are logged at the numbered line before them, e.g. a failing
+`Case 1: DoThing` at its `Select Case` line.
 
 **Small helpers** have no handler. Errors bubble to the nearest handler, so one failure
 produces one log entry.

@@ -40,8 +40,9 @@ Option Explicit
 ' the source in git stays un-numbered), so Erl says which line failed. LogError
 ' and RaiseAgain add it to the procedure name, e.g. "pgAdmin.btnSave_Click line 42",
 ' which is line 42 of src\forms\pgAdmin.vba. A copy built without numbers logs
-' the name alone. When the error came up through RaiseAgain, the line is on the
-' innermost trail entry and the entry point is logged without one.
+' the name alone. Erl is per procedure: in a caller's handler it is the line of
+' that caller's call into the procedure that failed, so each trail entry and the
+' entry point name their own line.
 
 ' Context added by RaiseAgain, innermost first. Kept with the error it belongs
 ' to, so a trail left by an error that was later ignored isn't attached to an
@@ -59,10 +60,8 @@ Private m_busy As Boolean           ' an error while logging must not log again
 Public Function LogError(ByVal source As String, Optional ByVal context As String = "") As Long
     Dim num As Long, desc As String, errSrc As String, trail As String
     num = Err.Number: desc = Err.Description: errSrc = Err.Source
+    source = SourceWithLine(source)
     If m_trailNum = num And m_trailDesc = desc Then trail = m_trail
-    ' After RaiseAgain, Erl is the Err.Raise line in RaiseAgain, not a line of
-    ' source; the trail already carries the line where it failed.
-    If Len(trail) = 0 Then source = SourceWithLine(source)
     m_trail = "": m_trailNum = 0: m_trailDesc = ""
     If m_busy Then Exit Function
     m_busy = True
