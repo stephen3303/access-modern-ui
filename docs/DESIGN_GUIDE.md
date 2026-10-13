@@ -85,6 +85,8 @@ access/
     Location, not a remembered trusted document), `dlgTrust` also opens over the form.
     `dlgTrust` has no code module or Open hook, so it works with the code off; it explains
     how to add the folder in the Trust Center. Code never changes Trust Center settings.
+    The check reads the user's (HKCU) settings and policies only, not machine-wide (HKLM)
+    policy locations, so on such a PC the page can show when it isn't needed.
   - Hidden: the DB window, document tabs and datasheet schema.
   - Name AutoCorrect off.
   - AppTitle.

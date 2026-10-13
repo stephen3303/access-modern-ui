@@ -94,7 +94,6 @@ Private Sub Build_dlgTrust()
     pad = Sp(SP_DIALOG)
     x = pad: w = DLG_W - 2 * pad
     NewDialog APP_NAME, DLG_W, px(400)
-    F.OnOpen = ""
     F.HasModule = False
     y = pad
     Lbl "lblTitle", "Trust this app's folder", x, y, w, px(26), 13, True
@@ -129,7 +128,32 @@ Private Sub Build_dlgTrust()
     c.OnClick = CLOSE_MACRO             ' a macro, not code: works with the code off
     c.Default = True: c.Cancel = True
     F.Section(acDetail).Height = y + px(32) + pad
+    ClearEvents F, "btnClose"
     SaveForm TRUST_FORM
+End Sub
+
+' Empty every event property (On...) of frm and its controls, except on the
+' control keep: whatever NewDialog or the control builders hook up now or
+' later (ThemeForm on Open, a backdrop on Close, [Event Procedure] on
+' buttons) would fail with the code off. Properties a control doesn't take
+' are skipped.
+Private Sub ClearEvents(frm As Object, ByVal keep As String)
+    Dim c As Control
+    ClearOnProps frm.Properties
+    For Each c In frm.Controls
+        If c.Name <> keep Then ClearOnProps c.Properties
+    Next
+End Sub
+
+Private Sub ClearOnProps(props As Object)
+    Dim prp As Object
+    On Error Resume Next
+    For Each prp In props
+        If Left$(prp.Name, 2) = "On" Then
+            If Len(Nz(prp.Value, "")) > 0 Then prp.Value = ""
+        End If
+    Next
+    On Error GoTo 0
 End Sub
 
 ' Height in twips that s takes in a label w wide at size points: each line

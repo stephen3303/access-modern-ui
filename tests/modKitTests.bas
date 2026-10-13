@@ -234,7 +234,9 @@ Public Function TestKit(ByVal root As String) As String
     Check RecordPath("%USERPROFILE%/My%20Apps/App.accdb") = LCase$(Environ$("USERPROFILE") & "\my apps\app.accdb"), "Trusted document name not decoded"
     BuildTrustCheck "frmTest"
     DoCmd.OpenForm "dlgTrust", acDesign
-    Check Not Forms("dlgTrust").HasModule And Len(Forms("dlgTrust").OnOpen) = 0, "dlgTrust needs code to open"
+    Check Not Forms("dlgTrust").HasModule And Len(Forms("dlgTrust").OnOpen) = 0 And Len(Forms("dlgTrust").OnClose) = 0, _
+        "dlgTrust needs code to open or close"
+    Check Forms("dlgTrust").btnClose.OnClick = "mcrTrustClose", "dlgTrust Close doesn't run its macro"
     DoCmd.Close acForm, "dlgTrust", acSaveNo
     text = CurrentProject.Path & "\autoexec_test.txt"
     Application.SaveAsText acMacro, "AutoExec", text
