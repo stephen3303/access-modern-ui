@@ -238,18 +238,18 @@ generated palette and `ThemeForm`. Keep SPM's behavior and data. Change only how
 built and styled.
 
 ### P1. Scaffolding
-- [ ] Add `access/` in the kit layout: `kit/` (copied), `tools/make_themes.py`,
+- [x] Add `access/` in the kit layout: `kit/` (copied), `tools/make_themes.py`,
   `build.ps1` (from `examples/build.ps1`), `src/modules`, `src/forms`,
   `src/themes/light`, `src/help/help.txt`, `src/seed`. Set `APP_NAME = "Submarine
   Program Manager"`. Convert `user-seed-data.json` into the seed step. Seed data
   Stephen asked to keep (departments, divisions, program roles) must survive.
-- [ ] `modErrors` from `examples/modules/modErrors.bas` replaces `HandleUIError` /
+- [x] `modErrors` from `examples/modules/modErrors.bas` replaces `HandleUIError` /
   `HandleDataError`. Keep the `ErrorLog` table's data.
-- [ ] `modGlobals`: `APP_NAME`, `g_Silent`, `Notify` (replaces `V6Message`), `Q`/`SqlVal`.
-- [ ] `BuildAll` builds an empty shell and the build passes on Stephen's machine.
+- [x] `modGlobals`: `APP_NAME`, `g_Silent`, `Notify` (replaces `V6Message`), `Q`/`SqlVal`.
+- [x] `BuildAll` builds an empty shell and the build passes on Stephen's machine.
 
 ### P2. Shell
-- [ ] `frmMain` replaces `frmHome`: the kit sidebar (collapsible, deferred `NavTo`) holds
+- [x] `frmMain` replaces `frmHome`: the kit sidebar (collapsible, deferred `NavTo`) holds
   the command logo with command text below it, at full window height and with no top
   title bar, as Stephen's SPM todo list asks. Add the Appearance palette picker, and add
   Help and the error log under Admin. This removes `V6ToggleNav`, `V6ToggleTheme`,
@@ -260,31 +260,36 @@ Each becomes `pg<Name>` built with `PageHeader`, chips with counts (K6), `BuildG
 and the list/detail pattern (K4), with print and export through K5. Remove the "# items
 in this view" text, the extra white space under titles and the demonstration notes, as
 the SPM todo list asks.
-- [ ] P3.1 Overview / home (KPI tiles; replaces `statCard*`)
-- [ ] P3.2 Gains (`pgGains`, `frmGainWorkspace`, `v3GainList`, `v4Gains`)
-- [ ] P3.3 Active (`pgActive`, `frmActiveWorkspace`, `v3ActiveList`, `v4Active`)
-- [ ] P3.4 Losses (`pgLosses`, `frmLossWorkspace`, `v3LossList`)
-- [ ] P3.5 Programs and coverage (`pgPrograms`, `v4Programs`, `v4Coverage`, `frmCoverage`)
-- [ ] P3.6 Documents and verification (`frmVerification`, `v4Documents`, `v4DocHistory`)
-- [ ] P3.7 Archive (`frmArchive*`, `v3ArchiveList`, `v4Archive`)
-- [ ] P3.8 Personnel (`pgPersonnel`, `frmPersonEditor`)
-- [ ] P3.9 Reports (`pgReports`, `rptDemoPrint` replaced by K5 `PrintGrid`)
-- [ ] P3.10 Admin (`pgAdmin`, `v6AuditLog`, `v6DepartmentChoices`, `v6DivisionChoices`,
+- [x] P3.1 Overview / home (KPI tiles; replaces `statCard*`)
+- [x] P3.2 Gains (`pgGains`, `frmGainWorkspace`, `v3GainList`, `v4Gains`)
+- [x] P3.3 Active (`pgActive`, `frmActiveWorkspace`, `v3ActiveList`, `v4Active`)
+- [x] P3.4 Losses (`pgLosses`, `frmLossWorkspace`, `v3LossList`)
+- [x] P3.5 Programs and coverage (`pgPrograms`, `v4Programs`, `v4Coverage`, `frmCoverage`)
+- [x] P3.6 Documents and verification (`frmVerification`, `v4Documents`, `v4DocHistory`)
+- [x] P3.7 Archive (`frmArchive*`, `v3ArchiveList`, `v4Archive`)
+- [x] P3.8 Personnel (`pgPersonnel`, `frmPersonEditor`)
+- [x] P3.9 Reports (`pgReports`, `rptDemoPrint` replaced by K5 `PrintGrid`)
+- [x] P3.10 Admin (`pgAdmin`, `v6AuditLog`, `v6DepartmentChoices`, `v6DivisionChoices`,
   `frmErrorLog`)
 
 ### P4. Editors become dialogs
-- [ ] Each `frm*Editor` (Appointment, Assessment, Document, Event, Milestone, POAM,
+- [x] Each `frm*Editor` (Appointment, Assessment, Document, Event, Milestone, POAM,
   POAMMilestone, Program, Person) becomes `dlg<Name>` built with `NewDialog`. Validation
   returns `False` + `errMsg` into `lblMsg` (guide §3), replacing `V7Validate*` message
   boxes. Cancel goes left of the primary action, both bottom-right.
 
 ### P5. Naming and cleanup
-- [ ] No form keeps a `v3`–`v7` or `frm*` (non-window) prefix. Subforms are `sub*`.
+- [x] No form keeps a `v3`–`v7` or `frm*` (non-window) prefix. Subforms are `sub*`.
   Procedure prefixes `V4`–`V7` are dropped as each page moves, and procedures are grouped
   into `mod<Area>` modules (guide §3).
-- [ ] The old PowerShell form scripts and exported `.access.txt` forms move to `archive/`
+- [x] The old PowerShell form scripts and exported `.access.txt` forms move to `archive/`
   once their replacements build.
-- [ ] `current-tests.bas` runs against the new build in silent mode.
+- [x] `current-tests.bas` runs against the new build in silent mode. Replaced by
+  `modTests.RunTests` (`build.ps1 -Test`), which runs silently with `g_Testing` set.
+- **As built** (Submarine-Program-Management #1). Teal Navy palette. The sidebar lists
+  Overview, Gains, Active, Losses, Archive, Personnel, Programs, Records and Reports, with
+  Admin and Appearance at the bottom. The old prototype is in
+  `archive/prototype-v7/`. Its code review and visual review run before merge.
 - **Done when** SPM has no `RGB(` outside generated files, no Aptos font, and only type
   scale sizes (guide §6.3).
 
@@ -296,4 +301,4 @@ the SPM todo list asks.
 |---|---|---|
 | 1 Kit harvest | K1–K7 | 7 (demo tested in Access 2026-10-12; card corners, hover and the zebra selected row checked by eye) |
 | 2 SABER | S1–S4 | 4 (built and smoke-tested in Access 2026-10-13; styling checked by eye) |
-| 3 SPM | P1–P5 | 0 |
+| 3 SPM | P1–P5 | 5 (SPM #1; built and 148 checks passed in Access 2026-10-13, review in progress) |
