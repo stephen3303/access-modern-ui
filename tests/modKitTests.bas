@@ -9,7 +9,7 @@ Public Function TestKit(ByVal root As String) As String
     Dim grid As Form, host As Form, c As Control, cols As Variant, i As Long
     Dim rows As DAO.Recordset, ids As Object, height As Long
     Dim text As String, fitted As String, measured As Long
-    Dim db As DAO.Database, badName As Long, badScale As Long
+    Dim db As DAO.Database, badName As Long, badScale As Long, badView As Long
     g_SrcRoot = root & "\kit": UseBuildPalette
     CurrentDb.Execute "CREATE TABLE test_rows (id LONG PRIMARY KEY, category TEXT(60), description TEXT(255))"
     For i = 1 To 23
@@ -47,6 +47,7 @@ Public Function TestKit(ByVal root As String) As String
     Txt "reqA", "", 0, px(660), px(80), px(30)
     Txt "reqB", "", px(100), px(660), px(80), px(30)
     Toggle "tglTest", "", px(220), px(663), onChange:="ToggleChanged"
+    SecretBox "secret", "", px(400), px(700), px(160), px(30)     ' clear of the ring, required and toggle fields
     SaveForm "frmTest", "testHost"
     DoCmd.OpenForm "frmTest"
     Set host = Forms("frmTest"): Set grid = host.sfRows.Form
@@ -113,6 +114,17 @@ Public Function TestKit(ByVal root As String) As String
     Check Not host.pillBound.Visible And Not host.pillBound_bg.Visible, "Hidden bound pill left its image"
     SetVisible host.pillBound, True
     Check host.pillBound.Visible And host.pillBound_bg.Visible, "Shown bound pill lost its image"
+    ' SecretBox: hidden on open, the eye shows then hides it, HideSecrets hides it again.
+    Check host.secret.Width = px(126) And host.eye_secret.Left = px(530), "Secret field pair is not 160px"
+    Check host.secret.InputMask = SECRET_MASK, "Secret field opens shown"
+    ToggleSecret host, "secret"
+    Check host.secret.InputMask = "" And host.eye_secret.ControlTipText = "Hide", "Eye did not show the secret"
+    Check Screen.ActiveControl.Name = "secret", "Eye left the focus off its field"
+    ToggleSecret host, "secret"
+    Check host.secret.InputMask = SECRET_MASK And host.eye_secret.Caption = ChrW(EYE_SHOW), "Eye did not hide the secret"
+    ToggleSecret host, "secret"
+    HideSecrets host
+    Check host.secret.InputMask = SECRET_MASK And host.eye_secret.ControlTipText = "Show", "HideSecrets left the secret shown"
     grid.RecordSource = "SELECT * FROM test_rows ORDER BY id"
     ' Click-to-sort captions: ascending with an up arrow, then reversed; the arrow moves with the column.
     Check host.head1.OnClick = "" And Right$(host.head1.Tag, 1) = "|", "Unsortable caption has a sort click"
@@ -256,6 +268,13 @@ Public Function TestKit(ByVal root As String) As String
     Check Not host.btn2.Visible And Not host.btn3.Visible, "Message dialog shows unused buttons"
     Check host.btn1.Left + host.btn1.Width = host.btn3.Left + host.btn3.Width, "Message OK button is not right-aligned"
     DoCmd.Close acForm, "dlgMessage", acSaveNo
+    ' SecretBox refuses a continuous form: one eye would show every row.
+    NewForm "", 1, px(300), px(100)
+    On Error Resume Next
+    SecretBox "secret", "", 0, 0, px(160), px(30): badView = Err.Number: Err.Clear
+    On Error GoTo 0
+    DoCmd.Close acForm, F.Name, acSaveNo
+    Check badView = 5, "SecretBox accepted a continuous form"
     Check CompareVersions("1.10.0", "1.9.2") = 1, "Version parts compared as text"
     Check CompareVersions("v1.2", "1.2.0") = 0, "Missing version part not read as 0"
     Check CompareVersions("1.0.0", "1.0.1-beta") = -1, "Version suffix not ignored"

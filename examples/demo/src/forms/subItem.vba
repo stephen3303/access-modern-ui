@@ -14,6 +14,15 @@ Err_Handler:
     HandleError "subItem.Form_AfterUpdate"
 End Sub
 
+' Each item opens with its access code hidden, even if the last one's was shown.
+Private Sub Form_Current()
+    On Error GoTo Err_Handler
+    HideSecrets Me
+    Exit Sub
+Err_Handler:
+    HandleError "subItem.Form_Current"
+End Sub
+
 Private Sub txtPct_AfterUpdate()
     On Error GoTo Err_Handler
     Me.Recalc          ' redraw the progress capsule
