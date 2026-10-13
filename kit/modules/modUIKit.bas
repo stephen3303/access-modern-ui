@@ -481,6 +481,8 @@ Public Sub BuildGrid(ByVal finalName As String, ByVal cols As Variant, ByVal w A
     F.Section(acDetail).BackColor = back
     F.Section(acDetail).AlternateBackColor = IIf(zebra, CLR_ROW2, back)
     F.Tag = "grid:" & w
+    F.ScrollBars = 0                        ' GridScroll shows it when the rows overflow
+    F.OnCurrent = "=GridScroll([Form])"
     ' A fit table's host sizes these (GridFit); anchored, they would stretch
     ' the form past the columns and stop GridFit narrowing it.
     Set c = RowBack("txtBg", 0, 0, w, h): If Not fit Then Anchor c, 2, 0

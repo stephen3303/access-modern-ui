@@ -372,6 +372,8 @@ End Sub
       in the last column stops 8px further in, so it clears the table's scrollbar.
     - Rows are separated by a 1px line, and the selected row is highlighted in
       `CLR_PRIMARY_SOFT`.
+    - The vertical scroll bar shows only when the rows overflow (`GridScroll`, the
+      table's OnCurrent).
     - Optional arguments, all off by default so existing tables don't change:
       - `zebra:=True` fills every other row with `CLR_ROW2`. The selected row still
         turns `CLR_PRIMARY_SOFT`.

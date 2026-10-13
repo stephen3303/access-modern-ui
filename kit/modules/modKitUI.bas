@@ -102,6 +102,24 @@ Private Function HasCtl(f As Form, ByVal nm As String) As Boolean
     HasCtl = Not c Is Nothing
 End Function
 
+' Show a table's vertical scroll bar only when its rows don't all fit:
+' Access draws the bar on a continuous form whatever its content. A BuildGrid
+' table calls this from its OnCurrent, which fires whenever its record source
+' is set or requeried. A failure is logged, not shown: it only leaves the bar.
+Public Function GridScroll(g As Form)
+    Dim n As Long, sb As Integer
+    On Error GoTo Fail
+    With g.RecordsetClone
+        If .RecordCount > 0 Then .MoveLast
+        n = .RecordCount
+    End With
+    sb = IIf(n * g.Section(acDetail).Height > g.InsideHeight, 2, 0)
+    If g.ScrollBars <> sb Then g.ScrollBars = sb
+    Exit Function
+Fail:
+    LogError "modKitUI.GridScroll", g.Name
+End Function
+
 ' Select the first row of a BuildGrid table and tell the host, as a click
 ' would (its GridClick grid, False). Returns the row's id, or Null when the
 ' table is empty (then nothing is called). Call it after the list loads or
