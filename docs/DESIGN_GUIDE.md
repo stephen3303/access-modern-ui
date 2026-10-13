@@ -494,6 +494,11 @@ Write app-specific helpers next to the builds that use them. Examples:
     `TimerInterval = 10`, and `Form_Timer` swaps `sfPage.SourceObject`. Swapping a
     subform while its own event is still running is unsafe.
   - `ShowPage` redirects keys that aren't allowed in the current state.
+  - Before it swaps or closes the page (`QueueNav`, Appearance, `Form_Unload`), the shell
+    asks `frmMain.CanLeavePage`. A page with unsaved work defines a public `CanLeave`
+    (pgList: `CanLeave = SaveDetail(Me, "sfDetail")`), and the page stays when it returns
+    False. Sidebar items are labels, so clicking one never takes the focus out of the
+    page: without this, Access would drop the page's unsaved record.
   - `RefreshNav` restacks the visible items without gaps and highlights the current one.
 - **Reopen**: `frmMain.Reopen pageKey` closes and reopens the shell on the same page,
   which is how a palette switch repaints everything. An `m_reopen` flag keeps `Form_Close`
@@ -640,6 +645,7 @@ A page that lists records and shows the selected one beside the list:
   save keeps the record in the panel: `ShowDetail` and `ClearDetail` return False and
   change nothing, `GridClick` then puts the list's selection back on the panel's record,
   and a filter chip calls `SaveDetail Me, "sfDetail"` first and stops when it is False.
+  The page's `CanLeave` does the same for the shell (section 6.5).
 - Whenever the list changes (load, a chip, the search box), call `SelectFirstRow
   Me.sfList`. It selects the first row and calls `GridClick` as a click would; when the
   list is empty it returns Null, and the page calls `ClearDetail Me, "sfDetail"` to show

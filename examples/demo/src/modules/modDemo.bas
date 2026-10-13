@@ -114,6 +114,19 @@ Public Function Q(ByVal s As Variant) As String
     Q = "'" & Replace(Nz(s, ""), "'", "''") & "'"
 End Function
 
+' Sidebar "Appearance": only while the current page can be left, because a
+' palette switch reopens the window (frmMain.CanLeavePage).
+Public Function DemoAppearance()
+    On Error GoTo Err_Handler
+    If IsFormOpen("frmMain") Then
+        If Not Forms("frmMain").CanLeavePage() Then Exit Function
+    End If
+    ShowAppearance
+    Exit Function
+Err_Handler:
+    HandleError "modDemo.DemoAppearance"
+End Function
+
 ' Go to a page (deferred until the calling event finishes; frmMain.QueueNav).
 Public Function NavTo(ByVal key As String)
     On Error GoTo Err_Handler

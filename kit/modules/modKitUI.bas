@@ -292,18 +292,18 @@ End Function
 ' form's BeforeUpdate cancelled the save: Access raises 2101 for a cancelled
 ' Dirty = False (2115 when a control's own BeforeUpdate cancelled).
 Private Function SaveDetailCtl(sf As Control) As Boolean
-    Dim errNo As Long, errDesc As String
+    Dim errNo As Long, errDesc As String, errSrc As String
     SaveDetailCtl = True
     If Len(sf.SourceObject) = 0 Then Exit Function
     If Not sf.Form.Dirty Then Exit Function
     On Error Resume Next
     sf.Form.Dirty = False
-    errNo = Err.Number: errDesc = Err.Description
+    errNo = Err.Number: errDesc = Err.Description: errSrc = Err.Source
     On Error GoTo 0
     If errNo = 2101 Or errNo = 2115 Then
         SaveDetailCtl = False
     ElseIf errNo <> 0 Then
-        Err.Raise errNo, , errDesc
+        Err.Raise errNo, errSrc, errDesc
     End If
 End Function
 
@@ -503,6 +503,9 @@ End Sub
 ' "txtName=Item;txtOwner=Owner". Returns True when all are filled. Call it at
 ' the top of the Save button's handler and stop when it returns False:
 '     If Not CheckRequired(Me, "txtName=Item;txtOwner=Owner") Then Exit Sub
+' and in the form's Form_BeforeUpdate, so every other save is checked too:
+'     Cancel = Not CheckRequired(Me, "txtName=Item;txtOwner=Owner")
+' (during an update the focus can't move, so it stays where it is).
 Public Function CheckRequired(frm As Form, ByVal fields As String) As Boolean
     Dim missing As String, first As String
     On Error GoTo Fail

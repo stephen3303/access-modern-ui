@@ -33,6 +33,12 @@ Err_Handler:
     HandleError "pgList.GridClick"
 End Sub
 
+' frmMain asks before it swaps or closes this page: save the open item, or
+' keep the page while a required field is empty (CheckRequired says which).
+Public Function CanLeave() As Boolean
+    CanLeave = SaveDetail(Me, "sfDetail")
+End Function
+
 ' The detail panel saved an item: show the change in the list.
 Public Sub ItemSaved(ByVal id As Long)
     Me.sfList.Form.Requery
@@ -107,6 +113,9 @@ End Function
 Private Sub RefreshPage()
     FilterGrid Me.sfList, ItemFilter(Status(m_chip), m_search)
     RefreshCounts
+    ' ClearDetail's result isn't needed: every caller (Chip, Form_Load, and
+    ' txtSearch_Change, which only runs once the focus has left the panel)
+    ' has already saved the open item.
     If IsNull(SelectFirstRow(Me.sfList)) Then ClearDetail Me, "sfDetail"
 End Sub
 
