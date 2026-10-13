@@ -162,8 +162,10 @@ Public Function TestKit(ByVal root As String) As String
     ResizeGrid grid, px(200), cols
     Check grid.ScrollBars = 3, "Narrow grid clips minimum columns instead of scrolling"
     Check grid.txtCol1.Width >= px(292), "Narrow grid discarded Description width"
+    DoCmd.OpenForm "dlgToast", WindowMode:=acHidden     ' as KitToast does, but errors raise here
+    Forms("dlgToast").ShowToast "Saved R&D", "success", 3000
+    Check Forms("dlgToast").lblMsg.Caption = "Saved R&&D", "Toast took & as an access key"
     KitToast "Saved", "success"
-    Check IsFormOpen("dlgToast"), "Toast did not open"
     Check Forms("dlgToast").lblMsg.Caption = "Saved", "Toast lost its message"
     Check Screen.ActiveForm.Name = "frmTest", "Toast took the focus"
     DoCmd.Close acForm, "dlgToast", acSaveNo

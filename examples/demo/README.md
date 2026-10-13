@@ -30,10 +30,10 @@ watching for Visual Basic error dialogs as well as the error log:
 - Cards: corners are round in every palette; hovering the buttons and cards doesn't flicker.
 - Progress: 0 shows only the track, 37 is a third full, 100 is full.
 - Toasts: each click on Outline shows the next variant (success, info, warning,
-  destructive) in the bottom-right corner; it fades after 3 seconds; the focus stays
-  where it was (type in the search box on Tables, then save on List and detail: the
-  cursor doesn't move); a click on the toast closes it; a toast while one shows
-  replaces it.
+  destructive) 16px in from the window's bottom-right corner; it fades after 3 seconds;
+  a click on any part of it closes it; a toast while one shows replaces it. On List and
+  detail, click into Notes, then Save, then press Shift+Tab while "Item saved." shows:
+  the focus moves to Notes, so the keyboard never went to the toast.
 - Tables: the band, zebra rows, pills and 38px rows show; the selected row is highlighted;
   widening the window widens every column of the first table and moves its captions; the
   chip and tab counts follow the search and category.

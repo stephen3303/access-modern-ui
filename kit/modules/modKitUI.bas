@@ -332,8 +332,8 @@ Public Function KitToast(ByVal msg As String, Optional ByVal vrnt As String = "i
     Forms("dlgToast").ShowToast msg, vrnt, ms
     Exit Function
 Fail:
-    LogError "modKitUI.KitToast", Left$(msg, 60)
     On Error Resume Next
+    LogError "modKitUI.KitToast", Left$(msg, 60)
     SysCmd acSysCmdSetStatus, Left$(msg, 255)
 End Function
 

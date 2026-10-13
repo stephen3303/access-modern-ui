@@ -16,6 +16,11 @@ Private Type RECT
     Bottom As Long
 End Type
 
+Private Type POINTAPI
+    x As Long
+    y As Long
+End Type
+
 #If Win64 Then
 Private Declare PtrSafe Function GetWindowLongPtr Lib "user32" Alias "GetWindowLongPtrW" (ByVal hwnd As LongPtr, _
     ByVal nIndex As Long) As LongPtr
@@ -30,11 +35,15 @@ Private Declare PtrSafe Function SetWindowLongPtr Lib "user32" Alias "SetWindowL
 Private Declare PtrSafe Function SetLayeredWindowAttributes Lib "user32" (ByVal hwnd As LongPtr, ByVal crKey As Long, _
     ByVal bAlpha As Byte, ByVal dwFlags As Long) As Long
 Private Declare PtrSafe Function GetWindowRect Lib "user32" (ByVal hwnd As LongPtr, lpRect As RECT) As Long
+Private Declare PtrSafe Function GetClientRect Lib "user32" (ByVal hwnd As LongPtr, lpRect As RECT) As Long
+Private Declare PtrSafe Function ClientToScreen Lib "user32" (ByVal hwnd As LongPtr, lpPoint As POINTAPI) As Long
+Private Declare PtrSafe Function IsIconic Lib "user32" (ByVal hwnd As LongPtr) As Long
 Private Declare PtrSafe Function SetWindowPos Lib "user32" (ByVal hwnd As LongPtr, ByVal hWndInsertAfter As LongPtr, _
     ByVal x As Long, ByVal y As Long, ByVal cx As Long, ByVal cy As Long, ByVal wFlags As Long) As Long
 
 Private Const GWL_EXSTYLE As Long = -20
 Private Const WS_EX_LAYERED As Long = &H80000
+Private Const WS_EX_NOACTIVATE As Long = &H8000000
 Private Const LWA_ALPHA As Long = 2
 Private Const HWND_TOP As Long = 0
 Private Const SWP_NOSIZE As Long = &H1
@@ -55,7 +64,7 @@ Private m_styled As Boolean     ' the layered style was tried (once per open)
 ' Show msg for ms milliseconds, then fade and close. vrnt picks the icon and
 ' accent color (KitToast lists them). Errors go back to KitToast.
 Public Sub ShowToast(ByVal msg As String, ByVal vrnt As String, ByVal ms As Long)
-    Me.lblMsg.Caption = msg
+    Me.lblMsg.Caption = Replace(msg, "&", "&&")     ' a label takes & as an access key
     SetVariant vrnt
     FitHeight msg
     MakeLayered
@@ -116,28 +125,36 @@ Private Function MessageLines(ByVal msg As String) As Long
     MessageLines = n
 End Function
 
-' Make the window layered so it can fade. A window made layered stays
-' invisible until its opacity is set, so if Windows refuses the opacity the
-' style is taken off again and the toast simply closes when its time is up.
+' Make the window layered so it can fade, and never activated, so even a
+' click on it leaves the keyboard with the user's form. A window made layered
+' stays invisible until its opacity is set, so if Windows refuses the opacity
+' the layered style is taken off again and the toast simply closes when its
+' time is up.
 Private Sub MakeLayered()
     Dim st As LongPtr
     If m_styled Then Exit Sub
     m_styled = True
-    st = GetWindowLongPtr(Me.hwnd, GWL_EXSTYLE)
+    st = GetWindowLongPtr(Me.hwnd, GWL_EXSTYLE) Or WS_EX_NOACTIVATE
     SetWindowLongPtr Me.hwnd, GWL_EXSTYLE, st Or WS_EX_LAYERED
     m_layered = (SetLayeredWindowAttributes(Me.hwnd, 0, 255, LWA_ALPHA) <> 0)
     If Not m_layered Then SetWindowLongPtr Me.hwnd, GWL_EXSTYLE, st
 End Sub
 
-' Show the window MARGIN in from the bottom-right corner of frmMain (of the
-' Access window when frmMain isn't open), on top but not active. Window
-' rectangles are in screen pixels, so the margin is converted with the
-' toast's own pixels-per-twip.
+' Show the window MARGIN in from the bottom-right corner of frmMain's client
+' area (of the Access window when frmMain isn't open or is minimized), on
+' top but not active. The client area leaves out the window frame, which on
+' Windows 10 and 11 is partly invisible. Window rectangles are in screen
+' pixels, so the margin is converted with the toast's own pixels-per-twip.
 Private Sub Place()
-    Dim rcHost As RECT, rcMe As RECT, host As LongPtr, w As Long, h As Long, m As Long
+    Dim rcHost As RECT, rcMe As RECT, pt As POINTAPI, host As LongPtr, w As Long, h As Long, m As Long
     host = Application.hWndAccessApp
-    If IsFormOpen("frmMain") Then host = Forms("frmMain").hwnd
-    GetWindowRect host, rcHost
+    If IsFormOpen("frmMain") Then
+        If IsIconic(Forms("frmMain").hwnd) = 0 Then host = Forms("frmMain").hwnd
+    End If
+    GetClientRect host, rcHost
+    pt.x = rcHost.Right: pt.y = rcHost.Bottom
+    ClientToScreen host, pt
+    rcHost.Right = pt.x: rcHost.Bottom = pt.y
     GetWindowRect Me.hwnd, rcMe
     w = rcMe.Right - rcMe.Left
     h = rcMe.Bottom - rcMe.Top
