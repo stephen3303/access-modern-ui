@@ -9,6 +9,7 @@ Public Function TestKit(ByVal root As String) As String
     Dim grid As Form, host As Form, c As Control, cols As Variant, i As Long
     Dim rows As DAO.Recordset, ids As Object, height As Long
     Dim text As String, fitted As String, measured As Long
+    Dim db As DAO.Database, badName As Long, badScale As Long
     g_SrcRoot = root & "\kit": UseBuildPalette
     CurrentDb.Execute "CREATE TABLE test_rows (id LONG PRIMARY KEY, category TEXT(60), description TEXT(255))"
     For i = 1 To 23
@@ -65,6 +66,26 @@ Public Function TestKit(ByVal root As String) As String
     LayoutFilterRow host, Array("filter0", "filter1"), px(24), px(10), px(600)
     Check host.filter0.Width = host.filter1.Width, "Filter widths differ"
     Check host.filter0.Top = host.filter1.Top, "Filters do not share one row"
+    ' Spacing: unset is the guide's values; a choice scales gaps, is saved and can be undone.
+    Check SpacingScale() = 1 And Sp(SP_CARD_GAP) = px(12), "Default spacing changed the guide's gaps"
+    Check host.filter1.Left = host.filter0.Left + host.filter0.Width + px(4), "Default filter gap is not 4px"
+    SetSpacing "compact"
+    Check Sp(SP_CARD_GAP) = px(9) And Sp(SP_PAGE) = px(24), "Compact spacing did not scale gaps"
+    SetSpacing "Comfortable"
+    Check Sp(SP_ITEM_GAP) = px(5) And Sp(SP_ROW_GAP) = px(10), "Comfortable spacing did not scale gaps"
+    LayoutFilterRow host, Array("filter0", "filter1"), px(24), px(10), px(600)
+    Check host.filter1.Left = host.filter0.Left + host.filter0.Width + px(5), "Filter row ignores the chosen spacing"
+    Set db = CurrentDb
+    Check CDbl(db.Properties("KitSpacing")) = 1.25, "Spacing choice was not saved"
+    On Error Resume Next
+    SetSpacing "roomy": badName = Err.Number: Err.Clear
+    SetSpacing 3: badScale = Err.Number: Err.Clear
+    On Error GoTo 0
+    Check badName = 5, "Unknown spacing name accepted"
+    Check badScale = 5, "Out-of-range spacing accepted"
+    Check SpacingScale() = 1.25, "Rejected spacing changed the scale"
+    SetSpacing "default"
+    LayoutFilterRow host, Array("filter0", "filter1"), px(24), px(10), px(600)
     LayoutNumberedTimeline host, "step", 3, px(24), px(500)
     LayoutNumberedTimeline host, "step", 3, px(24), px(650)
     Check host.stepMarker0.Width = 420 And host.stepMarker0.Height = 420, "Timeline circle expanded"

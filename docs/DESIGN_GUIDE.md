@@ -445,6 +445,11 @@ Write app-specific helpers next to the builds that use them. Examples:
   exception is the `DateBox` calendar button, which takes its input's 30px height.
 - Vertical rhythm for stacked fields: 38px.
 - Cards and KPI tiles are separated by 12px gaps.
+- **Designer spacing.** The values in this section are the default. A designer who wants a
+  tighter or roomier app calls `SetSpacing "compact"` (0.75) or `"comfortable"` (1.25), or a
+  scale from 0.5 to 2, once before building. Write gaps and padding as
+  `Sp(SP_CARD_GAP)`, `Sp(SP_PAGE)` and so on so they follow that choice; keep control sizes
+  in `px()` (an input stays 30px). Without a `SetSpacing` call, `Sp(n)` equals `px(n)`.
 - A KPI tile is 78px tall: a surface box with a 1px border, a 4px colored accent strip
   along the bottom, a 10pt caption and a 24pt number. A transparent `Link` over the whole
   tile makes it clickable.
