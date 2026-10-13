@@ -122,7 +122,7 @@ End Function
 ' a column per grid column, named by its caption (named) or col_<n>.
 Private Function GridSql(gridForm As Form, cols As Collection, ByVal named As Boolean) As String
     Dim src As String, sel As String, col As Variant, i As Long, pos As Long, ord As String, nm As String
-    Dim extra As Variant
+    Dim extra As Variant, f As String
     src = Trim$(gridForm.RecordSource)
     If Right$(src, 1) = ";" Then src = Trim$(Left$(src, Len(src) - 1))
     If UCase$(Left$(src, 7)) = "SELECT " Then
@@ -147,8 +147,11 @@ Private Function GridSql(gridForm As Form, cols As Collection, ByVal named As Bo
         If Left$(col(0), 1) = "=" Then
             sel = sel & ", (" & Mid$(col(0), 2) & ") AS [" & nm & "]"
         Else
-            ' Qualified, because a caption may repeat a field's name.
-            sel = sel & ", q.[" & col(0) & "] AS [" & nm & "]"
+            ' Qualified, because a caption may repeat a field's name. A source
+            ' given as "[field]" (BuildGrid "[SHA-256]|...") loses its brackets first.
+            f = col(0)
+            If Left$(f, 1) = "[" And Right$(f, 1) = "]" Then f = Mid$(f, 2, Len(f) - 2)
+            sel = sel & ", q.[" & f & "] AS [" & nm & "]"
         End If
         i = i + 1
     Next
