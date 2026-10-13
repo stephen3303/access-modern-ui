@@ -113,12 +113,12 @@ Control heights and font sizes never scale. `TabStrip` and `LayoutFilterRow` alr
 | Builder | What it does |
 |---|---|
 | `Lbl nm, cap, x, y, w, h [, size, bold, fore]` | Label with a transparent background |
-| `Txt nm, src, x, y, w, h` | Text box (a field name, or an expression starting with `=`) |
+| `Txt nm, src, x, y, w, h` | Text box (a field name, or an expression starting with `=`). A field box shows the focus ring. |
 | `BuildDatePicker` | Builds `dlgDatePick`, the month calendar `DateBox` buttons open. Call it once with the app's dialogs. |
 | `BuildMessageDialog` | Builds `dlgMessage`, the dialog `KitMsgBox` opens. Call it once with the app's dialogs. |
 | `DateBox nm, src, x, y, h` | Date entry: a 120px text box (dd mmm yyyy, left-aligned) and a calendar button `cal_<nm>` 4px to its right that opens the date picker. The pair is `DATEFIELD_W` (154px) wide. |
 | `RO nm, src, x, y, w, h` | Read-only text: no border, not a tab stop |
-| `Cbo` / `Lst` / `Chk` | Combo box, list box, check box with its label |
+| `Cbo` / `Lst` / `Chk` | Combo box (with the focus ring), list box, check box with its label |
 | `Btn nm, cap, x, y, w, h [, kind]` | Button. `kind` is `primary`, `outline`, `ghost`, `destructive` or `nav`. |
 | `Link nm, cap, x, y, w, h, onClick` | Clickable text (links and tab labels) |
 | `Box nm, x, y, w, h, back [, border]` | Rectangle. Pass -1 for no fill or no border. |
@@ -170,6 +170,7 @@ Control heights and font sizes never scale. `TabStrip` and `LayoutFilterRow` alr
 | `ShowDetail host, detailCtl, formName, where [, emptyCtl]` | List/detail pages: show the matching record in the detail subform, saving a changed one first, and hide the empty state |
 | `ClearDetail host, detailCtl [, emptyCtl]` | Empty the detail subform and show the empty state |
 | `PickDate frm, nm` | A `DateBox` calendar button's click: open the kit's date picker (`dlgDatePick`) for box `nm` and write the chosen date into it (not while the box is disabled or locked, or its form is read-only) |
+| `FocusRing frm, nm, clr` | The GotFocus and LostFocus that `Txt` and `Cbo` set: a `CLR_PRIMARY` border on the field being typed in, its own border again when it loses the focus. Only the border color changes, so nothing moves. Not on locked fields or continuous forms. A form that handles a kit input's GotFocus or LostFocus itself calls it from that handler. |
 | `KitMsgBox msg [, style, title]` | `MsgBox` in the kit's look, centred over Access (a `MsgBox` is centred on the monitor, so on a large or second screen it opens outside Access). Takes OK, OK/Cancel, Yes/No and Yes/No/Cancel, the four icons and `vbDefaultButton2`/`3`, and returns what `MsgBox` would. Anything else, or a dialog that isn't built yet, falls back to `MsgBox`. Use it in the app's `Notify` and `HandleError`. |
 | `SetCount ctl, n` | Show a count after a tab or chip caption, "Name (n)" |
 | `StyleChip lbl, isOn [, n]` | Filter chip on or off, with an optional count |

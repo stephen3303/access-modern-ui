@@ -4,7 +4,8 @@ Option Explicit
 ' Access UI kit - run-time helpers for pages built with modUIKit: tables that
 ' scale their columns (GridFit), list/detail pages (SelectFirstRow,
 ' ShowDetail, ClearDetail), tabs and filter chips with counts (SetCount,
-' StyleChip), and messages in the kit's look (KitMsgBox). Colors set here go
+' StyleChip), focus rings on inputs (FocusRing), and messages in the kit's
+' look (KitMsgBox). Colors set here go
 ' through Th() so they follow the palette.
 
 ' Width the table's vertical scroll bar takes (twips).
@@ -257,6 +258,32 @@ Public Sub SetDateTarget(ByVal v As Variant)
     If m_dateTarget Is Nothing Then Exit Sub
     m_dateTarget.Value = v
 End Sub
+
+' ---------------------------------------------------------------------------
+' Focus ring
+' ---------------------------------------------------------------------------
+
+' A kit input's GotFocus and LostFocus (set by Txt and Cbo): paint the border
+' of control nm on frm in palette color clr, CLR_PRIMARY while it has the
+' focus and its own border color again when it loses it. Only the border color
+' changes (no width, size or margin), so the text never moves; the color is
+' written only when it differs, so moving between fields repaints just the two
+' borders. The ring isn't shown on a locked field (nothing to type) or on a
+' continuous form, where one control's border is every row's. Losing the focus
+' always restores the color. A failure is logged but not shown, like
+' ThemeForm: the field keeps working without the ring.
+Public Function FocusRing(frm As Form, ByVal nm As String, ByVal clr As Long)
+    Dim c As Control
+    On Error GoTo Fail
+    Set c = frm.Controls(nm)
+    If clr = CLR_PRIMARY Then
+        If c.Locked Or frm.DefaultView <> 0 Then Exit Function
+    End If
+    If c.BorderColor <> Th(clr) Then c.BorderColor = Th(clr)
+    Exit Function
+Fail:
+    LogError "modKitUI.FocusRing", frm.Name & "." & nm
+End Function
 
 ' ---------------------------------------------------------------------------
 ' Messages

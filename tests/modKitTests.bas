@@ -34,6 +34,8 @@ Public Function TestKit(ByVal root As String) As String
     Set c = Lbl("pillPaint", "Open", 0, px(620), px(80), px(20)): PillLabel c
     Set c = Txt("pillBound", "=""Open""", px(100), px(620), px(80), px(20))
     CF c, "True", CLR_PRIMARY, CLR_WHITE: RoundCF c
+    Txt "ringA", "", px(200), px(620), px(80), px(30)
+    Cbo "ringB", "", "One;Two", px(290), px(620), px(80), px(30)
     SaveForm "frmTest", "testHost"
     DoCmd.OpenForm "frmTest"
     Set host = Forms("frmTest"): Set grid = host.sfRows.Form
@@ -151,6 +153,13 @@ Public Function TestKit(ByVal root As String) As String
     Check TagWidth(Array("Short", "Longest category")) = PillTextWidth("Longest category"), "Widest label differs"
     Check FileExists(CStr(ColumnPillPng(CLR_PRIMARY, 240, 26, PillTextWidth("Longest category")))), "Pill image missing"
     Check FileExists(RoundedCardPng(600, 200, CLR_SURFACE, CLR_BORDER)), "Rounded card missing"
+    host.ringA.SetFocus
+    Check host.ringA.BorderColor = CLR_PRIMARY, "Focused input lacks its focus ring"
+    host.ringB.SetFocus
+    Check host.ringA.BorderColor = CLR_INPUT_BORDER, "Input kept its focus ring after losing the focus"
+    Check host.ringB.BorderColor = CLR_PRIMARY, "Focused combo box lacks its focus ring"
+    host.ringB.Locked = True: host.ringA.SetFocus: host.ringB.SetFocus
+    Check host.ringB.BorderColor = CLR_INPUT_BORDER, "Locked input shows a focus ring"
     grid.txtCol0.SetFocus: grid.RowClick
     Check Screen.ActiveControl.Name = "txtFocusSink", "Row click left text focused"
     Check host.callbackGrid = "sfRows", "Grid callback used wrong parent"

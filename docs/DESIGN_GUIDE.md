@@ -330,6 +330,8 @@ End Sub
 - **Controls**
   - `Lbl`: transparent label.
   - `Txt`: input with `CLR_INPUT_BG`, a 1px `CLR_INPUT_BORDER` border and inner margins.
+    A field box (not an `=` expression) and a `Cbo` show the focus ring: the border turns
+    `CLR_PRIMARY` while the field has the focus (`FocusRing`, see §6.7).
   - `DateBox`: a date input, 120px wide, with its date left-aligned like text, and a
     30px outline calendar button 4px to its right that opens the kit's date picker
     (`PickDate`, `dlgDatePick`, built by `BuildDatePicker`): a month of day cells with
@@ -560,6 +562,14 @@ Write app-specific helpers next to the builds that use them. Examples:
   only through `SetVisible` and `SetEnabled` (error 2164 for a focused control being
   disabled). Both also cover a subform, tab control or option group that holds the
   focus, and fall back to the first free tab stop on a form with no sink.
+- **Focus ring**: `Txt` and `Cbo` set `OnGotFocus`/`OnLostFocus` to `=FocusRing(...)`,
+  which paints the border `CLR_PRIMARY` and back. Only `BorderColor` changes: a wider
+  border would eat into the text area and shift the text, and an extra ring control
+  would have to be shown and hidden on every focus change (flicker). Locked fields and
+  continuous forms get no ring (one control's border is every row's). Setting these
+  events later (`Ev c, "OnGotFocus"`) replaces the ring, so such a handler calls
+  `FocusRing Me, "<name>", CLR_PRIMARY` (or the field's border color on LostFocus)
+  itself.
 - Read-only row text with no click handler is set to `Enabled = False` +
   `Locked = True`. That keeps its normal look while it can never take focus.
 - **Disabled controls ignore theme colors.** Lock controls instead of disabling them when

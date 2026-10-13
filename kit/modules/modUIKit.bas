@@ -286,7 +286,8 @@ Public Function Lbl(ByVal nm As String, ByVal cap As String, ByVal x As Long, By
     Set Lbl = c
 End Function
 
-' Text box. src is a field name or an expression starting with "=".
+' Text box. src is a field name or an expression starting with "=". A field
+' box shows the focus ring (RingOnFocus); an expression box doesn't.
 Public Function Txt(ByVal nm As String, ByVal src As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
         Optional ByVal size As Integer = 10, Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control
     Dim c As Control
@@ -301,6 +302,7 @@ Public Function Txt(ByVal nm As String, ByVal src As String, ByVal x As Long, By
     c.LeftMargin = 60
     c.TopMargin = 30
     VCenter c, h, size
+    If Left$(src, 1) <> "=" Then RingOnFocus c, CLR_INPUT_BORDER   ' a calculated box takes no typing
     Set Txt = c
 End Function
 
@@ -393,6 +395,17 @@ Public Function RowBack(ByVal nm As String, ByVal x As Long, ByVal y As Long, By
     Set RowBack = c
 End Function
 
+' Focus ring: a CLR_PRIMARY border while input c has the focus, back to
+' border (its build color) when it loses it, through the run-time FocusRing.
+' These event properties replace any the caller sets later: a form that
+' handles c's GotFocus or LostFocus itself calls FocusRing from its handler.
+' Reports have no focus.
+Private Sub RingOnFocus(c As Control, ByVal border As Long)
+    If m_isReport Then Exit Sub
+    c.OnGotFocus = "=FocusRing([Form],""" & c.Name & """," & CLR_PRIMARY & ")"
+    c.OnLostFocus = "=FocusRing([Form],""" & c.Name & """," & border & ")"
+End Sub
+
 ' Read-only text: no border, transparent, not a tab stop.
 Public Function RO(ByVal nm As String, ByVal src As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
         Optional ByVal size As Integer = 10, Optional ByVal bold As Boolean = False, Optional ByVal fore As Long = CLR_FG, _
@@ -437,6 +450,7 @@ Public Function Cbo(ByVal nm As String, ByVal src As String, ByVal rowSrc As Str
     c.SpecialEffect = 0
     c.BackColor = CLR_INPUT_BG
     VCenter c, h, 10
+    RingOnFocus c, CLR_INPUT_BORDER
     Set Cbo = c
 End Function
 
