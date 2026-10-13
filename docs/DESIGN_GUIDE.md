@@ -119,7 +119,7 @@ them, and the shell (`frmMain`) last.
 | modBuildUI, modBuildPages, modBuildPages2 | `Build_<form>` procedures, one per form, grouped by area |
 | modUI | Run-time UI helpers: `NavTo`, badges/pills painting, `ShowTip`, the app's hooks (`BadgeColors`, `StatusVariant`) |
 | modUIKit (kit) | Build-time control builders (section 6) |
-| modKitUI (kit) | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `ToggleSwitch`, `KitMsgBox`, `SetCount`, `StyleChip` |
+| modKitUI (kit) | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `ToggleSwitch`, `ToggleFocus`, `KitMsgBox`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
 | modKitUtil (kit) | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `SetVisible`, `SetEnabled` |
 | modDarkMode (kit), modPalette (gen), modTheme (gen) | Palette engine (section 7) |
@@ -545,17 +545,20 @@ Write app-specific helpers next to the builds that use them. Examples:
   and Null shows an empty track. It is bound, so it follows the record in a continuous
   form. Give it a fixed width: the image keeps its shape, so don't anchor it to stretch.
 - **Toggle switch**: `Toggle` draws a 44 x 24px rounded track with a round knob
-  (`TogglePng`): `CLR_PRIMARY` with the knob on the right when on, `CLR_INPUT_BORDER`
-  with it on the left when off, the knob `CLR_WHITE`. Center the track on its row: in a
+  (`TogglePng`): `CLR_PRIMARY` with the knob on the right when on, `CLR_MUTED_FG`
+  with it on the left when off, the knob `CLR_SURFACE`, so the track and knob keep well
+  over 3:1 against the surface and each other in Navy and Midnight. Center the track on its row: in a
   30px input row it sits 3px down. Access has no switch, so it is a hidden check box
   `<nm>_val` bound to the field (the value), the track image `<nm>_bg` bound to it, and a
   transparent button `<nm>` on top that takes clicks, the Tab stop and Space
   (`ToggleSwitch`). A transparent button draws no focus, so a `CLR_PRIMARY` ring
   (`<nm>_ring`, 2px wide, 2px outside the track) shows while it has the focus; leave 4px
   clear around the track for it. A value set in code fires no `AfterUpdate`, so pass
-  `onChange`, a Public Sub in the form's code-behind, to act on a change (save a setting
-  at once). Hide or disable it with `SetVisible` or `SetEnabled` on `<nm>`; the track
-  follows. Use it on single forms only: in a continuous form the ring shows on every row.
+  `onChange`, a Public Sub in the form's code-behind, to act on a change (for example,
+  save the record at once). A misspelled `onChange` shows error 438 on the first click.
+  Hide it with `SetVisible` on `<nm>`, and the track goes too; `SetEnabled` on `<nm>`
+  stops clicks and the Tab stop but doesn't dim the track. Use it on single forms only:
+  in a continuous form the ring shows on every row.
 - **Empty states**: a centered muted 10pt label shown in place of an empty list.
 - **Search box placeholder**: `Format = "@;""Search by ..."""`.
 - **Hierarchical trees and wrapped rows**:

@@ -36,8 +36,8 @@ watching for Visual Basic error dialogs as well as the error log:
   row; editing and saving updates the list; a search with no match shows both empty
   states; Print previews and Export writes exactly the rows shown, with the captions.
 - Toggle (Flagged for review, in the detail panel): clicking the track, or Tab to it and
-  Space, slides the knob and saves at once; the track is the palette's primary color when
-  on and its input-border color when off; a ring shows while it has the focus. The table
+  Space, slides the knob and saves the record at once; the track is the palette's primary
+  color when on and its muted text color when off; a ring shows while it has the focus. The table
   gained a column, so build without `-UiOnly` once.
 
 ## Files

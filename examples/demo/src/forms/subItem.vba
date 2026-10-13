@@ -12,8 +12,8 @@ Err_Handler:
     HandleError "subItem.txtPct_AfterUpdate"
 End Sub
 
-' The Flagged switch changed (Toggle's onChange): save it at once, like a
-' settings switch.
+' The Flagged switch changed (Toggle's onChange): save the record at once,
+' like a settings switch.
 Public Sub FlagChanged()
     On Error GoTo Err_Handler
     If Me.Dirty Then Me.Dirty = False

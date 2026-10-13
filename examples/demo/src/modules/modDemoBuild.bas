@@ -154,7 +154,7 @@ Private Sub SearchBox(ByVal x As Long, ByVal y As Long, ByVal w As Long)
 End Sub
 
 ' Detail panel form for pgList: one item, editable. The Flagged switch
-' (Toggle) saves as soon as it changes.
+' (Toggle) saves the record as soon as it changes.
 Private Sub Build_subItem()
     Dim c As Control, x2 As Long, hw As Long
     NewForm "demo_item", 0, px(328), px(362)
@@ -175,7 +175,7 @@ Private Sub Build_subItem()
     Set c = Txt("txtDue", "due_date", 0, px(208), hw, px(30))
     c.Format = "dd mmm yyyy"
     FieldLbl "lblFlag", "FLAGGED FOR REVIEW", x2, px(190), hw
-    Toggle "tglFlag", "flagged", x2, px(211), onChange:="FlagChanged"   ' 24px track centred on the 30px row
+    Toggle "tglFlag", "flagged", x2, px(211), onChange:="FlagChanged"   ' 24px track centered on the 30px row
     FieldLbl "lblNotes", "NOTES", 0, px(246), px(328)
     Set c = Txt("txtNotes", "notes", 0, px(264), px(328), px(60))
     c.EnterKeyBehavior = True

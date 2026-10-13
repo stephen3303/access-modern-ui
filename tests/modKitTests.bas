@@ -34,7 +34,7 @@ Public Function TestKit(ByVal root As String) As String
     Set c = Lbl("pillPaint", "Open", 0, px(620), px(80), px(20)): PillLabel c
     Set c = Txt("pillBound", "=""Open""", px(100), px(620), px(80), px(20))
     CF c, "True", CLR_PRIMARY, CLR_WHITE: RoundCF c
-    Toggle "tglTest", "", px(300), px(620)
+    Toggle "tglTest", "", px(300), px(620), onChange:="ToggleChanged"
     SaveForm "frmTest", "testHost"
     DoCmd.OpenForm "frmTest"
     Set host = Forms("frmTest"): Set grid = host.sfRows.Form
@@ -158,11 +158,13 @@ Public Function TestKit(ByVal root As String) As String
     Check InStr(Nz(host.tglTest_bg.Properties("ControlSource").Value, ""), "TogglePng(") > 0, "Switch track is not bound"
     ToggleSwitch host, "tglTest"
     Check Not host.tglTest_val, "Second switch click did not turn it off"
+    Check host.toggleChanges = 2, "Switch onChange did not run once per change"
     host.tglTest_val.Locked = True
     ToggleSwitch host, "tglTest"
     Check Not host.tglTest_val, "Locked switch changed"
+    Check host.toggleChanges = 2, "Locked switch ran onChange"
     host.tglTest_val.Locked = False
-    Check FileExists(CStr(TogglePng(True, CLR_PRIMARY, CLR_INPUT_BORDER, CLR_WHITE, 44, 24))), "Switch image missing"
+    Check FileExists(CStr(TogglePng(True, CLR_PRIMARY, CLR_MUTED_FG, CLR_SURFACE, 44, 24))), "Switch image missing"
     Check FileExists(CStr(RingPng(CLR_PRIMARY, 52, 32))), "Focus ring image missing"
     Check Not host.tglTest_ring.Visible, "Focus ring shows without focus"
     host.tglTest.SetFocus
