@@ -1,3 +1,4 @@
 *.accdb
 *.laccdb
+examples/demo/KitDemo.bmp
 __pycache__/

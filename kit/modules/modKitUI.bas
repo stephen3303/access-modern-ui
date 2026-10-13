@@ -4,8 +4,9 @@ Option Explicit
 ' Access UI kit - run-time helpers for pages built with modUIKit: tables that
 ' scale their columns (GridFit), list/detail pages (SelectFirstRow,
 ' ShowDetail, ClearDetail), tabs and filter chips with counts (SetCount,
-' StyleChip), and messages in the kit's look (KitMsgBox). Colors set here go
-' through Th() so they follow the palette.
+' StyleChip), the splash screen's status line (SplashStatus) and messages in
+' the kit's look (KitMsgBox). Colors set here go through Th() so they follow
+' the palette.
 
 ' Width the table's vertical scroll bar takes (twips).
 Private Const SCROLL_W As Long = 300
@@ -20,6 +21,8 @@ Private m_msgText As String
 Private m_msgStyle As Long
 Private m_msgTitle As String
 Private m_msgAnswer As Long
+' The splash screen BuildSplash builds (SplashStatus, CloseSplash).
+Private Const SPLASH_FORM As String = "frmSplash"
 
 ' ---------------------------------------------------------------------------
 ' Tables
@@ -259,6 +262,30 @@ Public Sub SetDateTarget(ByVal v As Variant)
 End Sub
 
 ' ---------------------------------------------------------------------------
+' Splash screen
+' ---------------------------------------------------------------------------
+
+' Show msg on the splash screen's status line (frmSplash, BuildSplash) while
+' the app starts, for example "Opening the data file...". Does nothing once
+' the splash has closed, so start-up code can call it either way.
+Public Sub SplashStatus(ByVal msg As String)
+    If Not IsFormOpen(SPLASH_FORM) Then Exit Sub
+    Forms(SPLASH_FORM).Controls("lblSplashStatus").Caption = msg
+    Forms(SPLASH_FORM).Repaint
+End Sub
+
+' Close the splash screen if it is open. KitMsgBox calls it: the splash is a
+' pop-up, so a message opened during start-up could sit behind it. Access can
+' refuse (2585) while the splash's own Timer is still running; the splash then
+' closes itself when that event ends, so the refusal is ignored.
+Public Sub CloseSplash()
+    If Not IsFormOpen(SPLASH_FORM) Then Exit Sub
+    On Error Resume Next
+    DoCmd.Close acForm, SPLASH_FORM, acSaveNo
+    On Error GoTo 0
+End Sub
+
+' ---------------------------------------------------------------------------
 ' Messages
 ' ---------------------------------------------------------------------------
 
@@ -275,6 +302,7 @@ Public Function KitMsgBox(ByVal msg As String, Optional ByVal style As VbMsgBoxS
         Optional ByVal title As String = "") As VbMsgBoxResult
     Dim btns As Long
     btns = style And 7
+    CloseSplash                    ' a start-up message must not open behind the splash
     If m_msgOpen Then GoTo Plain
     If Not (btns = vbOKOnly Or btns = vbOKCancel Or btns = vbYesNo Or btns = vbYesNoCancel) Then GoTo Plain
     On Error GoTo Failed
