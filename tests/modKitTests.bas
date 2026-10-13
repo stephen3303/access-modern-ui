@@ -155,6 +155,15 @@ Public Function TestKit(ByVal root As String) As String
     Loop
     Check ids.Count = 20, "Pager omitted records"
     Check Not host.pagerNext.Enabled, "Last page permits advance"
+    ' Sorting a paginated table starts again at page 1 of the whole filtered set.
+    GridSort host, "sfRows", "sortHead", 1
+    With grid.RecordsetClone
+        .MoveFirst
+        Check !description = "Description 10", "Sorted pager kept the old order's page"
+    End With
+    Check host.pagerCount.Caption Like "Showing 1-* of 20", "Sorted pager did not return to page 1"
+    grid.OrderBy = "": grid.OrderByOn = False
+    LayoutTableFooter host, "sfRows", "pager", "id"
     SetTablePagination host.sfRows, False
     LayoutTableFooter host, "sfRows", "pager", "id"
     Check host.sfRows.Tag = "AppTag", "Opt-out lost app tag"

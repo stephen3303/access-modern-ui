@@ -167,7 +167,8 @@ End Sub
 ' left when the caption is right-aligned, so the text stays over the
 ' numbers) and the others lose theirs. The arrow is the sort state: a host
 ' that sorts the table in code should do it through GridSort.
-' The sort is the form's OrderBy, which PrintGrid and ExportGrid follow.
+' The sort is the form's OrderBy, which PrintGrid and ExportGrid follow. A
+' paginated table (GridFooter) goes back to its first page in the new order.
 ' The selected row stays selected (txtSel keeps its id).
 Public Function GridSort(host As Form, ByVal sfName As String, ByVal prefix As String, ByVal col As Long)
     Dim g As Form, cap As Control, t() As String, key As String, desc As Boolean, i As Long
@@ -181,6 +182,7 @@ Public Function GridSort(host As Form, ByVal sfName As String, ByVal prefix As S
     Set g = host.Controls(sfName).Form
     g.OrderBy = key & IIf(desc, " DESC", "")
     g.OrderByOn = True
+    RestartTablePages host, sfName      ' a paginated table shows the old order's page
     Do While HasCtl(host, prefix & i)
         SortArrow host.Controls(prefix & i), IIf(i = col, IIf(desc, ChrW(SORT_DOWN), ChrW(SORT_UP)), "")
         i = i + 1
