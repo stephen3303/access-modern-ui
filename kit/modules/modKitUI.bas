@@ -319,8 +319,10 @@ End Function
 ' follows, moves the ring before Access repaints.
 Public Function FocusRingEnter(frm As Form, ByVal nm As String)
     Dim inner As Form, c As Control
+    On Error Resume Next
+    Set inner = frm.Controls(nm).Form      ' error 2467 while it shows no form
     On Error GoTo Fail
-    Set inner = frm.Controls(nm).Form
+    If inner Is Nothing Then Exit Function
     Do
         Set c = Nothing
         On Error Resume Next
@@ -328,7 +330,7 @@ Public Function FocusRingEnter(frm As Form, ByVal nm As String)
         On Error GoTo Fail
         If c Is Nothing Then Exit Function
         If c.ControlType <> acSubform Then Exit Do
-        Set inner = c.Form                 ' a subform inside the subform
+        Set inner = c.Form                   ' a subform inside the subform
     Loop
     If Left$(Nz(c.OnGotFocus, ""), 11) = "=FocusRing(" Then FocusRing inner, c.Name, True
     Exit Function
