@@ -13,6 +13,7 @@ Private Const SECONDS_PER_DAY As Long = 86400
 Private m_openedAt As Single        ' Timer() when the splash opened
 Private m_started As Boolean        ' the next form has been opened
 Private m_name As String            ' this form's name, for after it may have closed
+Private m_retried As Boolean        ' a failed Timer has rescheduled the close once
 
 Private Sub Form_Load()
     On Error GoTo Err_Handler
@@ -43,9 +44,15 @@ Private Sub Form_Timer()
     End If
     Exit Sub
 Err_Handler:
-    ' HandleError's message closes the splash first (KitMsgBox, CloseSplash).
+    ' HandleError's message closes the splash first (KitMsgBox, CloseSplash),
+    ' but Access can refuse that (2585) while this Timer event is running. So
+    ' run the timer once more: m_started is set, so it only closes the splash.
+    ' Once only, so a close that keeps failing can't repeat its message.
     HandleError "frmSplash.Form_Timer"
-    CloseSplash
+    If Not m_retried And IsFormOpen(m_name) Then
+        m_retried = True
+        Me.TimerInterval = 100
+    End If
 End Sub
 
 ' Milliseconds since the splash opened (Timer() restarts at midnight).

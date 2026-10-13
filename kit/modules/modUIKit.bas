@@ -392,7 +392,13 @@ End Sub
 Public Sub BuildSplash(Optional ByVal nextForm As String = "frmMain", Optional ByVal subtitle As String = "", _
         Optional ByVal glyph As String = "")
     Dim c As Control, w As Long, h As Long, pad As Long, y As Long
-    w = px(480): h = px(280): pad = Sp(SP_PAGE)
+    ' 480 x 280px at the default spacing. Padding and gaps follow SetSpacing,
+    ' so a roomier scale makes the splash taller rather than overlapping the
+    ' subtitle and the footer.
+    w = px(480): pad = Sp(SP_PAGE)
+    h = pad + px(48) + Sp(16) + px(36) + Sp(SP_ITEM_GAP) + px(20) _
+        + Sp(SP_DIALOG) + Sp(SP_ROW_GAP) + px(1) + px(18) + pad
+    If h < px(280) Then h = px(280)
     NewForm "", 0, w, h
     With F
         .Caption = APP_NAME
