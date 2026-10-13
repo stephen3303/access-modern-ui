@@ -5,16 +5,19 @@ Option Explicit
 ' message KitMsgBox was given with its icon and buttons, shrinks to the lines
 ' the message takes, and hands back the button chosen (SetKitMsgAnswer).
 ' Enter picks the default button and Esc the last one (Cancel, No, or OK).
+' A message longer than the dialog's 14 lines keeps its full height and
+' starts with the focus in the message, which shows its scroll bar, so no
+' part of it is cut off.
 
 Private m_answers As Variant    ' what each visible button returns, btn1 first
 
 Private Sub Form_Load()
     On Error GoTo Err_Handler
-    Dim style As Long, n As Long, i As Long, btnY As Long, oldH As Long, x As Long
+    Dim style As Long, n As Long, i As Long, btnY As Long, oldH As Long, x As Long, msgH As Long
     style = KitMsgStyle()
     Me.Caption = IIf(Len(KitMsgTitle()) > 0, KitMsgTitle(), APP_NAME)
     ShowIcon style And &H70
-    Me.lblMsg.Caption = KitMsgText()
+    Me.txtMsg = KitMsgText()
 
     ' Buttons, right-aligned in Windows order.
     Select Case style And 7
@@ -35,14 +38,23 @@ Private Sub Form_Load()
     If i > 1 Then SwapLook Me.btn1, Me("btn" & i)   ' the default button looks primary
     Me("btn" & i).Default = True
     Me("btn" & n).Cancel = True
-    Me("btn" & i).SetFocus
+    msgH = MessageHeight()
+    If msgH > Me.txtMsg.Height Then
+        ' Too long for the dialog: focus the message so it can be scrolled
+        ' (Enter still picks the default button, Esc the last).
+        Me.txtMsg.SetFocus
+        Me.txtMsg.SelStart = 0
+        msgH = Me.txtMsg.Height
+    Else
+        Me("btn" & i).SetFocus
+    End If
 
     ' Shrink to the message: move the buttons up under it, then the dialog.
-    btnY = Me.lblMsg.Top + MessageHeight() + 300
+    btnY = Me.txtMsg.Top + msgH + 300
     If btnY < Me.lblIcon.Top + Me.lblIcon.Height + 300 Then btnY = Me.lblIcon.Top + Me.lblIcon.Height + 300
     If btnY < Me.btn1.Top Then
         oldH = Me.WindowHeight
-        Me.lblMsg.Height = btnY - 300 - Me.lblMsg.Top
+        Me.txtMsg.Height = btnY - 300 - Me.txtMsg.Top
         For i = 1 To 3
             Me("btn" & i).Top = btnY
         Next
@@ -69,8 +81,8 @@ Private Sub ShowIcon(ByVal kind As Long)
     End Select
     If glyph = 0 Then
         Me.lblIcon.Visible = False
-        Me.lblMsg.Width = Me.lblMsg.Left + Me.lblMsg.Width - Me.lblIcon.Left
-        Me.lblMsg.Left = Me.lblIcon.Left
+        Me.txtMsg.Width = Me.txtMsg.Left + Me.txtMsg.Width - Me.lblIcon.Left
+        Me.txtMsg.Left = Me.lblIcon.Left
     Else
         Me.lblIcon.Caption = ChrW(glyph)
         Me.lblIcon.ForeColor = clr
@@ -106,7 +118,7 @@ End Sub
 ' 10pt lines as its measured width needs, with 10% spare for word breaks.
 Private Function MessageHeight() As Long
     Dim para As Variant, lines As Long, w As Long
-    w = Me.lblMsg.Width
+    w = Me.txtMsg.Width
     For Each para In Split(Replace(KitMsgText(), vbCrLf, vbLf), vbLf)
         If Len(para) = 0 Then
             lines = lines + 1
@@ -116,7 +128,6 @@ Private Function MessageHeight() As Long
     Next
     If lines < 1 Then lines = 1
     MessageHeight = lines * CLng(10 * 20 * 1.36) + 30
-    If MessageHeight > Me.lblMsg.Height Then MessageHeight = Me.lblMsg.Height
 End Function
 
 Private Sub Answer(ByVal i As Long)
