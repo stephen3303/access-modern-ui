@@ -259,6 +259,47 @@ Public Sub SetDateTarget(ByVal v As Variant)
 End Sub
 
 ' ---------------------------------------------------------------------------
+' Sensitive fields
+' ---------------------------------------------------------------------------
+
+' Click on a SecretBox's eye button: show the box nm's text if it is hidden,
+' hide it if it is shown, and put the focus back in the box so typing
+' carries on (not while the box is disabled or hidden).
+Public Function ToggleSecret(frm As Form, ByVal nm As String)
+    Dim c As Control
+    On Error GoTo Fail
+    Set c = frm.Controls(nm)
+    ShowSecret frm, nm, (c.InputMask = SECRET_MASK)
+    If c.Enabled And c.Visible Then c.SetFocus
+    Exit Function
+Fail:
+    HandleError "modKitUI.ToggleSecret", nm
+End Function
+
+' Hide the text of every SecretBox on frm. Call it from the form's
+' Form_Current, so a field shown on one record is hidden again on the next.
+Public Sub HideSecrets(frm As Form)
+    Dim c As Control
+    For Each c In frm.Controls
+        If c.ControlType = acCommandButton Then
+            If Left$(c.Name, 4) = "eye_" Then ShowSecret frm, Mid$(c.Name, 5), False
+        End If
+    Next
+End Sub
+
+' Show (reveal True) or hide the text of SecretBox nm, and set its eye
+' button's glyph and tip to the next action. On a click the eye button has
+' the focus, not the box, so the mask never changes under text being typed.
+Private Sub ShowSecret(frm As Form, ByVal nm As String, ByVal reveal As Boolean)
+    Dim c As Control, b As Control
+    Set c = frm.Controls(nm)
+    Set b = frm.Controls("eye_" & nm)
+    c.InputMask = IIf(reveal, "", SECRET_MASK)
+    b.Caption = ChrW(IIf(reveal, EYE_HIDE, EYE_SHOW))
+    b.ControlTipText = IIf(reveal, "Hide", "Show")
+End Sub
+
+' ---------------------------------------------------------------------------
 ' Messages
 ' ---------------------------------------------------------------------------
 

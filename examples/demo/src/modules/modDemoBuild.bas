@@ -46,7 +46,7 @@ Private Sub CreateTables()
     Dim db As DAO.Database
     Set db = CurrentDb
     db.Execute "CREATE TABLE demo_item (id COUNTER PRIMARY KEY, name TEXT(120), owner TEXT(60), " & _
-        "category TEXT(30), status TEXT(30), percent_done LONG, due_date DATETIME, notes LONGTEXT)", dbFailOnError
+        "category TEXT(30), status TEXT(30), percent_done LONG, due_date DATETIME, notes LONGTEXT, access_code TEXT(20))", dbFailOnError
     db.Execute "CREATE TABLE error_log (id COUNTER PRIMARY KEY, logged_at DATETIME, error_number LONG, " & _
         "description LONGTEXT, err_source TEXT(255), source TEXT(255), call_trail LONGTEXT, context LONGTEXT, " & _
         "page TEXT(32), active_form TEXT(64), active_control TEXT(64), username TEXT(150), windows_user TEXT(64), " & _
@@ -75,10 +75,11 @@ Private Sub SeedItems()
             Case "Cancelled": pct = 10
             Case Else: pct = (i * 37) Mod 95 + 5
         End Select
-        CurrentDb.Execute "INSERT INTO demo_item (name, owner, category, status, percent_done, due_date, notes) VALUES (" & _
+        CurrentDb.Execute "INSERT INTO demo_item (name, owner, category, status, percent_done, due_date, notes, access_code) VALUES (" & _
             Q(names(i)) & "," & Q(owners(i Mod 6)) & "," & Q(cats((i \ 2) Mod 6)) & "," & Q(st) & "," & pct & "," & _
             "#" & Format$(DateSerial(2026, 10, 1) + i * 3, "mm/dd/yyyy") & "#," & _
-            Q("Demonstration item " & (i + 1) & ". Fictional data for testing the kit.") & ")", dbFailOnError
+            Q("Demonstration item " & (i + 1) & ". Fictional data for testing the kit.") & "," & _
+            Q("KD-" & Format$(4100 + i * 37, "0000")) & ")", dbFailOnError
     Next
 End Sub
 
@@ -155,6 +156,7 @@ End Sub
 Private Sub Build_subItem()
     Dim c As Control, x2 As Long, hw As Long
     NewForm "demo_item", 0, px(328), px(362)
+    Ev F, "OnCurrent"
     F.Section(acDetail).BackColor = CLR_SURFACE
     F.Section(acDetail).AlternateBackColor = CLR_SURFACE
     hw = px(156): x2 = px(172)
@@ -171,6 +173,8 @@ Private Sub Build_subItem()
     FieldLbl "lblDue", "DUE", 0, px(190), hw
     Set c = Txt("txtDue", "due_date", 0, px(208), hw, px(30))
     c.Format = "dd mmm yyyy"
+    FieldLbl "lblCode", "ACCESS CODE", x2, px(190), hw
+    SecretBox "txtCode", "access_code", x2, px(208), hw, px(30)
     FieldLbl "lblNotes", "NOTES", 0, px(246), px(328)
     Set c = Txt("txtNotes", "notes", 0, px(264), px(328), px(60))
     c.EnterKeyBehavior = True

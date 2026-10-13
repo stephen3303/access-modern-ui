@@ -19,6 +19,11 @@ Public Const CARD_RADIUS As Long = 12
 ' field with its 30px calendar button 4px to the right (154 px).
 Public Const DATEBOX_W As Long = 1800
 Public Const DATEFIELD_W As Long = 2310
+' SecretBox: the input mask that hides its text, and the eye button's
+' glyphs (Segoe MDL2 Assets View and Hide) for "show" and "hide".
+Public Const SECRET_MASK As String = "Password"
+Public Const EYE_SHOW As Long = &HE890&
+Public Const EYE_HIDE As Long = &HED1A&
 ' Badge variants a status pill can take (BadgeColors).
 Private Const BADGE_VARIANTS As String = "success,warning,info,destructive,default,outline,secondary"
 ' Spacing tokens (CSS px, guide 6.4) for Sp(), so a layout written with them
@@ -324,6 +329,28 @@ Public Function DateBox(ByVal nm As String, ByVal src As String, ByVal x As Long
     b.ControlTipText = "Choose a date"
     b.OnClick = "=PickDate([Form],""" & nm & """)"
     Set DateBox = c
+End Function
+
+' Sensitive entry (passwords, PINs, SSNs): a text box nm bound to src that
+' shows its text as asterisks (InputMask "Password", which also stops it
+' being copied), and an eye button eye_<nm> 4px to its right, 30px wide and h
+' tall like the box, that shows or hides the text (ToggleSecret). The pair
+' takes w; the box gets w less 34px. Masking is display only: the field
+' still stores what was typed, so hash passwords before saving them
+' (HashPassword). Returns the text box.
+Public Function SecretBox(ByVal nm As String, ByVal src As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, _
+        ByVal h As Long, Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control
+    Dim c As Control, b As Control
+    Set c = Txt(nm, src, x, y, w - px(34), h, 10, sec, parentCtl)
+    c.InputMask = SECRET_MASK
+    Set b = Btn("eye_" & nm, ChrW(EYE_SHOW), x + w - px(30), y, px(30), h, "outline", sec, parentCtl)
+    b.FontName = "Segoe MDL2 Assets"
+    b.FontSize = 10
+    b.FontWeight = 400
+    b.TabStop = False
+    b.ControlTipText = "Show"
+    b.OnClick = "=ToggleSecret([Form],""" & nm & """)"
+    Set SecretBox = c
 End Function
 
 ' The date picker a DateBox's calendar button opens (dlgDatePick, code in

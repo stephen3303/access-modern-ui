@@ -7,7 +7,7 @@ test changes to it. It has one local table of fictional items and three pages:
 |---|---|
 | Cards and progress | `Card` (rounded and square), `Progress` at 0, 37 and 100 percent, a table inside a rounded card |
 | Tables | `BuildGrid` with every option (header band, zebra rows, status pills, 38px rows, proportional fit through `GridFit`) next to a default table; `TabStrip` and chips with counts; search and a category filter to the right of the chips |
-| List and detail | The list/detail pattern (`SelectFirstRow`, `ShowDetail`, `ClearDetail`), `PrintGrid` and `ExportGrid` |
+| List and detail | The list/detail pattern (`SelectFirstRow`, `ShowDetail`, `ClearDetail`), `PrintGrid` and `ExportGrid`, and a `SecretBox` (the item's access code) |
 
 Appearance in the sidebar switches palettes.
 
@@ -35,6 +35,8 @@ watching for Visual Basic error dialogs as well as the error log:
 - List and detail: the first row opens on load and after each filter; a click shows that
   row; editing and saving updates the list; a search with no match shows both empty
   states; Print previews and Export writes exactly the rows shown, with the captions.
+- Access code: opens as asterisks; the eye shows the code and turns into a struck-through
+  eye, a second click hides it; the next item opens hidden again.
 
 ## Files
 

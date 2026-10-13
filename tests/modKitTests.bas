@@ -34,6 +34,7 @@ Public Function TestKit(ByVal root As String) As String
     Set c = Lbl("pillPaint", "Open", 0, px(620), px(80), px(20)): PillLabel c
     Set c = Txt("pillBound", "=""Open""", px(100), px(620), px(80), px(20))
     CF c, "True", CLR_PRIMARY, CLR_WHITE: RoundCF c
+    SecretBox "secret", "", px(200), px(620), px(160), px(30)
     SaveForm "frmTest", "testHost"
     DoCmd.OpenForm "frmTest"
     Set host = Forms("frmTest"): Set grid = host.sfRows.Form
@@ -100,6 +101,17 @@ Public Function TestKit(ByVal root As String) As String
     Check Not host.pillBound.Visible And Not host.pillBound_bg.Visible, "Hidden bound pill left its image"
     SetVisible host.pillBound, True
     Check host.pillBound.Visible And host.pillBound_bg.Visible, "Shown bound pill lost its image"
+    ' SecretBox: hidden on open, the eye shows then hides it, HideSecrets hides it again.
+    Check host.secret.Width = px(126) And host.eye_secret.Left = px(330), "Secret field pair is not 160px"
+    Check host.secret.InputMask = SECRET_MASK, "Secret field opens shown"
+    ToggleSecret host, "secret"
+    Check host.secret.InputMask = "" And host.eye_secret.ControlTipText = "Hide", "Eye did not show the secret"
+    Check Screen.ActiveControl.Name = "secret", "Eye left the focus off its field"
+    ToggleSecret host, "secret"
+    Check host.secret.InputMask = SECRET_MASK And host.eye_secret.Caption = ChrW(EYE_SHOW), "Eye did not hide the secret"
+    ToggleSecret host, "secret"
+    HideSecrets host
+    Check host.secret.InputMask = SECRET_MASK And host.eye_secret.ControlTipText = "Show", "HideSecrets left the secret shown"
     grid.RecordSource = "SELECT * FROM test_rows ORDER BY id"
     height = host.sfRows.Height
     LayoutTableFooter host, "sfRows", "pager", "id"

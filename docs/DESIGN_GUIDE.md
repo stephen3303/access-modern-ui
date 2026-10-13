@@ -119,7 +119,7 @@ them, and the shell (`frmMain`) last.
 | modBuildUI, modBuildPages, modBuildPages2 | `Build_<form>` procedures, one per form, grouped by area |
 | modUI | Run-time UI helpers: `NavTo`, badges/pills painting, `ShowTip`, the app's hooks (`BadgeColors`, `StatusVariant`) |
 | modUIKit (kit) | Build-time control builders (section 6) |
-| modKitUI (kit) | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `KitMsgBox`, `SetCount`, `StyleChip` |
+| modKitUI (kit) | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
 | modKitUtil (kit) | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `SetVisible`, `SetEnabled` |
 | modDarkMode (kit), modPalette (gen), modTheme (gen) | Palette engine (section 7) |
@@ -337,6 +337,13 @@ End Sub
     Clear and Cancel. Access's own picker is off: it shows only on focus, and
     `acCmdShowDatePicker` is refused once it is off. The pair is 154px
     (`DATEFIELD_W`), so it fits a half-width field column.
+  - `SecretBox`: passwords and other sensitive values (PINs, SSNs, access codes). The
+    text shows as asterisks (input mask `Password`, which also blocks copying), with a
+    30px outline eye button 4px to its right: an eye (E890) to show the text, an eye
+    struck through (ED1A) to hide it again (`ToggleSecret`). The form calls
+    `HideSecrets Me` in `Form_Current`, so a value shown on one record is hidden on the
+    next. Use it for every sensitive field. Masking only hides the text on screen:
+    passwords are still hashed (`HashPassword`) before they are saved.
   - `RO`: read-only text, borderless, transparent, no tab stop. Show read-only dates
     left-aligned (`TextAlign = 1`) so they line up with text values.
   - `Cbo`, `Lst`, `Chk`
@@ -442,7 +449,8 @@ Write app-specific helpers next to the builds that use them. Examples:
 - **Compact** size, for toolbars, filter rows, and actions inside cards, panels and
   table rows: buttons 28px and inputs (search boxes, filter combos) 26px to 28px, text
   still 9pt. Use one size per row. No other heights: no 24, 26 or 30px buttons. The one
-  exception is the `DateBox` calendar button, which takes its input's 30px height.
+  exception is the `DateBox` calendar and `SecretBox` eye buttons, which take their input's
+  30px height.
 - Vertical rhythm for stacked fields: 38px.
 - Cards and KPI tiles are separated by 12px gaps.
 - **Designer spacing.** The values in this section are the default. A designer who wants a

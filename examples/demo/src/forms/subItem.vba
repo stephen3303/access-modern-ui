@@ -4,6 +4,15 @@ Option Explicit
 ' Detail panel of pgList: one item, editable. The page saves a changed item
 ' before it shows another; Save saves now and refreshes the list.
 
+' Each item opens with its access code hidden, even if the last one's was shown.
+Private Sub Form_Current()
+    On Error GoTo Err_Handler
+    HideSecrets Me
+    Exit Sub
+Err_Handler:
+    HandleError "subItem.Form_Current"
+End Sub
+
 Private Sub txtPct_AfterUpdate()
     On Error GoTo Err_Handler
     Me.Recalc          ' redraw the progress capsule
