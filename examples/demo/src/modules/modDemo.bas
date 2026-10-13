@@ -137,9 +137,12 @@ Err_Handler:
 End Function
 
 ' Items filter for the demo pages: a status chip ("" for all), search text
-' and a category ("" for all).
+' and a category ("" for all). The search is literal text, as GridHighlight
+' marks it: LIKE's wildcard characters in it are bracketed.
 Public Function ItemFilter(ByVal status As String, ByVal search As String, Optional ByVal category As String = "") As String
     Dim s As String
+    search = Replace(search, "[", "[[]")
+    search = Replace(Replace(Replace(search, "*", "[*]"), "?", "[?]"), "#", "[#]")
     If Len(status) > 0 Then s = "status=" & Q(status)
     If Len(category) > 0 Then s = s & IIf(Len(s) > 0, " AND ", "") & "category=" & Q(category)
     If Len(search) > 0 Then

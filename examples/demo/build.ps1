@@ -3,12 +3,15 @@
 #
 #   build.ps1           build a new KitDemo.accdb with seed data
 #   build.ps1 -UiOnly   rebuild code and forms inside the existing KitDemo.accdb
+#   -NoLineNumbers      load the code without line numbers (see below)
 #
+# The code loaded into KitDemo.accdb gets line numbers (tools\VbaLineNumbers.ps1)
+# so the error log names the failing line; the files in git are not changed.
 # The build stops and reports any Visual Basic or Access dialog (a compile
 # error, an error message) instead of hanging behind it.
 # Requires Microsoft Access (2016+ / Microsoft 365). Python is only needed to
 # regenerate the palette (python ..\..\tools\make_themes.py src).
-param([switch]$UiOnly)
+param([switch]$UiOnly, [switch]$NoLineNumbers)
 $ErrorActionPreference = 'Stop'
 $demo = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repo = Split-Path -Parent (Split-Path -Parent $demo)
@@ -21,6 +24,8 @@ Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force (Join-Path $stage 'forms') | Out-Null
 Copy-Item (Join-Path $repo 'kit\forms\*.vba') (Join-Path $stage 'forms')
 Copy-Item (Join-Path $demo 'src\forms\*.vba') (Join-Path $stage 'forms')
+. (Join-Path $repo 'tools\VbaLineNumbers.ps1')
+if (-not $NoLineNumbers) { Add-VbaLineNumbersToFolder (Join-Path $stage 'forms') }
 
 . (Join-Path $repo 'tools\AccessWatch.ps1')
 $acc = New-Object -ComObject Access.Application
@@ -47,6 +52,7 @@ try {
         # LoadFromText expects Windows line endings.
         $tmp = Join-Path $env:TEMP ("kitdemo_" + $f.Name)
         $text = [IO.File]::ReadAllText($f.FullName) -replace "`r?`n", "`r`n"
+        if (-not $NoLineNumbers) { $text = Add-VbaLineNumbers $text }
         [IO.File]::WriteAllText($tmp, $text, [Text.Encoding]::ASCII)
         $acc.LoadFromText(5, $f.BaseName, $tmp)
         Remove-Item $tmp
