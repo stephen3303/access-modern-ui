@@ -21,6 +21,7 @@ Private Sub Form_Load()
     m_name = Me.Name
     Me.TimerInterval = 50           ' paint first, then start (set first, so the app starts whatever fails below)
     Me.lblSplashVersion.Caption = VersionText()
+    CenterOnApp Me                  ' over the Access window, on its monitor
     Exit Sub
 Err_Handler:
     HandleError "frmSplash.Form_Load"

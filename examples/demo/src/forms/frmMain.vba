@@ -12,6 +12,7 @@ Private Sub Form_Load()
     DoCmd.Maximize
     SplashStatus "Opening Cards and progress" & ChrW(8230)
     ShowPage Nz(TempVars("StartPage"), "cards")
+    MarkDueDates            ' item due dates on the date picker
     TempVars("StartPage") = Null
     Exit Sub
 Err_Handler:
