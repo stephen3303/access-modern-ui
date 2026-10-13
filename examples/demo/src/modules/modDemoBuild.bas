@@ -272,7 +272,8 @@ Private Sub Build_pgList()
     SaveForm "pgList"
 End Sub
 
-' Shell: sidebar with the pages and Appearance, and the page host sfPage.
+' Shell: sidebar with the pages, Folder trust (the kit's trust page) and
+' Appearance, and the page host sfPage.
 Private Sub Build_frmMain()
     Dim c As Control, i As Long, pages As Variant, y As Long
     NewForm "", 0, px(200) + PAGE_W, PAGE_H
@@ -292,6 +293,10 @@ Private Sub Build_frmMain()
         VCenter c, px(34), 10, True
         y = y + px(38)
     Next
+    Set c = Link("lnkTrust", "Folder trust", px(12), PAGE_H - px(90), px(176), px(34), "=ShowTrustHelp()", 10, CLR_NAV_FG)
+    c.LeftMargin = px(12)
+    VCenter c, px(34), 10, True
+    Anchor c, 0, 1
     Set c = Link("lnkAppearance", "Appearance", px(12), PAGE_H - px(52), px(176), px(34), "=ShowAppearance()", 10, CLR_NAV_FG)
     c.LeftMargin = px(12)
     VCenter c, px(34), 10, True
@@ -316,10 +321,12 @@ Private Sub SetProp(ByVal name As String, ByVal kind As Integer, ByVal value As 
 End Sub
 
 ' Open on frmMain without the navigation pane or document tabs, and record
-' when this front end was built (error-log entries show it).
+' when this front end was built (error-log entries show it). The kit's
+' BuildTrustCheck opens frmMain at startup (in place of StartUpForm) and shows
+' its trust page when the demo's folder isn't a Trusted Location.
 Private Sub SetStartupOptions()
+    BuildTrustCheck "frmMain"
     SetProp "AppTitle", dbText, APP_NAME
-    SetProp "StartUpForm", dbText, "frmMain"
     SetProp "StartUpShowDBWindow", dbBoolean, False
     SetProp "ShowDocumentTabs", dbBoolean, False
     SetProp "Perform Name AutoCorrect", dbLong, 0

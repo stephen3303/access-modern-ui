@@ -9,7 +9,9 @@ test changes to it. It has one local table of fictional items and three pages:
 | Tables | `BuildGrid` with every option (header band, zebra rows, status pills, 38px rows, proportional fit through `GridFit`) next to a default table; `TabStrip` and chips with counts; search and a category filter to the right of the chips |
 | List and detail | The list/detail pattern (`SelectFirstRow`, `ShowDetail`, `ClearDetail`), `PrintGrid` and `ExportGrid` |
 
-Appearance in the sidebar switches palettes.
+Appearance in the sidebar switches palettes. Folder trust opens the kit's trust page
+(`dlgTrust`), which also opens by itself at startup when the demo's folder isn't a Trusted
+Location.
 
 ## Build and open
 
@@ -35,6 +37,10 @@ watching for Visual Basic error dialogs as well as the error log:
 - List and detail: the first row opens on load and after each filter; a click shows that
   row; editing and saving updates the list; a search with no match shows both empty
   states; Print previews and Export writes exactly the rows shown, with the captions.
+- Folder trust: the page shows this folder's path and the steps, nothing is cut off, and
+  Close (or Esc) closes it. Opened from a folder that isn't a Trusted Location, the demo
+  shows the page at startup, over the main window after Enable Content, or on its own
+  with the code turned off.
 
 ## Files
 

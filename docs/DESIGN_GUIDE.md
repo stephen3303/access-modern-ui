@@ -42,7 +42,7 @@ access/
   build.ps1                  drives Access via COM; loads modules, calls BuildAll
   kit/
     modules/*.bas            reusable: modUIKit, modKitUI, modDarkMode, modPng, modGridOut,
-                             modCsv, modCrypto, modKitUtil (copied unchanged from the kit)
+                             modCsv, modCrypto, modKitUtil, modTrust (copied unchanged from the kit)
     forms/*.vba              kit code-behind: subGrid, dlgAppearance, dlgDatePick
   src/
     modules/*.bas            the app's own standard modules (incl. generated modPalette)
@@ -77,7 +77,12 @@ access/
 - Runs named steps, setting `m_step = "..."` before each so a failure names the step:
   create back end, link, local tables, seed, assets, user interface, help, startup.
 - Startup options it sets:
-  - StartUpForm = the login form.
+  - The first form (the login form) through the kit's `BuildTrustCheck "<form>"`, not
+    StartUpForm. It adds an `AutoExec` macro that opens the form when the code is on, and
+    opens `dlgTrust` instead when Access has turned the code off. When the folder isn't a
+    Trusted Location (the user chose Enable Content), `dlgTrust` also opens over the form.
+    `dlgTrust` has no code module or Open hook, so it works with the code off; it explains
+    how to add the folder in the Trust Center. Code never changes Trust Center settings.
   - Hidden: the DB window, document tabs and datasheet schema.
   - Name AutoCorrect off.
   - AppTitle.
@@ -121,6 +126,7 @@ them, and the shell (`frmMain`) last.
 | modUIKit (kit) | Build-time control builders (section 6) |
 | modKitUI (kit) | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `KitMsgBox`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
+| modTrust (kit) | `BuildTrustCheck` startup, `InTrustedLocation`, `ShowTrustHelp` (the `dlgTrust` page on trusting the folder) |
 | modKitUtil (kit) | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `SetVisible`, `SetEnabled` |
 | modDarkMode (kit), modPalette (gen), modTheme (gen) | Palette engine (section 7) |
 | modPng (kit) | Draws anti-aliased PNGs for rounded pills, card corners and progress capsules |
@@ -772,7 +778,7 @@ The Appearance dialog grows by itself, because it is built from `PALETTE_COUNT`.
    - Set `g_SrcRoot`.
    - Run named steps.
    - Build subforms, then pages, then dialogs, then the shell.
-   - Set startup options.
+   - Set startup options, opening the first form through `BuildTrustCheck`.
    - Return `"OK"` or the step that failed.
 5. Build the shell: collapsible sidebar with `NavItem`s, `sfPage` host, deferred
    `QueueNav`/`ShowPage`/`RefreshNav`, and `PageKey`/`Reopen`.
