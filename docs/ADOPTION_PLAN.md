@@ -245,7 +245,8 @@ built and styled.
   Stephen asked to keep (departments, divisions, program roles) must survive.
 - [x] `modErrors` from `examples/modules/modErrors.bas` replaces `HandleUIError` /
   `HandleDataError`. Keep the `ErrorLog` table's data.
-- [x] `modGlobals`: `APP_NAME`, `g_Silent`, `Notify` (replaces `V6Message`), `Q`/`SqlVal`.
+- [x] `modGlobals`: `APP_NAME`, `g_Silent`, `Notify` (replaces `V6Message`), `Q`/`SqlVal`. As built, `Q` and `DQ`
+  are in modGlobals and `SqlNum` (the numeric `SqlVal`) is in modPeople.
 - [x] `BuildAll` builds an empty shell and the build passes on Stephen's machine.
 
 ### P2. Shell
