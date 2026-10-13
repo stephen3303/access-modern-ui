@@ -416,9 +416,10 @@ End Function
 ' read-only columns with row lines and a highlighted selected row, in place
 ' of a list box. cols holds one "field|caption|width px|options" per column;
 ' options: "r" right-aligned, "c" centered, "b" bold, "m" muted, "p" a
-' rounded status pill colored by the app's StatusVariant(value). The last
+' rounded status pill colored by the app's StatusVariant(value), "w" wraps
+' onto rowLines lines (rather than cutting text off mid-word). The last
 ' column takes the rest of the width (and stretches with the form); with
-' rowLines > 1 it wraps onto that many lines. back is the color of what the
+' rowLines > 1 it always wraps. back is the color of what the
 ' table sits on. zebra fills every other row with CLR_ROW2. rowPx sets the
 ' row height (default: from rowLines). fit = True keeps the last column at
 ' its own width, for tables the host scales with GridFit. The record source
@@ -429,7 +430,7 @@ Public Sub BuildGrid(ByVal finalName As String, ByVal cols As Variant, ByVal w A
                      Optional ByVal back As Long = CLR_SURFACE, Optional ByVal zebra As Boolean = False, _
                      Optional ByVal rowPx As Long = 0, Optional ByVal fit As Boolean = False)
     Dim c As Control, i As Long, p() As String, x As Long, cw As Long, h As Long, last As Boolean, ty As Long, th As Long
-    Dim opts As String
+    Dim opts As String, wrap As Boolean
     h = IIf(rowPx > 0, px(rowPx), px(12) + rowLines * px(18))
     NewForm "", 1, w, h
     F.Section(acDetail).BackColor = back
@@ -457,11 +458,12 @@ Public Sub BuildGrid(ByVal finalName As String, ByVal cols As Variant, ByVal w A
             Set c = RO("txtCol" & i, p(0), x, (h - px(20)) \ 2, cw - px(8) - IIf(last And Not fit, px(8), 0), px(20), 8, True, CLR_FG)
             c.TextAlign = 2
         Else
-            ty = IIf(last And rowLines > 1, px(6), (h - px(18)) \ 2)
-            th = IIf(last And rowLines > 1, h - px(12), px(18))
+            wrap = rowLines > 1 And (last Or InStr(opts, "w") > 0)
+            ty = IIf(wrap, px(6), (h - px(18)) \ 2)
+            th = IIf(wrap, h - px(12), px(18))
             Set c = RO("txtCol" & i, p(0), x, ty, cw - px(8), th, 9, InStr(opts, "b") > 0, _
                 IIf(InStr(opts, "m") > 0, CLR_MUTED_FG, CLR_FG))
-            If last And rowLines > 1 Then c.TopMargin = 0
+            If wrap Then c.TopMargin = 0
             If InStr(opts, "r") > 0 Then c.TextAlign = 3
             If InStr(opts, "c") > 0 Then c.TextAlign = 2
         End If
