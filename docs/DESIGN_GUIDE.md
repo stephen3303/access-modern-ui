@@ -495,8 +495,11 @@ Write app-specific helpers next to the builds that use them. Examples:
     `version.txt` there, holding the release's version (`1.2.0`) on its first line.
   - A newer version gets one information `KitMsgBox` naming both versions and the folder,
     once per session. The app keeps running; nothing is copied for the user.
+  - Pass `advice` (third argument) when "copy the new version from the folder" is the
+    wrong next step, for example when the app's data lives inside its own file.
   - A blank folder or a missing file skips the check. A read failure is logged with
-    `LogError` and never shown, so an offline share can't stop the app opening.
+    `LogError` and never shown, so an offline share can't stop the app opening. An
+    unreachable network folder can still delay opening by about 20 seconds.
 
 ### 6.6 Visual components
 
