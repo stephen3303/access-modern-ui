@@ -106,7 +106,8 @@ Private Sub ShowTab(ByVal key As String)
     RefreshPage
 End Sub
 
-' Apply the chips, search and category to the table shown, and update the counts.
+' Apply the chips, search and category to the table shown, mark the search
+' in both tables' rows, and update the counts.
 Private Sub RefreshPage()
     Dim statuses As Variant, i As Long, where As String, cat As String, n As Long
     statuses = Array("", "In progress", "Blocked", "Not started", "Complete")
@@ -114,6 +115,8 @@ Private Sub RefreshPage()
     If Left$(cat, 1) = "(" Then cat = ""
     where = ItemFilter(CStr(statuses(m_chip)), m_search, cat)
     If m_tab = "options" Then FilterGrid Me.sfOptions, where Else FilterGrid Me.sfPlain, where
+    GridHighlight Me.sfOptions, m_search
+    GridHighlight Me.sfPlain, m_search
     For i = 0 To UBound(statuses)
         StyleChip Me("chip" & i), i = m_chip, ItemCount(CStr(statuses(i)), m_search, cat)
     Next
