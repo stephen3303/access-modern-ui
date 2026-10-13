@@ -32,6 +32,7 @@ Private Declare PtrSafe Function FindWindowExW Lib "user32" (ByVal parent As Lon
 Private Declare PtrSafe Function GetWindow Lib "user32" (ByVal hwnd As LongPtr, ByVal cmd As Long) As LongPtr
 Private Declare PtrSafe Function IsWindowVisible Lib "user32" (ByVal hwnd As LongPtr) As Long
 Private Declare PtrSafe Function IsIconic Lib "user32" (ByVal hwnd As LongPtr) As Long
+Private Declare PtrSafe Function GetDpiForWindow Lib "user32" (ByVal hwnd As LongPtr) As Long
 Private Declare PtrSafe Function GetWindowRect Lib "user32" (ByVal hwnd As LongPtr, ByRef r As RectL) As Long
 Private Declare PtrSafe Function DwmGetWindowAttribute Lib "dwmapi" (ByVal hwnd As LongPtr, ByVal attr As Long, _
     ByRef r As RectL, ByVal size As Long) As Long
@@ -58,6 +59,7 @@ Private Declare Function FindWindowExW Lib "user32" (ByVal parent As Long, ByVal
 Private Declare Function GetWindow Lib "user32" (ByVal hwnd As Long, ByVal cmd As Long) As Long
 Private Declare Function IsWindowVisible Lib "user32" (ByVal hwnd As Long) As Long
 Private Declare Function IsIconic Lib "user32" (ByVal hwnd As Long) As Long
+Private Declare Function GetDpiForWindow Lib "user32" (ByVal hwnd As Long) As Long
 Private Declare Function GetWindowRect Lib "user32" (ByVal hwnd As Long, ByRef r As RectL) As Long
 Private Declare Function DwmGetWindowAttribute Lib "dwmapi" (ByVal hwnd As Long, ByVal attr As Long, _
     ByRef r As RectL, ByVal size As Long) As Long
@@ -172,7 +174,7 @@ Private Sub ShowLayer(ByVal owner As Long, ByVal color As Long)
     ' which CreateWindowExW also uses, is kept as it is.
     If GetWindowRect(owner, r) = 0 Then Exit Sub
     If DwmGetWindowAttribute(owner, DWMWA_EXTENDED_FRAME_BOUNDS, vis, LenB(vis)) = 0 Then
-        If IsBorderInset(r, vis) Then r = vis
+        If IsBorderInset(r, vis, WindowDpi(owner)) Then r = vis
     End If
     sz.cx = r.Right - r.Left
     sz.cy = r.Bottom - r.Top
@@ -222,10 +224,25 @@ End Sub
 
 ' True when the visible frame vis sits inside the window rectangle r by no
 ' more than a resize border on every side, so both are in the same pixels.
-Private Function IsBorderInset(r As RectL, vis As RectL) As Boolean
-    Const MAX_BORDER As Long = 16
-    IsBorderInset = InRange(vis.Left - r.Left, MAX_BORDER) And InRange(vis.Top - r.Top, MAX_BORDER) And _
-        InRange(r.Right - vis.Right, MAX_BORDER) And InRange(r.Bottom - vis.Bottom, MAX_BORDER)
+' The border grows with the window's DPI (8px at 100%, 20px at 250%), so the
+' limit does too: 16px at 96 DPI, a border with room to spare.
+Private Function IsBorderInset(r As RectL, vis As RectL, ByVal dpi As Long) As Boolean
+    Dim maxB As Long
+    maxB = 16 * dpi \ 96
+    IsBorderInset = InRange(vis.Left - r.Left, maxB) And InRange(vis.Top - r.Top, maxB) And _
+        InRange(r.Right - vis.Right, maxB) And InRange(r.Bottom - vis.Bottom, maxB)
+End Function
+
+' The DPI Windows reports for the window: 96 when Windows scales Access
+' (DPI virtualization), or before Windows 10 1607, which has no GetDpiForWindow.
+#If VBA7 Then
+Private Function WindowDpi(ByVal wnd As LongPtr) As Long
+#Else
+Private Function WindowDpi(ByVal wnd As Long) As Long
+#End If
+    On Error Resume Next
+    WindowDpi = GetDpiForWindow(wnd)
+    If WindowDpi < 96 Then WindowDpi = 96
 End Function
 
 Private Function InRange(ByVal n As Long, ByVal maxN As Long) As Boolean
