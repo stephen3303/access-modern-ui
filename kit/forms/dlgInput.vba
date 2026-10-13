@@ -67,18 +67,12 @@ Private Function PromptHeight() As Long
     PromptHeight = lines * CLng(10 * 20 * 1.36) + 30
 End Function
 
-' The text in the input. While the input has the focus (Enter pressed in it)
-' its Value may not be updated yet, so read what is on screen (Text).
+' The text in the input. Enter in the input clicks OK before the input's
+' Value is updated, and a masked input's Text is only *, so move the focus to
+' OK first, which commits what was typed, then read Value.
 Private Function EnteredText() As String
-    Dim onInput As Boolean
-    On Error Resume Next
-    onInput = (Me.ActiveControl.Name = Me.txtValue.Name)   ' error 2474 (no active control): False
-    On Error GoTo 0
-    If onInput Then
-        EnteredText = Nz(Me.txtValue.Text, "")
-    Else
-        EnteredText = Nz(Me.txtValue.Value, "")
-    End If
+    Me.btnOK.SetFocus
+    EnteredText = Nz(Me.txtValue.Value, "")
 End Function
 
 Private Sub btnOK_Click()
