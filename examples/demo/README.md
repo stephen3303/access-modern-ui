@@ -32,6 +32,8 @@ watching for Visual Basic error dialogs as well as the error log:
 - Tables: the band, zebra rows, pills and 38px rows show; the selected row is highlighted;
   widening the window widens every column of the first table and moves its captions; the
   chip and tab counts follow the search and category.
+- Dialogs: Appearance and the card buttons' messages open centred over Access, on its
+  monitor, with Access restored, maximized, or moved partly off the edge of a screen.
 - List and detail: the first row opens on load and after each filter; a click shows that
   row; editing and saving updates the list; a search with no match shows both empty
   states; Print previews and Export writes exactly the rows shown, with the captions.

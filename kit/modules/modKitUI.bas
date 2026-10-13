@@ -364,6 +364,67 @@ Public Sub SetKitMsgAnswer(ByVal answer As Long)
 End Sub
 
 ' ---------------------------------------------------------------------------
+' Required fields
+' ---------------------------------------------------------------------------
+
+' Save check for a form's required inputs: every empty one (Null, or only
+' spaces) is outlined in CLR_DESTRUCTIVE, all of them are listed in one
+' KitMsgBox, and the focus goes to the first. fields lists the inputs in tab
+' order as "control=Caption" pairs separated by ";", for example
+' "txtName=Item;txtOwner=Owner". Returns True when all are filled. Call it at
+' the top of the Save button's handler and stop when it returns False:
+'     If Not CheckRequired(Me, "txtName=Item;txtOwner=Owner") Then Exit Sub
+Public Function CheckRequired(frm As Form, ByVal fields As String) As Boolean
+    Dim missing As String, first As String
+    On Error GoTo Fail
+    missing = RequiredMissing(frm, fields, first)
+    If Len(missing) = 0 Then
+        CheckRequired = True
+        Exit Function
+    End If
+    KitMsgBox "Please fill in:" & vbCrLf & missing, vbExclamation, "Required fields"
+    ' Moving the focus is a courtesy: a control that can't take it (error
+    ' 2110) or a form that isn't active any more is left as it is.
+    On Error Resume Next
+    frm.Controls(first).SetFocus
+    Exit Function
+Fail:
+    HandleError "modKitUI.CheckRequired", frm.Name & ": " & fields
+End Function
+
+' CheckRequired without the message: outline the empty required inputs and
+' return their captions, one per line after a bullet (an empty string when
+' all are filled), and the first one's control name in first. A filled input
+' gets its normal border back, so a field fixed since the last Save stops
+' being red. Hidden or disabled inputs are skipped: the user can't fill them.
+' Raises on a control name the form doesn't have.
+Public Function RequiredMissing(frm As Form, ByVal fields As String, Optional ByRef first As String) As String
+    Dim p As Variant, nm As String, cap As String, c As Control, out As String, blank As Boolean
+    first = ""
+    For Each p In Split(fields, ";")
+        If Len(Trim$(p)) > 0 Then
+            nm = Trim$(p): cap = nm
+            If InStr(nm, "=") > 0 Then
+                cap = Trim$(Mid$(nm, InStr(nm, "=") + 1))
+                nm = Trim$(Left$(nm, InStr(nm, "=") - 1))
+            End If
+            Set c = frm.Controls(nm)
+            blank = False
+            If c.Visible And c.Enabled Then blank = (Len(Trim$(Nz(c.Value, ""))) = 0)
+            If blank Then
+                c.BorderColor = Th(CLR_DESTRUCTIVE)
+                If Len(first) = 0 Then first = nm
+                out = out & IIf(Len(out) > 0, vbCrLf, "") & ChrW(&H2022) & " " & cap
+            Else
+                ' The border the kit's builders give the input (Txt, DateBox, Cbo; Lst).
+                c.BorderColor = Th(IIf(c.ControlType = acListBox, CLR_BORDER, CLR_INPUT_BORDER))
+            End If
+        End If
+    Next
+    RequiredMissing = out
+End Function
+
+' ---------------------------------------------------------------------------
 ' Tabs and filter chips
 ' ---------------------------------------------------------------------------
 
