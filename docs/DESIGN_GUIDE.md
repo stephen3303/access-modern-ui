@@ -81,7 +81,9 @@ access/
 - Runs named steps, setting `m_step = "..."` before each so a failure names the step:
   create back end, link, local tables, seed, assets, user interface, help, startup.
 - Startup options it sets:
-  - StartUpForm = the login form.
+  - StartUpForm = the login form or `frmMain`, or the kit's optional splash screen
+    `frmSplash` (`BuildSplash`), which opens it. `HideAccessSplash`, called last, hides
+    Access's own splash.
   - Hidden: the DB window, document tabs and datasheet schema.
   - Name AutoCorrect off.
   - AppTitle.
@@ -345,6 +347,7 @@ End Sub
   - `NewReport recSrc, w`: Letter portrait, 0.5 in margins, `REPORT_W = 10800`, pop-up
     preview.
   - `SaveForm`, `Trace`
+  - `BuildSplash [nextForm], [subtitle], [glyph]`: the startup splash screen (section 6.5).
 - **Controls**
   - `Lbl`: transparent label.
   - `Txt`: input with `CLR_INPUT_BG`, a 1px `CLR_INPUT_BORDER` border and inner margins.
@@ -559,6 +562,18 @@ Write app-specific helpers next to the builds that use them. Examples:
     its size. It centres the dialog over the Access window, on that window's monitor,
     and pulls it back inside the monitor's work area. `AutoCenter` alone can open a
     dialog high or on another monitor.
+- **Splash screen** (optional): the app starts on `frmSplash` (`BuildSplash`), a borderless 480 x 280px
+  pop-up in `CLR_SIDEBAR` with the app's MDL2 glyph, its name in 20pt white, a subtitle,
+  and a footer under a `CLR_SIDEBAR_LINE` hairline: a status line on the left and the
+  version on the right. `ThemeForm` gives it the user's palette. Once it has painted, its
+  timer opens `nextForm` (the login form or `frmMain`); that form's Load does the start-up
+  work (version checks, linking) and calls `SplashStatus "..."` to say what it is doing.
+  The splash closes when the form is open, and stays at least 1.2 seconds so it doesn't
+  flash. `KitMsgBox` closes it first, so a start-up error is never hidden behind it.
+  A plain `MsgBox` or a file dialog doesn't close it, so call `CloseSplash` before one
+  (for example a back-end file picker at start-up).
+  `HideAccessSplash` writes the 1 x 1 pixel `<database name>.bmp` that replaces Access's
+  own splash. It is a build output: ignore it in git and ship it beside the front end.
 - **List subforms** (continuous forms of cards or rows) call back to their host with
   `Me.Parent.<PublicProc>`.
 - **New version notice**: once the app has opened (after sign-in checks, before the
@@ -901,7 +916,8 @@ The Appearance dialog grows by itself, because it is built from `PALETTE_COUNT`.
    and a `src/forms/pg<Name>.vba` where every handler uses the standard error handler.
 7. Copy the dialogs: `dlgAppearance`, `BuildMessageDialog` (for `Notify` and `HandleError`),
    `BuildDatePicker` (for date fields), and a non-modal `dlgHelp` with `help.txt` and the F1
-   `AutoKeys` macro.
+   `AutoKeys` macro. Optionally add the splash screen with `BuildSplash` and
+   `HideAccessSplash`, and make `frmSplash` the startup form.
 8. Write `README.md` and `DEVELOPING.md` using the structure in section 4, linking to the
    kit's README for the builder catalog.
 9. Check every page in a light palette and a dark palette. There is no automated UI test,

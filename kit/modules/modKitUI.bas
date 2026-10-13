@@ -5,9 +5,9 @@ Option Explicit
 ' scale their columns (GridFit), list/detail pages (SelectFirstRow,
 ' ShowDetail, ClearDetail), search matches marked in tables (GridHighlight),
 ' tabs and filter chips with counts (SetCount, StyleChip), focus rings on
-' inputs (FocusRing), toggle switches (ToggleSwitch, ToggleFocus) and messages
-' in the kit's look (KitMsgBox). Colors set here go through Th() so they follow
-' the palette.
+' inputs (FocusRing), toggle switches (ToggleSwitch, ToggleFocus), the splash
+' screen's status line (SplashStatus) and messages in the kit's look
+' (KitMsgBox). Colors set here go through Th() so they follow the palette.
 
 ' Width the table's vertical scroll bar takes (twips).
 Private Const SCROLL_W As Long = 300
@@ -28,6 +28,8 @@ Private m_msgText As String
 Private m_msgStyle As Long
 Private m_msgTitle As String
 Private m_msgAnswer As Long
+' The splash screen BuildSplash builds (SplashStatus, CloseSplash).
+Private Const SPLASH_FORM As String = "frmSplash"
 ' The field showing the focus ring (FocusRing): the control, its form's
 ' window and its name, and the border color the ring covers.
 Private m_ringCtl As Control
@@ -609,6 +611,43 @@ Private Sub ClearRing()
 End Sub
 
 ' ---------------------------------------------------------------------------
+' Splash screen
+' ---------------------------------------------------------------------------
+
+' Show msg on the splash screen's status line (frmSplash, BuildSplash) while
+' the app starts, for example "Opening the data file...". Does nothing once
+' the splash has closed, so start-up code can call it either way.
+Public Sub SplashStatus(ByVal msg As String)
+    If Not SplashOpen() Then Exit Sub
+    Forms(SPLASH_FORM).Controls("lblSplashStatus").Caption = msg
+    Forms(SPLASH_FORM).Repaint
+End Sub
+
+' Close the splash screen if it is open. KitMsgBox calls it: the splash is a
+' pop-up, so a message opened during start-up could sit behind it. Access can
+' refuse (2585) while the splash's own Timer is still running; the splash then
+' closes itself when that event ends, so the refusal is ignored.
+Public Sub CloseSplash()
+    If Not SplashOpen() Then Exit Sub
+    On Error Resume Next
+    DoCmd.Close acForm, SPLASH_FORM, acSaveNo
+    On Error GoTo 0
+End Sub
+
+' True when the kit's splash is open in Form view: not one open in Design
+' view, and not an app's own form that happens to be called frmSplash (it
+' has no lblSplashStatus). A missing control is expected there, so its error
+' leaves the answer False.
+Private Function SplashOpen() As Boolean
+    Dim frm As Form
+    If Not IsFormOpen(SPLASH_FORM) Then Exit Function
+    On Error Resume Next
+    Set frm = Forms(SPLASH_FORM)
+    SplashOpen = (frm.CurrentView = 1) And (frm.Controls("lblSplashStatus").Name = "lblSplashStatus")
+    On Error GoTo 0
+End Function
+
+' ---------------------------------------------------------------------------
 ' Toggle switches
 ' ---------------------------------------------------------------------------
 
@@ -665,6 +704,7 @@ Public Function KitMsgBox(ByVal msg As String, Optional ByVal style As VbMsgBoxS
         Optional ByVal title As String = "") As VbMsgBoxResult
     Dim btns As Long
     btns = style And 7
+    CloseSplash                    ' a start-up message must not open behind the splash
     If m_msgOpen Then GoTo Plain
     If Not (btns = vbOKOnly Or btns = vbOKCancel Or btns = vbYesNo Or btns = vbYesNoCancel) Then GoTo Plain
     On Error GoTo Failed

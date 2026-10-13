@@ -13,6 +13,7 @@ kit/modules/*.bas             the reusable modules, loaded before the app's own
 kit/forms/dlgAppearance.vba   code-behind for the palette picker
 kit/forms/dlgDatePick.vba     code-behind for the date picker (BuildDatePicker)
 kit/forms/dlgMessage.vba      code-behind for the message dialog (BuildMessageDialog, KitMsgBox)
+kit/forms/frmSplash.vba       code-behind for the splash screen (BuildSplash)
 kit/forms/subGrid.vba         code-behind for BuildGrid tables
 tools/make_themes.py          generates the build palette and the palette modules, checks contrast
 tools/AccessWatch.ps1         makes a build script report Visual Basic and Access dialogs instead of hanging
@@ -36,7 +37,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 | modUIKit | Build-time form and control builders (catalog below) |
 | modDarkMode | Palette engine: `ThemeForm` repaints each form on open (and, on Windows 11, colors pop-up title bars and borders through `ThemeTitleBar`), `Th()` gives runtime colors, and `SetPalette`/`ShowAppearance` switch palettes |
 | modPng | Anti-aliased PNGs for rounded shapes: `PillPng` (pills and badges), `CardPng` (card corners), `ProgressPng` (progress capsules), `ColumnPillPng` (uniform-width pills in a table column), `RoundedCardPng` (whole resizable card backgrounds), `TogglePng` and `RingPng` (toggle switch track and focus ring), cached in `%LOCALAPPDATA%\<APP_NAME>\pills` |
-| modKitUI | Run-time page helpers: `GridFit`, `GridHighlight`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSwitch`, `ToggleFocus`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `CheckRequired`, `SetCount`, `StyleChip` (catalog below) |
+| modKitUI | Run-time page helpers: `GridFit`, `GridHighlight`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSwitch`, `ToggleFocus`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `CheckRequired`, `SplashStatus`, `SetCount`, `StyleChip` (catalog below) |
 | modGridOut | `PrintGrid` and `ExportGrid`: print or export a table as the user sees it |
 | modCsv | UTF-8 text files, RFC 4180 CSV read/write, query-to-CSV export |
 | modCrypto | SHA-256 through Windows CNG, salted password hashing |
@@ -52,7 +53,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
    - Set `FIXED` to the colors that must never change with the palette.
    - Run the script. It writes `src\themes\light\modTheme.bas` and `src\modules\modPalette.bas`, and prints a contrast check.
 3. In the app's own modules, provide the names the kit calls (listed below).
-4. For the palette picker, copy `examples\modules\modBuildAppearance.bas` to `src\modules` and `kit\forms\dlgAppearance.vba` to `src\forms`. For date fields, copy `kit\forms\dlgDatePick.vba` to `src\forms` too, and for messages copy `kit\forms\dlgMessage.vba`: `SaveForm` attaches code-behind from `src\forms` only, so without them `dlgDatePick` and `dlgMessage` build with no code.
+4. For the palette picker, copy `examples\modules\modBuildAppearance.bas` to `src\modules` and `kit\forms\dlgAppearance.vba` to `src\forms`. For date fields, copy `kit\forms\dlgDatePick.vba` to `src\forms` too, for messages copy `kit\forms\dlgMessage.vba`, and for the splash screen copy `kit\forms\frmSplash.vba`: `SaveForm` attaches code-behind from `src\forms` only, so without them `dlgDatePick`, `dlgMessage` and `frmSplash` build with no code.
 5. Write a `BuildAll` entry point that calls `UseBuildPalette`, sets `g_SrcRoot`, and builds the forms. The design guide (section 2) describes what it does.
 
 ### What the app must provide
@@ -61,7 +62,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 |---|---|---|
 | `CLR_*` roles, `FONT_UI`, `THEME_DARK` | modUIKit | modTheme (generated) |
 | `PALETTE_COUNT`, `PaletteKey`, `PaletteName`, `PaletteIsDark`, `PaletteSwatch`, `PaletteOf` | modDarkMode, dlgAppearance | modPalette (generated) |
-| `APP_NAME` | modPng, modKitUpdate | modGlobals |
+| `APP_NAME` | modPng, modKitUpdate, `BuildSplash` | modGlobals |
 | `HandleError`, `LogError`, `RaiseAgain` | modDarkMode, modCsv, modKitUI, modKitUpdate | modErrors (`examples/modules`) |
 | `MeasureText(s, size, weight)` (Segoe UI text width in twips; size in points, weight 400 normal / 700 bold) | modTextUI, modPng, `TitleTip`/`PageHeader` | modWrap |
 | `ShowTip(frm, nm)` | the "?" marks from `TitleTip` | modUI |
@@ -69,6 +70,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 | `dlgAppearance` form | `ShowAppearance` | `Build_dlgAppearance` + dlgAppearance.vba |
 | `dlgDatePick` form | `PickDate` (`DateBox` buttons) | call the kit's `BuildDatePicker` with the app's dialogs + copy `kit\forms\dlgDatePick.vba` to src\forms |
 | `dlgMessage` form | `KitMsgBox` (the app's `Notify` and `HandleError`) | call the kit's `BuildMessageDialog` with the app's dialogs + copy `kit\forms\dlgMessage.vba` to src\forms |
+| `frmSplash` form (optional) | the startup form, `SplashStatus` | call the kit's `BuildSplash` + copy `kit\forms\frmSplash.vba` to src\forms; set `StartUpForm` to `frmSplash` |
 | `BandLabels()`, `BandBack(label)` | `BandCF` | modUI |
 | `BadgeColors(variant)` (returns `Array(back, fore)`) | `BadgeCF`, `BuildGrid` | modUI |
 | `StatusVariant(value)` (a Variant, may be Null; returns a badge variant or "") | `BuildGrid` pill columns (`p`) | modUI |
@@ -109,6 +111,8 @@ Control heights and font sizes never scale. `TabStrip` and `LayoutFilterRow` alr
 | `NewDialog caption, w, h` | Modal pop-up dialog that sizes to its design. Its code-behind's `Form_Load` should end with `CenterOnApp Me` (the builder can't add it). |
 | `NewReport recSrc, w` | Start a report. Reports use the `PRINT_` colors and are never repainted. |
 | `SaveForm name [, codeName]` | Save under the final name and attach `src\forms\<name>.vba` as the code-behind |
+| `BuildSplash [nextForm, subtitle, glyph]` | Builds `frmSplash`, a 480 x 280px splash screen (taller at a roomier `SetSpacing`) in the palette's sidebar colors: an MDL2 icon glyph, `APP_NAME`, a subtitle, the version (database property `AppVersion`, else `AppBuild`) and a status line. Make it the `StartUpForm`. It opens `nextForm` (default `frmMain`), whose Load does the start-up work under it, then closes, after at least 1.2 seconds. |
+| `HideAccessSplash` | Writes a 1 x 1 pixel `<database name>.bmp` next to the front end, which Access shows in place of its own splash. Call it last in BuildAll's startup step; ignore the .bmp in git and ship it with the front end. |
 | `Trace s` / `BuildTrace` | Record build steps, so a failed build reports where it stopped |
 
 **Controls**
@@ -177,6 +181,8 @@ Control heights and font sizes never scale. `TabStrip` and `LayoutFilterRow` alr
 | `ShowDetail host, detailCtl, formName, where [, emptyCtl]` | List/detail pages: show the matching record in the detail subform, saving a changed one first, and hide the empty state |
 | `ClearDetail host, detailCtl [, emptyCtl]` | Empty the detail subform and show the empty state |
 | `PickDate frm, nm` | A `DateBox` calendar button's click: open the kit's date picker (`dlgDatePick`) for box `nm` and write the chosen date into it (not while the box is disabled or locked, or its form is read-only) |
+| `SplashStatus msg` | Show what start-up is doing on the splash screen's status line, "Opening the data file...". Does nothing once the splash has closed. |
+| `CloseSplash` | Close the splash screen now. `KitMsgBox` calls it, so a start-up message never opens behind the splash; call it yourself before a plain `MsgBox` or a file dialog at start-up. |
 | `ToggleSwitch frm, nm` / `ToggleFocus frm, nm, hasFocus` | A `Toggle`'s click and focus handlers (set by the builder): flip the value and call `onChange` (not while its value is locked or its form is read-only); show the switch's focus ring and take an input's `FocusRing` off |
 | `MarkDate d, label` / `ClearMarkedDates` | Mark an app date (a deadline, a drill) on the date picker with a tooltip label; a second label on the same day is added after "; ". Set marks before the picker opens, for example at startup from the app's deadlines table. |
 | `FederalHoliday d` | The US federal holiday on day `d`, on its observed day (a Saturday holiday on Friday, a Sunday one on Monday, "(observed)" added), or "". The date picker marks these on its own. |
