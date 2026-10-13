@@ -26,8 +26,6 @@ Source: design system audit of 12 Oct 2026 (kit 75fda1d, SABER 95a3549, SPM 7785
   and click-through on Stephen's machine through Remote Control. Check for modal Visual
   Basic error dialogs as well as the error log, and click through in one light and one
   dark palette (`docs/DESIGN_GUIDE.md` §8.9).
-- SPM's `AGENTS.md` forbids opening the SABER folder on Stephen's machine. Work on SPM
-  reads from this kit repo and the SPM repo only.
 - One task per PR unless the task says otherwise. Tick the box here in the same PR.
 
 ---
