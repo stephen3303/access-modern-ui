@@ -362,8 +362,9 @@ End Sub
     continuous form, not a list box.
     - Each column is `"field|caption|widthPx|opts"`. Options: `r` right-aligned,
       `c` centered, `b` bold, `m` muted, `p` a status pill, `w` wraps onto `rowLines`
-      lines (the last column always wraps when `rowLines` > 1). Never let a cell cut
-      text off mid-word: widen the column or make it wrap. A pill column draws the
+      lines (the last column always wraps when `rowLines` > 1); text longer than that
+      stops at the end of the last line. Never let a cell cut text off mid-word: widen
+      the column or make it wrap. A pill column draws the
       value as a rounded badge whose variant comes from the app's
       `StatusVariant(value)` (it gets a Variant, which may be Null, and returns a
       `BadgeColors` variant or "" for no pill). Map statuses there, never as colors.

@@ -461,7 +461,8 @@ End Function
 ' of a list box. cols holds one "field|caption|width px|options" per column;
 ' options: "r" right-aligned, "c" centered, "b" bold, "m" muted, "p" a
 ' rounded status pill colored by the app's StatusVariant(value), "w" wraps
-' onto rowLines lines (rather than cutting text off mid-word). The last
+' onto rowLines lines (rather than cutting text off mid-word; text longer
+' than that stops at the end of the last line). The last
 ' column takes the rest of the width (and stretches with the form); with
 ' rowLines > 1 it always wraps. back is the color of what the
 ' table sits on. zebra fills every other row with CLR_ROW2. rowPx sets the
@@ -504,7 +505,10 @@ Public Sub BuildGrid(ByVal finalName As String, ByVal cols As Variant, ByVal w A
         Else
             wrap = rowLines > 1 And (last Or InStr(opts, "w") > 0)
             ty = IIf(wrap, px(6), (h - px(18)) \ 2)
-            th = IIf(wrap, h - px(12), px(18))
+            ' A wrapped cell is exactly rowLines lines of 9pt text (VCenter's
+            ' line height) plus 2px for descenders, so longer text stops at a
+            ' line's end instead of showing the top of the next line.
+            th = IIf(wrap, rowLines * CLng(9 * 20 * 1.36) + px(2), px(18))
             Set c = RO("txtCol" & i, p(0), x, ty, cw - px(8), th, 9, InStr(opts, "b") > 0, _
                 IIf(InStr(opts, "m") > 0, CLR_MUTED_FG, CLR_FG))
             If wrap Then c.TopMargin = 0
