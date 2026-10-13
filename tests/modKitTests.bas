@@ -19,6 +19,7 @@ Public Function TestKit(ByVal root As String) As String
     BuildGrid "subTest", cols, px(600)
     NewForm "", 0, px(700), px(700)
     GridHeaders "head", cols, px(24), px(60)
+    GridHeaders "sortHead", cols, px(24), px(40), sortSf:="sfRows"
     SubF "sfRows", "Form.subTest", px(24), px(82), px(600), px(180)
     SubF "sfReuse", "Form.subTest", px(24), px(320), px(600), px(180)
     GridFooter "sfRows", "pager", "id"
@@ -101,6 +102,22 @@ Public Function TestKit(ByVal root As String) As String
     SetVisible host.pillBound, True
     Check host.pillBound.Visible And host.pillBound_bg.Visible, "Shown bound pill lost its image"
     grid.RecordSource = "SELECT * FROM test_rows ORDER BY id"
+    ' Click-to-sort captions: ascending with an up arrow, then reversed; the arrow moves with the column.
+    Check host.head1.OnClick = "" And Right$(host.head1.Tag, 1) = "|", "Unsortable caption has a sort click"
+    Check host.sortHead1.OnClick = "=GridSort([Form],""sfRows"",""sortHead"",1)", "Sortable caption has no sort click"
+    GridSort host, "sfRows", "sortHead", 1
+    Check grid.OrderByOn And grid.OrderBy Like "*description]", "First caption click did not sort ascending"
+    Check host.sortHead1.Caption = "DESCRIPTION " & ChrW(&H25B2), "Ascending caption lacks its arrow"
+    GridSort host, "sfRows", "sortHead", 1
+    Check grid.OrderBy Like "*description] DESC", "Second caption click did not reverse the sort"
+    Check host.sortHead1.Caption = "DESCRIPTION " & ChrW(&H25BC), "Descending caption lacks its arrow"
+    With grid.RecordsetClone
+        .MoveFirst
+        Check !description = "Description 9", "Rows are not in descending order"
+    End With
+    GridSort host, "sfRows", "sortHead", 0
+    Check host.sortHead0.Caption = "CATEGORY " & ChrW(&H25B2) And host.sortHead1.Caption = "DESCRIPTION", "Arrow stayed on the old column"
+    grid.OrderBy = "": grid.OrderByOn = False
     height = host.sfRows.Height
     LayoutTableFooter host, "sfRows", "pager", "id"
     Check Not host.pagerCount.Visible, "Unmarked table has footer"

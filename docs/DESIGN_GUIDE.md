@@ -119,7 +119,7 @@ them, and the shell (`frmMain`) last.
 | modBuildUI, modBuildPages, modBuildPages2 | `Build_<form>` procedures, one per form, grouped by area |
 | modUI | Run-time UI helpers: `NavTo`, badges/pills painting, `ShowTip`, the app's hooks (`BadgeColors`, `StatusVariant`) |
 | modUIKit (kit) | Build-time control builders (section 6) |
-| modKitUI (kit) | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `KitMsgBox`, `SetCount`, `StyleChip` |
+| modKitUI (kit) | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `KitMsgBox`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
 | modKitUtil (kit) | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `SetVisible`, `SetEnabled` |
 | modDarkMode (kit), modPalette (gen), modTheme (gen) | Palette engine (section 7) |
@@ -394,9 +394,18 @@ End Sub
       `GridClick(grid, dbl)`.
     - Each column's `Tag` holds its caption and design position, which `GridFit` and
       modGridOut read.
-  - `GridHeaders prefix, cols, x, y, [parentCtl], [band], [w]` puts the captions above
-    the grid in 8pt bold muted uppercase. `band:=True` draws them on a 22px `CLR_INSET`
+  - `GridHeaders prefix, cols, x, y, [parentCtl], [band], [w], [sortSf]` puts the
+    captions above the grid in 8pt bold muted uppercase. `band:=True` draws them on a 22px `CLR_INSET`
     strip, `w` wide (default: the columns' widths), that stretches with the window.
+    - **Click to sort.** `sortSf:="sfList"` (the table's subform control) makes each
+      caption sort the table by its column (`GridSort`): the first click sorts
+      ascending, the next reverses. The sorted caption shows ▲ or ▼ after the text, or
+      before it on a right-aligned column; the others show none. A column sorts by its
+      field; give a fifth part, `"due|Due|80||due_date"`, when the cell shows formatted
+      text (a date through `Format`) and the record source also returns the real
+      field. A computed column (`"=..."`) sorts only with a fifth part.
+    - The sort is the table's `OrderBy`, so `PrintGrid` and `ExportGrid` follow it. Sort
+      a table in code through `GridSort` so its arrow stays right.
   - `PrintGrid gridForm, title, [subtitle]` and `ExportGrid gridForm, path` (modGridOut)
     print or export a table as the user sees it: its visible columns with their
     captions, and the rows its filter and sort show. `PrintGrid` builds a report
