@@ -563,13 +563,13 @@ Write app-specific helpers next to the builds that use them. Examples:
   disabled). Both also cover a subform, tab control or option group that holds the
   focus, and fall back to the first free tab stop on a form with no sink.
 - **Focus ring**: `Txt` and `Cbo` set `OnGotFocus`/`OnLostFocus` to `=FocusRing(...)`,
-  which paints the border `CLR_PRIMARY` and back. Only `BorderColor` changes: a wider
+  which paints the border `CLR_PRIMARY` and then gives back the color it found (so a
+  required field's red outline survives tabbing through). Only `BorderColor` changes: a wider
   border would eat into the text area and shift the text, and an extra ring control
   would have to be shown and hidden on every focus change (flicker). Locked fields and
   continuous forms get no ring (one control's border is every row's). Setting these
   events later (`Ev c, "OnGotFocus"`) replaces the ring, so such a handler calls
-  `FocusRing Me, "<name>", CLR_PRIMARY` (or the field's border color on LostFocus)
-  itself.
+  `FocusRing Me, "<name>", True` (`False` on LostFocus) itself.
 - Read-only row text with no click handler is set to `Enabled = False` +
   `Locked = True`. That keeps its normal look while it can never take focus.
 - **Disabled controls ignore theme colors.** Lock controls instead of disabling them when

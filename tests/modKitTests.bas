@@ -158,6 +158,8 @@ Public Function TestKit(ByVal root As String) As String
     host.ringB.SetFocus
     Check host.ringA.BorderColor = CLR_INPUT_BORDER, "Input kept its focus ring after losing the focus"
     Check host.ringB.BorderColor = CLR_PRIMARY, "Focused combo box lacks its focus ring"
+    host.ringA.BorderColor = CLR_DESTRUCTIVE: host.ringA.SetFocus: host.ringB.SetFocus
+    Check host.ringA.BorderColor = CLR_DESTRUCTIVE, "Focus ring lost the input's own border color"
     host.ringB.Locked = True: host.ringA.SetFocus: host.ringB.SetFocus
     Check host.ringB.BorderColor = CLR_INPUT_BORDER, "Locked input shows a focus ring"
     grid.txtCol0.SetFocus: grid.RowClick

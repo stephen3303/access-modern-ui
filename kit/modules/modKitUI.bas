@@ -20,6 +20,8 @@ Private m_msgText As String
 Private m_msgStyle As Long
 Private m_msgTitle As String
 Private m_msgAnswer As Long
+' Border colors the focus ring covered (FocusRing), keyed "<form hWnd>|<name>".
+Private m_ringWas As Collection
 
 ' ---------------------------------------------------------------------------
 ' Tables
@@ -262,27 +264,51 @@ End Sub
 ' Focus ring
 ' ---------------------------------------------------------------------------
 
-' A kit input's GotFocus and LostFocus (set by Txt and Cbo): paint the border
-' of control nm on frm in palette color clr, CLR_PRIMARY while it has the
-' focus and its own border color again when it loses it. Only the border color
-' changes (no width, size or margin), so the text never moves; the color is
-' written only when it differs, so moving between fields repaints just the two
-' borders. The ring isn't shown on a locked field (nothing to type) or on a
-' continuous form, where one control's border is every row's. Losing the focus
-' always restores the color. A failure is logged but not shown, like
+' A kit input's GotFocus (isOn True) and LostFocus (False), set by Txt and
+' Cbo: paint control nm's border CLR_PRIMARY while it has the focus, then give
+' back the color it had. That color is whatever was there on GotFocus, not
+' always CLR_INPUT_BORDER, so a red outline from CheckRequired survives
+' tabbing through the field. If something else repaints the border while the
+' field has the focus, LostFocus leaves that color alone. Only the border
+' color changes (no width, size or margin), so the text never moves. The ring
+' isn't shown on a locked field (nothing to type) or on a continuous form,
+' where one control's border is every row's. The key uses the form's hWnd so
+' two copies of a subform keep apart. A failure is logged but not shown, like
 ' ThemeForm: the field keeps working without the ring.
-Public Function FocusRing(frm As Form, ByVal nm As String, ByVal clr As Long)
-    Dim c As Control
+Public Function FocusRing(frm As Form, ByVal nm As String, ByVal isOn As Boolean)
+    Dim c As Control, key As String, ring As Long
     On Error GoTo Fail
     Set c = frm.Controls(nm)
-    If clr = CLR_PRIMARY Then
+    If m_ringWas Is Nothing Then Set m_ringWas = New Collection
+    key = frm.Hwnd & "|" & nm
+    ring = Th(CLR_PRIMARY)
+    If isOn Then
         If c.Locked Or frm.DefaultView <> 0 Then Exit Function
+        If c.BorderColor = ring Then Exit Function      ' already ringed: keep the saved color
+        ForgetRing key
+        m_ringWas.Add c.BorderColor, key
+        c.BorderColor = ring
+    ElseIf HasRing(key) Then
+        If c.BorderColor = ring Then c.BorderColor = m_ringWas(key)
+        ForgetRing key
     End If
-    If c.BorderColor <> Th(clr) Then c.BorderColor = Th(clr)
     Exit Function
 Fail:
     LogError "modKitUI.FocusRing", frm.Name & "." & nm
 End Function
+
+' True when FocusRing saved a color under key.
+Private Function HasRing(ByVal key As String) As Boolean
+    Dim v As Variant
+    On Error Resume Next
+    v = m_ringWas(key)
+    HasRing = (Err.Number = 0)
+End Function
+
+' Drop the color saved under key, if any.
+Private Sub ForgetRing(ByVal key As String)
+    If HasRing(key) Then m_ringWas.Remove key
+End Sub
 
 ' ---------------------------------------------------------------------------
 ' Messages

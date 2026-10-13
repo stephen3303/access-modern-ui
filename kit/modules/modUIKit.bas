@@ -302,7 +302,7 @@ Public Function Txt(ByVal nm As String, ByVal src As String, ByVal x As Long, By
     c.LeftMargin = 60
     c.TopMargin = 30
     VCenter c, h, size
-    If Left$(src, 1) <> "=" Then RingOnFocus c, CLR_INPUT_BORDER   ' a calculated box takes no typing
+    If Left$(src, 1) <> "=" Then RingOnFocus c   ' a calculated box takes no typing
     Set Txt = c
 End Function
 
@@ -395,15 +395,15 @@ Public Function RowBack(ByVal nm As String, ByVal x As Long, ByVal y As Long, By
     Set RowBack = c
 End Function
 
-' Focus ring: a CLR_PRIMARY border while input c has the focus, back to
-' border (its build color) when it loses it, through the run-time FocusRing.
-' These event properties replace any the caller sets later: a form that
-' handles c's GotFocus or LostFocus itself calls FocusRing from its handler.
-' Reports have no focus.
-Private Sub RingOnFocus(c As Control, ByVal border As Long)
+' Focus ring: a CLR_PRIMARY border while input c has the focus, and its own
+' border back when it loses it, through the run-time FocusRing. These event
+' properties replace any the caller sets later: a form that handles c's
+' GotFocus or LostFocus itself calls FocusRing from its handler. Reports have
+' no focus.
+Private Sub RingOnFocus(c As Control)
     If m_isReport Then Exit Sub
-    c.OnGotFocus = "=FocusRing([Form],""" & c.Name & """," & CLR_PRIMARY & ")"
-    c.OnLostFocus = "=FocusRing([Form],""" & c.Name & """," & border & ")"
+    c.OnGotFocus = "=FocusRing([Form],""" & c.Name & """,True)"
+    c.OnLostFocus = "=FocusRing([Form],""" & c.Name & """,False)"
 End Sub
 
 ' Read-only text: no border, transparent, not a tab stop.
@@ -450,7 +450,7 @@ Public Function Cbo(ByVal nm As String, ByVal src As String, ByVal rowSrc As Str
     c.SpecialEffect = 0
     c.BackColor = CLR_INPUT_BG
     VCenter c, h, 10
-    RingOnFocus c, CLR_INPUT_BORDER
+    RingOnFocus c
     Set Cbo = c
 End Function
 
