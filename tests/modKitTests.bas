@@ -169,15 +169,6 @@ Public Function TestKit(ByVal root As String) As String
     Check Not host.btn2.Visible And Not host.btn3.Visible, "Message dialog shows unused buttons"
     Check host.btn1.Left + host.btn1.Width = host.btn3.Left + host.btn3.Width, "Message OK button is not right-aligned"
     DoCmd.Close acForm, "dlgMessage", acSaveNo
-    Check ErrorLineSource() = "test line 179", "Error log did not record the failing line (Erl)"
+    Check ErrorLineSource() = "test line 8", "Error log did not record the failing line (Erl)"
     TestKit = checks & " kit checks passed"
-End Function
-
-' Fails on line 179 of this file; SourceWithLine (modErrors) should name that line.
-Private Function ErrorLineSource() As String
-    On Error GoTo Fail
-    Err.Raise 5
-    Exit Function
-Fail:
-    ErrorLineSource = SourceWithLine("test")
 End Function

@@ -35,7 +35,11 @@ $script:VbaSkip = @(
 # Number one module's text. Accepts CRLF or LF and returns CRLF text.
 function Add-VbaLineNumbers([string]$Text) {
     $lines = $Text -split "`r?`n"
-    if (@($lines -match '^\s*\d+(\s|:|$)').Count -gt 0) { return ($lines -join "`r`n") }
+    $numbered = @($lines -match '^\s*\d+(\s|:|$)')
+    if ($numbered.Count -gt 0) {
+        Write-Warning "Line numbers not added to a module that already has some: $($numbered[0].Trim())"
+        return ($lines -join "`r`n")
+    }
     $inProc = $false
     $continued = $false     # the previous line ended with " _"
     for ($i = 0; $i -lt $lines.Count; $i++) {
