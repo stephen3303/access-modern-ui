@@ -120,6 +120,22 @@ Fail:
     LogError "modKitUI.GridScroll", g.Name
 End Function
 
+' GridScroll for every BuildGrid table on frm and on the forms inside it.
+' Call it from the window's Form_Resize: a table anchored to the window
+' changes height without its OnCurrent firing. A subform still loading (the
+' window resizes as it opens) is skipped; GridScroll logs its own failures.
+Public Sub GridScrollAll(frm As Form)
+    Dim c As Control
+    On Error Resume Next
+    For Each c In frm.Controls
+        If c.ControlType = acSubform Then
+            If Len(c.SourceObject) > 0 Then
+                If c.Form.Tag Like "grid:*" Then GridScroll c.Form Else GridScrollAll c.Form
+            End If
+        End If
+    Next
+End Sub
+
 ' Select the first row of a BuildGrid table and tell the host, as a click
 ' would (its GridClick grid, False). Returns the row's id, or Null when the
 ' table is empty (then nothing is called). Call it after the list loads or

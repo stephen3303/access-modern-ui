@@ -373,7 +373,8 @@ End Sub
     - Rows are separated by a 1px line, and the selected row is highlighted in
       `CLR_PRIMARY_SOFT`.
     - The vertical scroll bar shows only when the rows overflow (`GridScroll`, the
-      table's OnCurrent).
+      table's OnCurrent). The window's `Form_Resize` calls `GridScrollAll Me`, since
+      a table anchored to the window changes height without a Current event.
     - Optional arguments, all off by default so existing tables don't change:
       - `zebra:=True` fills every other row with `CLR_ROW2`. The selected row still
         turns `CLR_PRIMARY_SOFT`.
