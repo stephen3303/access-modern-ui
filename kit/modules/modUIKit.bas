@@ -19,6 +19,11 @@ Public Const CARD_RADIUS As Long = 12
 ' field with its 30px calendar button 4px to the right (154 px).
 Public Const DATEBOX_W As Long = 1800
 Public Const DATEFIELD_W As Long = 2310
+' SecretBox: the input mask that hides its text, and the eye button's
+' glyphs (Segoe MDL2 Assets View and Hide) for "show" and "hide".
+Public Const SECRET_MASK As String = "Password"
+Public Const EYE_SHOW As Long = &HE890&
+Public Const EYE_HIDE As Long = &HED1A&
 ' Badge variants a status pill can take (BadgeColors).
 Private Const BADGE_VARIANTS As String = "success,warning,info,destructive,default,outline,secondary"
 ' Spacing tokens (CSS px, guide 6.4) for Sp(), so a layout written with them
@@ -330,6 +335,31 @@ Public Function DateBox(ByVal nm As String, ByVal src As String, ByVal x As Long
     Set DateBox = c
 End Function
 
+' Sensitive entry (passwords, PINs, SSNs): a text box nm bound to src that
+' shows its text as asterisks (InputMask "Password", which also stops it
+' being copied), and an eye button eye_<nm> 4px to its right, 30px wide and h
+' tall like the box, that shows or hides the text (ToggleSecret). The pair
+' takes w; the box gets w less 34px. Masking is display only: the field
+' still stores what was typed, so hash passwords before saving them
+' (HashPassword). Single-record forms only: a continuous form shares one
+' InputMask across its rows, so one eye would show every row's value.
+' Returns the text box.
+Public Function SecretBox(ByVal nm As String, ByVal src As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, _
+        ByVal h As Long, Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control
+    Dim c As Control, b As Control
+    If F.DefaultView <> 0 Then Err.Raise 5, , "SecretBox " & nm & " needs a single-record form: one eye would show every row"
+    Set c = Txt(nm, src, x, y, w - px(34), h, 10, sec, parentCtl)
+    c.InputMask = SECRET_MASK
+    Set b = Btn("eye_" & nm, ChrW(EYE_SHOW), x + w - px(30), y, px(30), h, "outline", sec, parentCtl)
+    b.FontName = "Segoe MDL2 Assets"
+    b.FontSize = 10
+    b.FontWeight = 400
+    b.TabStop = False
+    b.ControlTipText = "Show"
+    b.OnClick = "=ToggleSecret([Form],""" & nm & """)"
+    Set SecretBox = c
+End Function
+
 ' The date picker a DateBox's calendar button opens (dlgDatePick, code in
 ' forms\dlgDatePick.vba): previous and next month arrows around the month's
 ' name, the weekday initials, six weeks of day cells (34 x 30px on a 34 x 32
@@ -639,7 +669,8 @@ End Function
 ' options: "r" right-aligned, "c" centered, "b" bold, "m" muted, "p" a
 ' rounded status pill colored by the app's StatusVariant(value), "w" wraps
 ' onto rowLines lines (rather than cutting text off mid-word; text longer
-' than that stops at the end of the last line). The last
+' than that stops at the end of the last line), "s" marks the text matching
+' the page's search box (GridHighlight) in the highlight colors. The last
 ' column takes the rest of the width (and stretches with the form); with
 ' rowLines > 1 it always wraps. back is the color of what the
 ' table sits on. zebra fills every other row with CLR_ROW2. rowPx sets the
@@ -670,6 +701,8 @@ Public Sub BuildGrid(ByVal finalName As String, ByVal cols As Variant, ByVal w A
     ' the selected row's condition still fills it.
     If zebra Then c.BackStyle = 0
     Set c = RO("txtSel", "", 0, 0, px(4), px(4)): c.Visible = False
+    ' The search term GridHighlight sets, which the "s" columns mark.
+    Set c = RO("txtFind", "", 0, 0, px(4), px(4)): c.Visible = False
     x = px(8)
     For i = 0 To UBound(cols)
         p = Split(cols(i), "|")
@@ -694,6 +727,7 @@ Public Sub BuildGrid(ByVal finalName As String, ByVal cols As Variant, ByVal w A
             If wrap Then c.TopMargin = 0
             If InStr(opts, "r") > 0 Then c.TextAlign = 3
             If InStr(opts, "c") > 0 Then c.TextAlign = 2
+            If InStr(opts, "s") > 0 Then SearchCol c, p(0), i
         End If
         c.Tag = p(1) & "|" & x & "|" & cw
         c.OnClick = "=RowClick()"
@@ -724,6 +758,18 @@ Private Sub PillCol(c As Control, ByVal field As String)
         CF c, "StatusVariant(" & ref & ")=""" & v & """", col(0), col(1)
     Next
     RoundCF c, first
+End Sub
+
+' A grid column that marks the search term (option "s"): a rich text cell
+' showing GridMark([txtSrc<i>], [txtFind]), where hidden txtSrc<i> is bound to
+' the column's field. The field goes through a control because a bare field
+' reference in an expression can bind to a form property instead ([name] is
+' the form's Name). modGridOut prints and exports txtSrc<i>'s source.
+Private Sub SearchCol(c As Control, ByVal field As String, ByVal i As Long)
+    Dim src As Control
+    Set src = RO("txtSrc" & i, field, 0, 0, px(4), px(4)): src.Visible = False
+    c.ControlSource = "=GridMark([txtSrc" & i & "],[txtFind])"
+    c.TextFormat = 1                        ' acTextFormatHTMLRichText
 End Sub
 
 ' Column captions for a BuildGrid table whose subform sits at (x, y + px(22)).

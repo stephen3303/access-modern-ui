@@ -7,7 +7,7 @@ test changes to it. It has one local table of fictional items and three pages:
 |---|---|
 | Cards and progress | `Card` (rounded and square), `Progress` at 0, 37 and 100 percent, a table inside a rounded card |
 | Tables | `BuildGrid` with every option (header band, zebra rows, status pills, 38px rows, proportional fit through `GridFit`) next to a default table, both sorted by clicking a column caption; `TabStrip` and chips with counts; search and a category filter to the right of the chips |
-| List and detail | The list/detail pattern (`SelectFirstRow`, `ShowDetail`, `ClearDetail`), click-to-sort captions, `PrintGrid` and `ExportGrid` in the list's sort; the Due field is a `DateBox` whose date picker marks federal holidays and every item's due date (`MarkDate`); a compact `Toggle` switch (Flagged for review) on the detail panel's Save row |
+| List and detail | The list/detail pattern (`SelectFirstRow`, `ShowDetail`, `ClearDetail`), click-to-sort captions, `PrintGrid` and `ExportGrid` in the list's sort; the Due field is a `DateBox` whose date picker marks federal holidays and every item's due date (`MarkDate`); a compact `Toggle` switch (Flagged for review) on the detail panel's Save row; a `SecretBox` (the item's access code) |
 
 Appearance in the sidebar switches palettes.
 
@@ -18,6 +18,9 @@ cd examples\demo
 .\build.ps1            # new KitDemo.accdb with seed data
 .\build.ps1 -UiOnly    # rebuild code and forms, keep the data
 ```
+
+The code loaded into KitDemo.accdb has line numbers so the error log names the failing
+line (`-NoLineNumbers` leaves them out). Edit the files here, not the built copy.
 
 Then open `examples\demo\KitDemo.accdb`. The build stops and prints any Visual Basic or
 Access dialog it meets (a compile error, an error message) instead of hanging.
@@ -44,6 +47,8 @@ watching for Visual Basic error dialogs as well as the error log:
   the danger color and item due dates (1st, 4th, 7th...) in the warning color, with
   tooltips naming them; July 2026 marks Friday the 3rd as Independence Day (observed).
   Changing an item's due date and saving moves its mark.
+- Access code: opens as asterisks; the eye shows the code and turns into a struck-through
+  eye, a second click hides it; the next item opens hidden again.
 - Toggle (Flagged for review, left of Save in the detail panel): clicking the track or its
   label, or Tab to it and Space, slides the knob and saves the record at once; the track is
   the palette's primary color when on and its muted text color when off; a ring shows while
