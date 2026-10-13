@@ -119,7 +119,7 @@ them, and the shell (`frmMain`) last.
 | modBuildUI, modBuildPages, modBuildPages2 | `Build_<form>` procedures, one per form, grouped by area |
 | modUI | Run-time UI helpers: `NavTo`, badges/pills painting, `ShowTip`, the app's hooks (`BadgeColors`, `StatusVariant`) |
 | modUIKit (kit) | Build-time control builders (section 6) |
-| modKitUI (kit) | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `SetCount`, `StyleChip` |
+| modKitUI (kit) | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
 | modKitUtil (kit) | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `SetVisible`, `SetEnabled` |
 | modDarkMode (kit), modPalette (gen), modTheme (gen) | Palette engine (section 7) |
@@ -327,7 +327,12 @@ End Sub
 - **Controls**
   - `Lbl`: transparent label.
   - `Txt`: input with `CLR_INPUT_BG`, a 1px `CLR_INPUT_BORDER` border and inner margins.
-  - `RO`: read-only text, borderless, transparent, no tab stop.
+  - `DateBox`: a date input, 120px wide, with its date left-aligned like text, and a
+    30px outline calendar button 4px to its right that opens the date picker
+    (`PickDate`). Access's own picker icon, which shows only on focus, is off. The
+    pair is 154px (`DATEFIELD_W`), so it fits a half-width field column.
+  - `RO`: read-only text, borderless, transparent, no tab stop. Show read-only dates
+    left-aligned (`TextAlign = 1`) so they line up with text values.
   - `Cbo`, `Lst`, `Chk`
   - `Btn ... kind`: `primary`, `outline`, `ghost`, `destructive` or `nav`, each with
     themed hover and pressed colors and `Shape = 1` for rounded corners.
@@ -422,7 +427,8 @@ Write app-specific helpers next to the builds that use them. Examples:
   Captions sit about 18px above their input.
 - **Compact** size, for toolbars, filter rows, and actions inside cards, panels and
   table rows: buttons 28px and inputs (search boxes, filter combos) 26px to 28px, text
-  still 9pt. Use one size per row. No other heights: no 24, 26 or 30px buttons.
+  still 9pt. Use one size per row. No other heights: no 24, 26 or 30px buttons. The one
+  exception is the `DateBox` calendar button, which takes its input's 30px height.
 - Vertical rhythm for stacked fields: 38px.
 - Cards and KPI tiles are separated by 12px gaps.
 - A KPI tile is 78px tall: a surface box with a 1px border, a 4px colored accent strip

@@ -15,6 +15,10 @@ Private m_trace As String
 Public Const REPORT_W As Long = 10800
 ' Corner radius of rounded cards (px).
 Public Const CARD_RADIUS As Long = 12
+' DateBox: the text box (120 px, fits "dd mmm yyyy" at 10pt) and the whole
+' field with its 30px calendar button 4px to the right (154 px).
+Public Const DATEBOX_W As Long = 1800
+Public Const DATEFIELD_W As Long = 2310
 ' Badge variants a status pill can take (BadgeColors).
 Private Const BADGE_VARIANTS As String = "success,warning,info,destructive,default,outline,secondary"
 
@@ -223,6 +227,27 @@ Public Function Txt(ByVal nm As String, ByVal src As String, ByVal x As Long, By
     c.TopMargin = 30
     VCenter c, h, size
     Set Txt = c
+End Function
+
+' Date entry: a DATEBOX_W text box nm bound to src (dd mmm yyyy, left-aligned
+' like text, Access's own picker icon off) and a calendar button cal_<nm>
+' 4px to its right, h tall like the box, that opens the date picker on it
+' (PickDate). The pair takes DATEFIELD_W. Returns the text box.
+Public Function DateBox(ByVal nm As String, ByVal src As String, ByVal x As Long, ByVal y As Long, ByVal h As Long, _
+        Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control
+    Dim c As Control, b As Control
+    Set c = Txt(nm, src, x, y, DATEBOX_W, h, 10, sec, parentCtl)
+    c.Format = "dd mmm yyyy"
+    c.TextAlign = 1
+    c.ShowDatePicker = 0
+    Set b = Btn("cal_" & nm, ChrW(&HE787), x + DATEBOX_W + px(4), y, px(30), h, "outline", sec, parentCtl)
+    b.FontName = "Segoe MDL2 Assets"
+    b.FontSize = 10
+    b.FontWeight = 400
+    b.TabStop = False
+    b.ControlTipText = "Choose a date"
+    b.OnClick = "=PickDate([Form],""" & nm & """)"
+    Set DateBox = c
 End Function
 
 ' Background box for a continuous-form row: paints (with conditional colors)

@@ -167,6 +167,24 @@ Private Sub SaveDetail(sf As Control)
 End Sub
 
 ' ---------------------------------------------------------------------------
+' Date fields
+' ---------------------------------------------------------------------------
+
+' Click on a DateBox's calendar button: open the date picker on the box nm.
+' Does nothing while the box is disabled or locked.
+Public Function PickDate(frm As Form, ByVal nm As String)
+    Dim c As Control
+    On Error GoTo Fail
+    Set c = frm.Controls(nm)
+    If Not c.Enabled Or c.Locked Then Exit Function
+    c.SetFocus
+    DoCmd.RunCommand acCmdShowDatePicker
+    Exit Function
+Fail:
+    HandleError "modKitUI.PickDate", nm
+End Function
+
+' ---------------------------------------------------------------------------
 ' Tabs and filter chips
 ' ---------------------------------------------------------------------------
 
