@@ -117,7 +117,7 @@ Public Function TestKit(ByVal root As String) As String
     Check CountedCaption("UPL", 2) = "UPL (2)", "Count format differs"
     Check TagWidth(Array("Short", "Longest category")) = PillTextWidth("Longest category"), "Widest label differs"
     Check FileExists(CStr(ColumnPillPng(CLR_PRIMARY, 240, 26, PillTextWidth("Longest category")))), "Pill image missing"
-    Check FileExists(CardPng(600, 200, CLR_SURFACE, CLR_BORDER)), "Rounded card missing"
+    Check FileExists(RoundedCardPng(600, 200, CLR_SURFACE, CLR_BORDER)), "Rounded card missing"
     grid.txtCol0.SetFocus: grid.RowClick
     Check Screen.ActiveControl.Name = "txtFocusSink", "Row click left text focused"
     Check host.callbackGrid = "sfRows", "Grid callback used wrong parent"

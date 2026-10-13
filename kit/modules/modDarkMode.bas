@@ -110,7 +110,7 @@ Private Function HasSection(frm As Object, ByVal i As Long) As Boolean
 End Function
 
 ' Repaint one control: every color property, conditional formats, the colors
-' inside pill image expressions, and dark-only extras (Tag "darkonly").
+' inside rounded image expressions, and dark-only extras (Tag "darkonly").
 Private Sub ThemeControl(c As Control)
     Dim p As Variant, fc As Object, src As String
     On Error GoTo Fail
@@ -124,10 +124,11 @@ Private Sub ThemeControl(c As Control)
                 If Pal(fc.ForeColor) <> fc.ForeColor Then fc.ForeColor = Pal(fc.ForeColor)
             Next
         Case acImage
-            ' Rounded pills: =PillPng(Switch(cond,color,...),w,h)
+            ' Rounded images (modPng): =PillPng(Switch(cond,color,...),w,h),
+            ' =CardPng(fill,border,back,r,corner), =ProgressPng(pct,fill,track,w,h)
             If c.Tag = "RoundedCard" Then ResizeRoundedCard c, c.Width, c.Height: Exit Sub
             src = Nz(c.Properties("ControlSource"), "")
-            If InStr(src, "PillPng(") > 0 Then c.Properties("ControlSource") = PaletteColorsIn(src)
+            If InStr(src, "Png(") > 0 Then c.Properties("ControlSource") = PaletteColorsIn(src)
     End Select
     If c.Tag = "darkonly" Then c.Visible = IsDark()
     Exit Sub
