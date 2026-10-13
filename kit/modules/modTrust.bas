@@ -293,12 +293,14 @@ Private Function ExpandEnv(ByVal p As String) As String
     ExpandEnv = p
 End Function
 
-' Open the trust page (dlgTrust) in the current palette. It has no Open hook,
-' so it opens hidden, is themed, then shown.
+' Open the trust page (dlgTrust) in the current palette, centred over Access
+' like the other dialogs. It has no code of its own (AutoCenter places it when
+' the code is off), so it opens hidden, is themed and placed, then shown.
 Public Function ShowTrustHelp()
     On Error GoTo Err_Handler
     DoCmd.OpenForm TRUST_FORM, WindowMode:=acHidden
     ThemeForm Forms(TRUST_FORM)
+    CenterOnApp Forms(TRUST_FORM)
     Forms(TRUST_FORM).Visible = True
     Exit Function
 Err_Handler:
