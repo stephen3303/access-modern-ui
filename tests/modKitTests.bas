@@ -181,5 +181,7 @@ Public Function TestKit(ByVal root As String) As String
     On Error GoTo 0
     Check badName <> 0, "RunDialog hid a missing dialog"
     Check Not AppDimmed(), "Dim left on after a dialog failed to open"
+    BackdropOnClose
+    Check Not AppDimmed(), "Closing a dialog with no dim on changed the count"
     TestKit = checks & " kit checks passed"
 End Function

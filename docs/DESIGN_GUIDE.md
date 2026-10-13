@@ -324,7 +324,8 @@ End Sub
 - **Forms**
   - `NewForm recSrc, view(0 single/1 continuous), w, h`
   - `NewDialog caption, w, h`: pop-up, modal, auto-center, dialog border, `CLR_DIALOG`
-    background.
+    background, and `OnClose = "=BackdropOnClose()"`, which removes a dim a VBA reset
+    left behind (a dialog with its own `Form_Close` calls `BackdropOnClose` from it).
   - `NewReport recSrc, w`: Letter portrait, 0.5 in margins, `REPORT_W = 10800`, pop-up
     preview.
   - `SaveForm`, `Trace`

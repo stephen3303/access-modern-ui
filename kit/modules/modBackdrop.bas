@@ -16,9 +16,11 @@ Option Explicit
 ' as a click outside an undimmed dialog is.
 '
 ' Nested dialogs (a message from inside a dialog) share the first one's
-' layer: a count keeps it until the last UndimApp. The layer has a fixed
-' title, so UndimApp finds and removes it even after a VBA reset has cleared
-' this module's variables.
+' layer: a count keeps it until the last UndimApp. A VBA reset (an End, or
+' Reset after an error) while a dialog is open clears that count, and the
+' code that would call UndimApp never runs. So every dialog built with
+' NewDialog also calls BackdropOnClose as it closes: with no DimApp waiting,
+' any layer left is an orphan, and it is found by its fixed title and removed.
 
 #If VBA7 Then
 Private Declare PtrSafe Function CreateWindowExW Lib "user32" (ByVal exStyle As Long, ByVal className As LongPtr, _
@@ -132,15 +134,24 @@ Public Sub UndimApp()
     RemoveLayers
 End Sub
 
+' A dialog's OnClose (NewDialog sets it to =BackdropOnClose()). In normal use
+' the DimApp that opened the dialog is still waiting for its UndimApp, so this
+' does nothing; after a VBA reset nothing is waiting, and the orphaned layer
+' is removed so Access isn't left dimmed. A dialog with its own Form_Close
+' replaces this; call BackdropOnClose from it to keep the clean-up.
+Public Function BackdropOnClose()
+    If m_depth > 0 Then Exit Function
+    On Error Resume Next
+    RemoveLayers
+End Function
+
 ' True while a DimApp is waiting for its UndimApp.
 Public Function AppDimmed() As Boolean
     AppDimmed = (m_depth > 0)
 End Function
 
-' Create the layer over the owner window's visible frame (DWM bounds leave
-' out the invisible resize border, which would spill onto a neighbouring
-' monitor when Access is maximized), fill it with color and show it without
-' taking the focus. GDI objects are freed on every path.
+' Create the layer over the owner window's visible frame, fill it with color
+' and show it without taking the focus. GDI objects are freed on every path.
 #If VBA7 Then
 Private Sub ShowLayer(ByVal owner As LongPtr, ByVal color As Long)
     Dim wnd As LongPtr, scr As LongPtr, mem As LongPtr, bmp As LongPtr, old As LongPtr, brush As LongPtr
@@ -148,12 +159,21 @@ Private Sub ShowLayer(ByVal owner As LongPtr, ByVal color As Long)
 Private Sub ShowLayer(ByVal owner As Long, ByVal color As Long)
     Dim wnd As Long, scr As Long, mem As Long, bmp As Long, old As Long, brush As Long
 #End If
-    Dim r As RectL, fill As RectL, sz As SizeL, at As PointL, origin As PointL
+    Dim r As RectL, vis As RectL, fill As RectL, sz As SizeL, at As PointL, origin As PointL
     Dim cls As String, ttl As String, blendFn As Long, drawn As Long
     Dim num As Long, desc As String
     If owner = 0 Then Exit Sub
     If IsWindowVisible(owner) = 0 Or IsIconic(owner) <> 0 Then Exit Sub
-    If DwmGetWindowAttribute(owner, DWMWA_EXTENDED_FRAME_BOUNDS, r, LenB(r)) <> 0 Then GetWindowRect owner, r
+    ' GetWindowRect includes the invisible resize border (about 7px a side),
+    ' which would show as a dim band around the window, or spill onto the next
+    ' monitor when Access is maximized. DWM gives the visible frame, but in
+    ' physical pixels: when Windows scales Access (DPI virtualization) the two
+    ' rectangles differ by much more than a border, and the window rectangle,
+    ' which CreateWindowExW also uses, is kept as it is.
+    If GetWindowRect(owner, r) = 0 Then Exit Sub
+    If DwmGetWindowAttribute(owner, DWMWA_EXTENDED_FRAME_BOUNDS, vis, LenB(vis)) = 0 Then
+        If IsBorderInset(r, vis) Then r = vis
+    End If
     sz.cx = r.Right - r.Left
     sz.cy = r.Bottom - r.Top
     If sz.cx <= 0 Or sz.cy <= 0 Then Exit Sub
@@ -176,6 +196,7 @@ Private Sub ShowLayer(ByVal owner As Long, ByVal color As Long)
     If mem = 0 Or bmp = 0 Then Err.Raise 7, , "No memory for the backdrop (" & sz.cx & "x" & sz.cy & ")"
     old = SelectObject(mem, bmp)
     brush = CreateSolidBrush(color)
+    If old = 0 Or brush = 0 Then Err.Raise 5, , "The backdrop could not be painted"
     FillRect mem, fill, brush
     drawn = UpdateLayeredWindow(wnd, scr, at, sz, mem, origin, 0, blendFn, ULW_ALPHA)
     If drawn = 0 Then Err.Raise 5, , "The backdrop could not be drawn"
@@ -198,6 +219,18 @@ Fail:
     desc = Err.Description
     Resume Done
 End Sub
+
+' True when the visible frame vis sits inside the window rectangle r by no
+' more than a resize border on every side, so both are in the same pixels.
+Private Function IsBorderInset(r As RectL, vis As RectL) As Boolean
+    Const MAX_BORDER As Long = 16
+    IsBorderInset = InRange(vis.Left - r.Left, MAX_BORDER) And InRange(vis.Top - r.Top, MAX_BORDER) And _
+        InRange(r.Right - vis.Right, MAX_BORDER) And InRange(r.Bottom - vis.Bottom, MAX_BORDER)
+End Function
+
+Private Function InRange(ByVal n As Long, ByVal maxN As Long) As Boolean
+    InRange = (n >= 0 And n <= maxN)
+End Function
 
 ' Destroy every backdrop layer this Access window owns: the current one and
 ' any a VBA reset left behind. Another Access window's layers are left alone.
