@@ -298,6 +298,7 @@ Public Sub BuildMessageDialog()
     Set c = RO("txtMsg", "", px(64), px(22), px(336), msgH, 10, False, CLR_FG)
     c.TopMargin = 0: c.LeftMargin = 0: c.RightMargin = 0: c.BottomMargin = 0
     c.ScrollBars = 2                                ' shows only while it has the focus
+    c.BackColor = CLR_DIALOG                        ' painted while it has the focus
     For i = 1 To 3
         Set c = Btn("btn" & i, "OK", px(420) - px(20) - (4 - i) * px(88) - (3 - i) * px(8), btnY, px(88), px(30), _
             IIf(i = 1, "primary", "outline"))
