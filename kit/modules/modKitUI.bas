@@ -5,15 +5,10 @@ Option Explicit
 ' scale their columns (GridFit), list/detail pages (SelectFirstRow,
 ' ShowDetail, ClearDetail), search matches marked in tables (GridHighlight),
 ' tabs and filter chips with counts (SetCount, StyleChip), focus rings on
-<<<<<<< HEAD
-' inputs (FocusRing), toggle switches (ToggleSwitch, ToggleFocus) and messages
-' and questions in the kit's look (KitMsgBox, KitInputBox). Colors set here go
-' through Th() so they follow the palette.
-=======
 ' inputs (FocusRing), toggle switches (ToggleSwitch, ToggleFocus), the splash
-' screen's status line (SplashStatus) and messages in the kit's look
-' (KitMsgBox). Colors set here go through Th() so they follow the palette.
->>>>>>> origin/main
+' screen's status line (SplashStatus) and messages and questions in the kit's
+' look (KitMsgBox, KitInputBox). Colors set here go through Th() so they follow
+' the palette.
 
 ' Width the table's vertical scroll bar takes (twips).
 Private Const SCROLL_W As Long = 300
@@ -786,6 +781,7 @@ Public Function KitInputBox(ByVal prompt As String, Optional ByVal title As Stri
     m_inMasked = masked
     m_inAnswer = Null
     m_inOpen = True
+    CloseSplash                    ' a start-up question must not open behind the splash
     DimApp                          ' the app behind is dimmed, as for KitMsgBox
     DoCmd.OpenForm "dlgInput", WindowMode:=acDialog
     UndimApp
