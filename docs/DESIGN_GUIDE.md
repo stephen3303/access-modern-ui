@@ -77,8 +77,9 @@ access/
 - Runs named steps, setting `m_step = "..."` before each so a failure names the step:
   create back end, link, local tables, seed, assets, user interface, help, startup.
 - Startup options it sets:
-  - StartUpForm = the kit's splash screen `frmSplash` (`BuildSplash`), which opens the
-    login form or `frmMain`. `HideAccessSplash` hides Access's own splash.
+  - StartUpForm = the login form or `frmMain`, or the kit's optional splash screen
+    `frmSplash` (`BuildSplash`), which opens it. `HideAccessSplash`, called last, hides
+    Access's own splash.
   - Hidden: the DB window, document tabs and datasheet schema.
   - Name AutoCorrect off.
   - AppTitle.
@@ -489,7 +490,7 @@ Write app-specific helpers next to the builds that use them. Examples:
     dialog set `TempVars("DialogResult") = "ok"`.
   - Other results come back in named TempVars.
   - Dialog input comes through `OpenArgs`.
-- **Splash screen**: the app starts on `frmSplash` (`BuildSplash`), a borderless 480 x 280px
+- **Splash screen** (optional): the app starts on `frmSplash` (`BuildSplash`), a borderless 480 x 280px
   pop-up in `CLR_SIDEBAR` with the app's MDL2 glyph, its name in 20pt white, a subtitle,
   and a footer under a `CLR_SIDEBAR_LINE` hairline: a status line on the left and the
   version on the right. `ThemeForm` gives it the user's palette. Once it has painted, its
@@ -497,8 +498,10 @@ Write app-specific helpers next to the builds that use them. Examples:
   work (version checks, linking) and calls `SplashStatus "..."` to say what it is doing.
   The splash closes when the form is open, and stays at least 1.2 seconds so it doesn't
   flash. `KitMsgBox` closes it first, so a start-up error is never hidden behind it.
+  A plain `MsgBox` or a file dialog doesn't close it, so call `CloseSplash` before one
+  (for example a back-end file picker at start-up).
   `HideAccessSplash` writes the 1 x 1 pixel `<database name>.bmp` that replaces Access's
-  own splash; ship it beside the front end.
+  own splash. It is a build output: ignore it in git and ship it beside the front end.
 - **List subforms** (continuous forms of cards or rows) call back to their host with
   `Me.Parent.<PublicProc>`.
 
@@ -799,8 +802,8 @@ The Appearance dialog grows by itself, because it is built from `PALETTE_COUNT`.
    and a `src/forms/pg<Name>.vba` where every handler uses the standard error handler.
 7. Copy the dialogs: `dlgAppearance`, `BuildMessageDialog` (for `Notify` and `HandleError`),
    `BuildDatePicker` (for date fields), and a non-modal `dlgHelp` with `help.txt` and the F1
-   `AutoKeys` macro. Add the splash screen with `BuildSplash` and `HideAccessSplash`, and
-   make `frmSplash` the startup form.
+   `AutoKeys` macro. Optionally add the splash screen with `BuildSplash` and
+   `HideAccessSplash`, and make `frmSplash` the startup form.
 8. Write `README.md` and `DEVELOPING.md` using the structure in section 4, linking to the
    kit's README for the builder catalog.
 9. Check every page in a light palette and a dark palette. There is no automated UI test,

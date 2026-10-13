@@ -169,5 +169,20 @@ Public Function TestKit(ByVal root As String) As String
     Check Not host.btn2.Visible And Not host.btn3.Visible, "Message dialog shows unused buttons"
     Check host.btn1.Left + host.btn1.Width = host.btn3.Left + host.btn3.Width, "Message OK button is not right-aligned"
     DoCmd.Close acForm, "dlgMessage", acSaveNo
+    ' Splash: CloseSplash and SplashStatus do nothing without one, the footer clears the
+    ' subtitle, and the bitmap that hides Access's splash is 58 bytes.
+    CloseSplash
+    SplashStatus "Starting"
+    BuildSplash "frmMain", "Subtitle"
+    DoCmd.OpenForm "frmSplash", acDesign
+    Set host = Forms("frmSplash")
+    Check host.lblSplashSub.Top + host.lblSplashSub.Height <= host.lnSplash.Top, "Splash subtitle overlaps its footer"
+    CloseSplash
+    Check IsFormOpen("frmSplash"), "CloseSplash closed a splash in Design view"
+    DoCmd.Close acForm, "frmSplash", acSaveNo
+    HideAccessSplash
+    text = CurrentProject.Path & "\" & Left$(CurrentProject.Name, InStrRev(CurrentProject.Name, ".") - 1) & ".bmp"
+    Check FileLen(text) = 58, "HideAccessSplash did not write a 58-byte bitmap"
+    Kill text
     TestKit = checks & " kit checks passed"
 End Function

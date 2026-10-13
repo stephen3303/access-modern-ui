@@ -322,10 +322,10 @@ End Sub
 Private Sub SetStartupOptions()
     SetProp "AppTitle", dbText, APP_NAME
     SetProp "StartUpForm", dbText, "frmSplash"
-    HideAccessSplash
     SetProp "StartUpShowDBWindow", dbBoolean, False
     SetProp "ShowDocumentTabs", dbBoolean, False
     SetProp "Perform Name AutoCorrect", dbLong, 0
     SetProp "Track Name AutoCorrect Info", dbLong, 0
     SetProp "AppBuild", dbText, Format$(Now(), "yyyy-mm-dd hh:nn")
+    HideAccessSplash                ' last: it writes a file, so a failure leaves the settings above in place
 End Sub

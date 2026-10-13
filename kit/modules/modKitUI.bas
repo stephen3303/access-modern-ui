@@ -269,7 +269,7 @@ End Sub
 ' the app starts, for example "Opening the data file...". Does nothing once
 ' the splash has closed, so start-up code can call it either way.
 Public Sub SplashStatus(ByVal msg As String)
-    If Not IsFormOpen(SPLASH_FORM) Then Exit Sub
+    If Not SplashOpen() Then Exit Sub
     Forms(SPLASH_FORM).Controls("lblSplashStatus").Caption = msg
     Forms(SPLASH_FORM).Repaint
 End Sub
@@ -279,11 +279,24 @@ End Sub
 ' refuse (2585) while the splash's own Timer is still running; the splash then
 ' closes itself when that event ends, so the refusal is ignored.
 Public Sub CloseSplash()
-    If Not IsFormOpen(SPLASH_FORM) Then Exit Sub
+    If Not SplashOpen() Then Exit Sub
     On Error Resume Next
     DoCmd.Close acForm, SPLASH_FORM, acSaveNo
     On Error GoTo 0
 End Sub
+
+' True when the kit's splash is open in Form view: not one open in Design
+' view, and not an app's own form that happens to be called frmSplash (it
+' has no lblSplashStatus). A missing control is expected there, so its error
+' leaves the answer False.
+Private Function SplashOpen() As Boolean
+    Dim frm As Form
+    If Not IsFormOpen(SPLASH_FORM) Then Exit Function
+    On Error Resume Next
+    Set frm = Forms(SPLASH_FORM)
+    SplashOpen = (frm.CurrentView = 1) And (frm.Controls("lblSplashStatus").Name = "lblSplashStatus")
+    On Error GoTo 0
+End Function
 
 ' ---------------------------------------------------------------------------
 ' Messages
