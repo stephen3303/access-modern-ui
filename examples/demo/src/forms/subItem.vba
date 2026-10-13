@@ -14,12 +14,31 @@ Err_Handler:
     HandleError "subItem.Form_AfterUpdate"
 End Sub
 
+' Each item opens with its access code hidden, even if the last one's was shown.
+Private Sub Form_Current()
+    On Error GoTo Err_Handler
+    HideSecrets Me
+    Exit Sub
+Err_Handler:
+    HandleError "subItem.Form_Current"
+End Sub
+
 Private Sub txtPct_AfterUpdate()
     On Error GoTo Err_Handler
     Me.Recalc          ' redraw the progress capsule
     Exit Sub
 Err_Handler:
     HandleError "subItem.txtPct_AfterUpdate"
+End Sub
+
+' The Flagged switch changed (Toggle's onChange): save the record at once,
+' like a settings switch.
+Public Sub FlagChanged()
+    On Error GoTo Err_Handler
+    If Me.Dirty Then Me.Dirty = False
+    Exit Sub
+Err_Handler:
+    HandleError "subItem.FlagChanged"
 End Sub
 
 Private Sub btnSave_Click()

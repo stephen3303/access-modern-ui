@@ -5,8 +5,9 @@ Option Explicit
 ' scale their columns (GridFit), list/detail pages (SelectFirstRow,
 ' ShowDetail, ClearDetail), search matches marked in tables (GridHighlight),
 ' tabs and filter chips with counts (SetCount, StyleChip), focus rings on
-' inputs (FocusRing), and messages in the kit's look (KitMsgBox). Colors set
-' here go through Th() so they follow the palette.
+' inputs (FocusRing), toggle switches (ToggleSwitch, ToggleFocus) and messages
+' in the kit's look (KitMsgBox). Colors set here go through Th() so they follow
+' the palette.
 
 ' Width the table's vertical scroll bar takes (twips).
 Private Const SCROLL_W As Long = 300
@@ -463,6 +464,59 @@ Private Function NthWeekday(ByVal y As Integer, ByVal m As Integer, ByVal wd As 
 End Function
 
 ' ---------------------------------------------------------------------------
+' Sensitive fields
+' ---------------------------------------------------------------------------
+
+' Click on a SecretBox's eye button: show the box nm's text if it is hidden,
+' hide it if it is shown, and put the focus back in the box with the caret
+' at the end, so typing carries on rather than replacing the value (not
+' while the box is disabled or hidden).
+Public Function ToggleSecret(frm As Form, ByVal nm As String)
+    Dim c As Control
+    On Error GoTo Fail
+    Set c = frm.Controls(nm)
+    ShowSecret frm, nm, (c.InputMask = SECRET_MASK)
+    If c.Enabled And c.Visible Then
+        c.SetFocus
+        c.SelStart = Len(Nz(c.Text, ""))
+    End If
+    Exit Function
+Fail:
+    HandleError "modKitUI.ToggleSecret", nm
+End Function
+
+' Hide the text of every SecretBox on frm. Call it from the form's
+' Form_Current, so a field shown on one record is hidden again on the next.
+' A button named eye_<x> with no box x beside it is not a SecretBox's and is
+' left alone.
+Public Sub HideSecrets(frm As Form)
+    Dim c As Control
+    On Error GoTo Fail
+    For Each c In frm.Controls
+        If c.ControlType = acCommandButton Then
+            If Left$(c.Name, 4) = "eye_" Then
+                If HasCtl(frm, Mid$(c.Name, 5)) Then ShowSecret frm, Mid$(c.Name, 5), False
+            End If
+        End If
+    Next
+    Exit Sub
+Fail:
+    RaiseAgain "modKitUI.HideSecrets", frm.Name
+End Sub
+
+' Show (reveal True) or hide the text of SecretBox nm, and set its eye
+' button's glyph and tip to the next action. On a click the eye button has
+' the focus, not the box, so the mask never changes under text being typed.
+Private Sub ShowSecret(frm As Form, ByVal nm As String, ByVal reveal As Boolean)
+    Dim c As Control, b As Control
+    Set c = frm.Controls(nm)
+    Set b = frm.Controls("eye_" & nm)
+    c.InputMask = IIf(reveal, "", SECRET_MASK)
+    b.Caption = ChrW(IIf(reveal, EYE_HIDE, EYE_SHOW))
+    b.ControlTipText = IIf(reveal, "Hide", "Show")
+End Sub
+
+' ---------------------------------------------------------------------------
 ' Focus ring
 ' ---------------------------------------------------------------------------
 
@@ -553,6 +607,46 @@ Private Sub ClearRing()
     m_ringHwnd = 0
     m_ringName = ""
 End Sub
+
+' ---------------------------------------------------------------------------
+' Toggle switches
+' ---------------------------------------------------------------------------
+
+' Click, or Space, on a Toggle switch nm (modUIKit.Toggle): flips its value
+' (<nm>_val, and so its field), redraws the track and calls the form's
+' onChange sub if the switch has one. Does nothing while the value is locked
+' or disabled, or the form is read-only (AllowEdits off, unless on a record
+' being added), like PickDate.
+Public Function ToggleSwitch(frm As Form, ByVal nm As String)
+    Dim v As Control, onChange As String
+    On Error GoTo Fail
+    Set v = frm.Controls(nm & "_val")
+    If Not v.Enabled Or v.Locked Then Exit Function
+    ' Nested, so an unbound settings form never reads NewRecord.
+    If Not frm.AllowEdits Then
+        If Not (frm.NewRecord And frm.AllowAdditions) Then Exit Function
+    End If
+    v.Value = Not CBool(Nz(v.Value, False))
+    frm.Controls(nm & "_bg").Requery            ' an unbound image recalculates
+    onChange = Nz(frm.Controls(nm).Tag, "")
+    If Len(onChange) > 0 Then CallByName frm, onChange, VbMethod
+    Exit Function
+Fail:
+    HandleError "modKitUI.ToggleSwitch", nm
+End Function
+
+' Focus moving onto (hasFocus True) or off a Toggle switch nm: shows or hides
+' its focus ring, since a transparent button draws no focus of its own, and
+' takes an input's ring off (FocusRing) like the kit's buttons do. A failure
+' is logged, not shown, so moving the focus never stops on a message.
+Public Function ToggleFocus(frm As Form, ByVal nm As String, ByVal hasFocus As Boolean)
+    On Error GoTo Fail
+    If hasFocus Then ClearRing
+    SetVisible frm.Controls(nm & "_ring"), hasFocus
+    Exit Function
+Fail:
+    LogError "modKitUI.ToggleFocus", nm
+End Function
 
 ' ---------------------------------------------------------------------------
 ' Messages

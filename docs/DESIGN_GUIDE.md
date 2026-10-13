@@ -119,11 +119,11 @@ them, and the shell (`frmMain`) last.
 | modBuildUI, modBuildPages, modBuildPages2 | `Build_<form>` procedures, one per form, grouped by area |
 | modUI | Run-time UI helpers: `NavTo`, badges/pills painting, `ShowTip`, the app's hooks (`BadgeColors`, `StatusVariant`) |
 | modUIKit (kit) | Build-time control builders (section 6) |
-| modKitUI (kit) | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `KitMsgBox`, `CheckRequired`, `SetCount`, `StyleChip` |
+| modKitUI (kit) | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSwitch`, `ToggleFocus`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `CheckRequired`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
 | modKitUtil (kit) | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `CenterOnApp`, `SetVisible`, `SetEnabled` |
 | modDarkMode (kit), modPalette (gen), modTheme (gen) | Palette engine (section 7) |
-| modPng (kit) | Draws anti-aliased PNGs for rounded pills, card corners and progress capsules |
+| modPng (kit) | Draws anti-aliased PNGs for rounded pills, card corners, progress capsules and toggle switches |
 | modWrap | GDI text measurement (`MeasureText`) and word wrap for fixed-height rows |
 | modCsv, modZip (kit / app) | CSV I/O, ZIP |
 | Domain modules | Business logic, one module per area; they enforce rules so they hold from any caller |
@@ -346,9 +346,23 @@ End Sub
     Access's own picker is off: it shows only on focus, and
     `acCmdShowDatePicker` is refused once it is off. The pair is 154px
     (`DATEFIELD_W`), so it fits a half-width field column.
+  - `SecretBox`: passwords and other sensitive values (PINs, SSNs, access codes). The
+    text shows as asterisks (input mask `Password`, which also blocks copying while it is
+    hidden), with a
+    30px outline eye button 4px to its right: an eye (E890) to show the text, an eye
+    struck through (ED1A) to hide it again (`ToggleSecret`). The form calls
+    `HideSecrets Me` in `Form_Current`, so a value shown on one record is hidden on the
+    next. Use it for every sensitive field. Masking only hides the text on screen:
+    a password box is unbound, or hashed (`HashPassword`) in `BeforeUpdate`, before it
+    is saved, and other sensitive values stay readable in tables, queries and exports.
+    Single-record forms only: a continuous form shares one mask across its rows, so
+    `SecretBox` raises error 5 when built on one.
   - `RO`: read-only text, borderless, transparent, no tab stop. Show read-only dates
     left-aligned (`TextAlign = 1`) so they line up with text values.
   - `Cbo`, `Lst`, `Chk`
+  - `Toggle nm, src, x, y, [w], [h], [onChange]`: an on/off switch for a yes/no field
+    (section 6.6). Use it for settings and flags that take effect at once; keep `Chk`
+    for a choice saved with the rest of a form.
   - `Btn ... kind`: `primary`, `outline`, `ghost`, `destructive` or `nav`, each with
     themed hover and pressed colors and `Shape = 1` for rounded corners.
   - `Link`: clickable label.
@@ -471,8 +485,9 @@ Write app-specific helpers next to the builds that use them. Examples:
   Captions sit about 18px above their input.
 - **Compact** size, for toolbars, filter rows, and actions inside cards, panels and
   table rows: buttons 28px and inputs (search boxes, filter combos) 26px to 28px, text
-  still 9pt. Use one size per row. No other heights: no 24, 26 or 30px buttons. The one
-  exception is the `DateBox` calendar button, which takes its input's 30px height.
+  still 9pt. Use one size per row. No other heights: no 24, 26 or 30px buttons. The
+  exceptions are the `DateBox` calendar and `SecretBox` eye buttons, which take their
+  input's 30px height.
 - Vertical rhythm for stacked fields: 38px.
 - Cards and KPI tiles are separated by 12px gaps.
 - **Designer spacing.** The values in this section are the default. A designer who wants a
@@ -586,6 +601,21 @@ Write app-specific helpers next to the builds that use them. Examples:
   `expr` is a field such as `"[percent_done]"` or a number; values are clamped to 0-100
   and Null shows an empty track. It is bound, so it follows the record in a continuous
   form. Give it a fixed width: the image keeps its shape, so don't anchor it to stretch.
+- **Toggle switch**: `Toggle` draws a 44 x 24px rounded track with a round knob
+  (`TogglePng`): `CLR_PRIMARY` with the knob on the right when on, `CLR_MUTED_FG`
+  with it on the left when off, the knob `CLR_SURFACE`, so the track and knob keep well
+  over 3:1 against the surface and each other in Navy and Midnight. Center the track on its row: in a
+  30px input row it sits 3px down. Access has no switch, so it is a hidden check box
+  `<nm>_val` bound to the field (the value), the track image `<nm>_bg` bound to it, and a
+  transparent button `<nm>` on top that takes clicks, the Tab stop and Space
+  (`ToggleSwitch`). A transparent button draws no focus, so a `CLR_PRIMARY` ring
+  (`<nm>_ring`, 2px wide, 2px outside the track) shows while it has the focus, and an input's
+  `FocusRing` comes off as it does for a button; leave 4px clear around the track for it. A value set in code fires no `AfterUpdate`, so pass
+  `onChange`, a Public Sub in the form's code-behind, to act on a change (for example,
+  save the record at once). A misspelled `onChange` shows error 438 on the first click.
+  Hide it with `SetVisible` on `<nm>`, and the track goes too; `SetEnabled` on `<nm>`
+  stops clicks and the Tab stop but doesn't dim the track. Use it on single forms only:
+  in a continuous form the ring shows on every row.
 - **Empty states**: a centered muted 10pt label shown in place of an empty list.
 - **Search box placeholder**: `Format = "@;""Search by ..."""`.
 - **Hierarchical trees and wrapped rows**:
