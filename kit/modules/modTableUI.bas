@@ -238,6 +238,7 @@ Public Sub LayoutTableFooter(ByVal host As Form, ByVal subName As String, ByVal 
             state("Source") = grid.RecordSource: Set state("Grid") = grid
         End If
     End If
+    state("Prefix") = prefix: state("KeyField") = keyField   ' for RestartTablePages
     grid.Filter = state("Base"): grid.FilterOn = Len(state("Base")) > 0
     Set rows = grid.Recordset.Clone
     If Not rows.EOF Then rows.MoveLast: count = rows.RecordCount: rows.MoveFirst
@@ -287,6 +288,19 @@ Failed:
     m_busy = False
     On Error GoTo 0
     Err.Raise num, source, description
+End Sub
+
+' A paginated table's sort changed (GridSort): go back to page 1 and pick
+' its rows again in the new order, since the page shown is the old order's
+' rows. Does nothing for a table without pagination or not yet laid out.
+Public Sub RestartTablePages(ByVal host As Form, ByVal subName As String)
+    Dim key As String, state As Object
+    If Not TablePaginationEnabled(host.Controls(subName)) Then Exit Sub
+    If m_pages Is Nothing Then Exit Sub
+    key = TableKey(host, subName): If Not m_pages.Exists(key) Then Exit Sub
+    Set state = m_pages(key)
+    state("Page") = 1
+    LayoutTableFooter host, subName, state("Prefix"), state("KeyField")
 End Sub
 
 Public Function MoveTablePage(ByVal host As Form, ByVal subName As String, ByVal prefix As String, ByVal keyField As String, ByVal delta As Long, Optional ByVal slot As Long = -1) As Boolean
