@@ -11,7 +11,7 @@ Option Explicit
 
 Private Sub Form_Load()
     On Error GoTo Err_Handler
-    Dim promptH As Long, inY As Long, dy As Long, oldH As Long
+    Dim promptH As Long, inY As Long, dy As Long
     Me.Caption = IIf(Len(KitInputTitle()) > 0, KitInputTitle(), APP_NAME)
     Me.txtPrompt = KitInputPrompt()
     ' The mask goes on before the starting text, so that is never shown plain.
@@ -30,16 +30,14 @@ Private Sub Form_Load()
     End If
     dy = Me.txtValue.Top - inY
     If dy > 0 Then
-        oldH = Me.WindowHeight
         If promptH > 0 Then Me.txtPrompt.Height = promptH
         Me.txtValue.Top = inY
         Me.btnOK.Top = Me.btnOK.Top - dy
         Me.btnCancel.Top = Me.btnOK.Top
         Me.Section(acDetail).Height = Me.Section(acDetail).Height - dy
         Me.InsideHeight = Me.Section(acDetail).Height
-        ' Keep it centred where AutoCenter put it.
-        Me.Move Me.WindowLeft, Me.WindowTop + (oldH - Me.WindowHeight) \ 2
     End If
+    CenterOnApp Me                  ' at its final size, over Access (modKitUtil)
 
     Me.txtValue.SetFocus
     Me.txtValue.SelStart = 0
