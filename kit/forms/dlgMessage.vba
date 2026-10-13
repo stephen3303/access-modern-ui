@@ -13,7 +13,7 @@ Private m_answers As Variant    ' what each visible button returns, btn1 first
 
 Private Sub Form_Load()
     On Error GoTo Err_Handler
-    Dim style As Long, n As Long, i As Long, btnY As Long, oldH As Long, x As Long, msgH As Long
+    Dim style As Long, n As Long, i As Long, btnY As Long, x As Long, msgH As Long
     style = KitMsgStyle()
     Me.Caption = IIf(Len(KitMsgTitle()) > 0, KitMsgTitle(), APP_NAME)
     ShowIcon style And &H70
@@ -53,16 +53,14 @@ Private Sub Form_Load()
     btnY = Me.txtMsg.Top + msgH + 300
     If btnY < Me.lblIcon.Top + Me.lblIcon.Height + 300 Then btnY = Me.lblIcon.Top + Me.lblIcon.Height + 300
     If btnY < Me.btn1.Top Then
-        oldH = Me.WindowHeight
         Me.txtMsg.Height = btnY - 300 - Me.txtMsg.Top
         For i = 1 To 3
             Me("btn" & i).Top = btnY
         Next
         Me.Section(acDetail).Height = btnY + Me.btn1.Height + 240
         Me.InsideHeight = Me.Section(acDetail).Height
-        ' Keep it centred where AutoCenter put it.
-        Me.Move Me.WindowLeft, Me.WindowTop + (oldH - Me.WindowHeight) \ 2
     End If
+    CenterOnApp Me                  ' at its final size, over Access (modKitUtil)
     Exit Sub
 Err_Handler:
     ' Whatever failed, the dialog still shows the message and an OK button.

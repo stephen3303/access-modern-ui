@@ -2,7 +2,8 @@ Option Compare Database
 Option Explicit
 
 ' Detail panel of pgList: one item, editable. The page saves a changed item
-' before it shows another; Save saves now and refreshes the list.
+' before it shows another; Save checks the required fields (item and
+' owner), saves now and refreshes the list.
 
 ' Each item opens with its access code hidden, even if the last one's was shown.
 Private Sub Form_Current()
@@ -23,6 +24,7 @@ End Sub
 
 Private Sub btnSave_Click()
     On Error GoTo Err_Handler
+    If Not CheckRequired(Me, "txtName=Item;txtOwner=Owner") Then Exit Sub
     If Me.Dirty Then Me.Dirty = False
     Me.Parent.ItemSaved Me!id
     Exit Sub

@@ -150,6 +150,7 @@ Public Sub NewForm(ByVal recSrc As String, ByVal view As Integer, ByVal w As Lon
     sink.BackStyle = 0
     sink.BorderStyle = 0
     sink.TabIndex = 0
+    sink.OnGotFocus = "=FocusRingClear()"      ' focus ring off (modKitUI)
 End Sub
 
 ' Read-only text in list rows that has no click action can't take focus, so
@@ -291,7 +292,8 @@ Public Function Lbl(ByVal nm As String, ByVal cap As String, ByVal x As Long, By
     Set Lbl = c
 End Function
 
-' Text box. src is a field name or an expression starting with "=".
+' Text box. src is a field name or an expression starting with "=". A field
+' box shows the focus ring (RingOnFocus); an expression box doesn't.
 Public Function Txt(ByVal nm As String, ByVal src As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
         Optional ByVal size As Integer = 10, Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control
     Dim c As Control
@@ -306,6 +308,7 @@ Public Function Txt(ByVal nm As String, ByVal src As String, ByVal x As Long, By
     c.LeftMargin = 60
     c.TopMargin = 30
     VCenter c, h, size
+    If Left$(src, 1) <> "=" Then RingOnFocus c   ' a calculated box takes no typing
     Set Txt = c
 End Function
 
@@ -423,6 +426,17 @@ Public Function RowBack(ByVal nm As String, ByVal x As Long, ByVal y As Long, By
     Set RowBack = c
 End Function
 
+' Focus ring: a CLR_PRIMARY border while input c has the focus, and its own
+' border back when it loses it, through the run-time FocusRing. These event
+' properties replace any the caller sets later: a form that handles c's
+' GotFocus or LostFocus itself calls FocusRing from its handler. Reports have
+' no focus.
+Private Sub RingOnFocus(c As Control)
+    If m_isReport Then Exit Sub
+    c.OnGotFocus = "=FocusRing([Form],""" & c.Name & """,True)"
+    c.OnLostFocus = "=FocusRing([Form],""" & c.Name & """,False)"
+End Sub
+
 ' Read-only text: no border, transparent, not a tab stop.
 Public Function RO(ByVal nm As String, ByVal src As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
         Optional ByVal size As Integer = 10, Optional ByVal bold As Boolean = False, Optional ByVal fore As Long = CLR_FG, _
@@ -467,6 +481,7 @@ Public Function Cbo(ByVal nm As String, ByVal src As String, ByVal rowSrc As Str
     c.SpecialEffect = 0
     c.BackColor = CLR_INPUT_BG
     VCenter c, h, 10
+    RingOnFocus c
     Set Cbo = c
 End Function
 
@@ -486,6 +501,7 @@ Public Function Lst(ByVal nm As String, ByVal rowSrc As String, ByVal x As Long,
     c.BorderColor = CLR_BORDER
     c.SpecialEffect = 0
     c.BackColor = CLR_INPUT_BG
+    c.OnGotFocus = "=FocusRingClear()"         ' focus ring off (modKitUI)
     Set Lst = c
 End Function
 
@@ -496,6 +512,7 @@ Public Function Chk(ByVal nm As String, ByVal src As String, ByVal x As Long, By
     Set c = Mk(acCheckBox, nm, x, y, 260, 260, sec, parentCtl)
     If Len(src) > 0 Then c.ControlSource = src Else c.DefaultValue = "False"
     c.SpecialEffect = 0
+    c.OnGotFocus = "=FocusRingClear()"         ' focus ring off (modKitUI)
     Set Chk = c
 End Function
 
@@ -533,6 +550,7 @@ Public Function Btn(ByVal nm As String, ByVal cap As String, ByVal x As Long, By
     c.Properties("Shape") = 1
     On Error GoTo 0
     c.OnClick = "[Event Procedure]"
+    c.OnGotFocus = "=FocusRingClear()"         ' focus ring off (modKitUI)
     Set Btn = c
 End Function
 
@@ -572,7 +590,9 @@ Public Function Rule(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal
     Set Rule = c
 End Function
 
-' Subform control showing the form srcObj.
+' Subform control showing the form srcObj. Its Enter and Exit keep the focus
+' ring right for the fields inside it (FocusRingEnter, FocusRingClear); a form
+' that handles them itself calls those from its handlers.
 Public Function SubF(ByVal nm As String, ByVal srcObj As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
         Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control
     Dim c As Control
@@ -580,6 +600,11 @@ Public Function SubF(ByVal nm As String, ByVal srcObj As String, ByVal x As Long
     c.SourceObject = srcObj
     c.BorderStyle = 0
     c.SpecialEffect = 0
+    If Not m_isReport Then
+        ' The focus ring of a field inside it (FocusRingEnter/FocusRingClear).
+        c.OnEnter = "=FocusRingEnter([Form],""" & nm & """)"
+        c.OnExit = "=FocusRingClear()"
+    End If
     Set SubF = c
 End Function
 
@@ -614,6 +639,7 @@ Public Sub BuildGrid(ByVal finalName As String, ByVal cols As Variant, ByVal w A
     F.Tag = "grid:" & w
     F.ScrollBars = 0                        ' GridScroll shows it when the rows overflow
     F.OnCurrent = "=GridScroll([Form])"
+    F.OrderByOnLoad = False                 ' a sort saved with the form would show no arrow (GridSort)
     ' A fit table's host sizes these (GridFit); anchored, they would stretch
     ' the form past the columns and stop GridFit narrowing it.
     Set c = RowBack("txtBg", 0, 0, w, h): If Not fit Then Anchor c, 2, 0
@@ -681,12 +707,18 @@ End Sub
 
 ' Column captions for a BuildGrid table whose subform sits at (x, y + px(22)).
 ' band = True draws them on a CLR_INSET strip w wide (default: the columns'
-' widths), which stretches with the window like the table. Each caption's
-' Tag holds "x|offset|width" for GridFit.
+' widths), which stretches with the window like the table. sortSf names the
+' table's subform control on the same form: then clicking a caption sorts the
+' table by that column (GridSort), and a second click reverses it. A column
+' sorts by its field, or by a fifth part "field|caption|width|options|sort
+' field" (e.g. the date behind a formatted text column; the record source must
+' return it). A column whose field is an expression ("=...") and has no sort
+' field doesn't sort. Each caption's Tag holds "x|offset|width|sort field"
+' for GridFit and GridSort.
 Public Sub GridHeaders(ByVal prefix As String, ByVal cols As Variant, ByVal x As Long, ByVal y As Long, _
                        Optional ByVal parentCtl As String = "", Optional ByVal band As Boolean = False, _
-                       Optional ByVal w As Long = 0)
-    Dim c As Control, i As Long, p() As String, cx As Long, cy As Long, cw As Long, opts As String
+                       Optional ByVal w As Long = 0, Optional ByVal sortSf As String = "")
+    Dim c As Control, i As Long, p() As String, cx As Long, cy As Long, cw As Long, opts As String, key As String
     If band Then
         If w = 0 Then
             w = px(16)
@@ -706,7 +738,13 @@ Public Sub GridHeaders(ByVal prefix As String, ByVal cols As Variant, ByVal x As
         Set c = Lbl(prefix & i, UCase$(p(1)), cx, cy, cw, px(16), 8, True, CLR_MUTED_FG, acDetail, parentCtl)
         If InStr(opts, "r") > 0 Then c.TextAlign = 3
         If InStr(opts, "c") > 0 Or InStr(opts, "p") > 0 Then c.TextAlign = 2
-        c.Tag = x & "|" & (cx - x) & "|" & cw
+        key = ""
+        If Len(sortSf) > 0 Then
+            If UBound(p) >= 4 Then key = p(4)
+            If Len(key) = 0 And Left$(p(0), 1) <> "=" Then key = p(0)
+            If Len(key) > 0 Then c.OnClick = "=GridSort([Form],""" & sortSf & """,""" & prefix & """," & i & ")"
+        End If
+        c.Tag = x & "|" & (cx - x) & "|" & cw & "|" & key
         cx = cx + px(Val(p(2)))
     Next
 End Sub
