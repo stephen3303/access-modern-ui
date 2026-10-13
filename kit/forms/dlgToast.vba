@@ -175,6 +175,14 @@ Private Sub lblMsg_Click()
     CloseToast
 End Sub
 
+Private Sub lblIcon_Click()
+    CloseToast
+End Sub
+
+Private Sub boxAccent_Click()
+    CloseToast
+End Sub
+
 ' Close the toast. Errors are logged only: the toast has no message box.
 Private Sub CloseToast()
     On Error GoTo Err_Handler

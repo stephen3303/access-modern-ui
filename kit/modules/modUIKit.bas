@@ -410,9 +410,11 @@ Public Sub BuildToast()
     End With
     Ev F, "OnTimer"
     F.Section(acDetail).OnClick = "[Event Procedure]"   ' a click closes it
-    Box "boxAccent", 0, 0, px(4), h, CLR_PRIMARY
+    Set c = Box("boxAccent", 0, 0, px(4), h, CLR_PRIMARY)
+    Ev c, "OnClick"
     Set c = Lbl("lblIcon", ChrW(&HE946), px(16), px(12), px(22), px(22), 12, False, CLR_PRIMARY)
     c.FontName = "Segoe MDL2 Assets": c.FontWeight = 400: c.TextAlign = 2
+    Ev c, "OnClick"
     Set c = Lbl("lblMsg", "Message", px(48), px(14), w - px(48) - px(16), msgH, 10, False, CLR_FG)
     Ev c, "OnClick"
     ' Edges are hairlines: a filled 1px Box paints 2px.
