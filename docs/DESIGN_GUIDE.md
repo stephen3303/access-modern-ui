@@ -338,13 +338,16 @@ End Sub
     `acCmdShowDatePicker` is refused once it is off. The pair is 154px
     (`DATEFIELD_W`), so it fits a half-width field column.
   - `SecretBox`: passwords and other sensitive values (PINs, SSNs, access codes). The
-    text shows as asterisks (input mask `Password`, which also blocks copying), with a
+    text shows as asterisks (input mask `Password`, which also blocks copying while it is
+    hidden), with a
     30px outline eye button 4px to its right: an eye (E890) to show the text, an eye
     struck through (ED1A) to hide it again (`ToggleSecret`). The form calls
     `HideSecrets Me` in `Form_Current`, so a value shown on one record is hidden on the
     next. Use it for every sensitive field. Masking only hides the text on screen:
-    passwords are still hashed (`HashPassword`) before they are saved. Single-record forms
-    only: a continuous form shares one mask across its rows, so `SecretBox` refuses one.
+    a password box is unbound, or hashed (`HashPassword`) in `BeforeUpdate`, before it
+    is saved, and other sensitive values stay readable in tables, queries and exports.
+    Single-record forms only: a continuous form shares one mask across its rows, so
+    `SecretBox` raises error 5 when built on one.
   - `RO`: read-only text, borderless, transparent, no tab stop. Show read-only dates
     left-aligned (`TextAlign = 1`) so they line up with text values.
   - `Cbo`, `Lst`, `Chk`
@@ -449,9 +452,9 @@ Write app-specific helpers next to the builds that use them. Examples:
   Captions sit about 18px above their input.
 - **Compact** size, for toolbars, filter rows, and actions inside cards, panels and
   table rows: buttons 28px and inputs (search boxes, filter combos) 26px to 28px, text
-  still 9pt. Use one size per row. No other heights: no 24, 26 or 30px buttons. The one
-  exception is the `DateBox` calendar and `SecretBox` eye buttons, which take their input's
-  30px height.
+  still 9pt. Use one size per row. No other heights: no 24, 26 or 30px buttons. The
+  exceptions are the `DateBox` calendar and `SecretBox` eye buttons, which take their
+  input's 30px height.
 - Vertical rhythm for stacked fields: 38px.
 - Cards and KPI tiles are separated by 12px gaps.
 - **Designer spacing.** The values in this section are the default. A designer who wants a

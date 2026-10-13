@@ -263,14 +263,18 @@ End Sub
 ' ---------------------------------------------------------------------------
 
 ' Click on a SecretBox's eye button: show the box nm's text if it is hidden,
-' hide it if it is shown, and put the focus back in the box so typing
-' carries on (not while the box is disabled or hidden).
+' hide it if it is shown, and put the focus back in the box with the caret
+' at the end, so typing carries on rather than replacing the value (not
+' while the box is disabled or hidden).
 Public Function ToggleSecret(frm As Form, ByVal nm As String)
     Dim c As Control
     On Error GoTo Fail
     Set c = frm.Controls(nm)
     ShowSecret frm, nm, (c.InputMask = SECRET_MASK)
-    If c.Enabled And c.Visible Then c.SetFocus
+    If c.Enabled And c.Visible Then
+        c.SetFocus
+        c.SelStart = Len(Nz(c.Text, ""))
+    End If
     Exit Function
 Fail:
     HandleError "modKitUI.ToggleSecret", nm
@@ -278,13 +282,21 @@ End Function
 
 ' Hide the text of every SecretBox on frm. Call it from the form's
 ' Form_Current, so a field shown on one record is hidden again on the next.
+' A button named eye_<x> with no box x beside it is not a SecretBox's and is
+' left alone.
 Public Sub HideSecrets(frm As Form)
     Dim c As Control
+    On Error GoTo Fail
     For Each c In frm.Controls
         If c.ControlType = acCommandButton Then
-            If Left$(c.Name, 4) = "eye_" Then ShowSecret frm, Mid$(c.Name, 5), False
+            If Left$(c.Name, 4) = "eye_" Then
+                If HasCtl(frm, Mid$(c.Name, 5)) Then ShowSecret frm, Mid$(c.Name, 5), False
+            End If
         End If
     Next
+    Exit Sub
+Fail:
+    RaiseAgain "modKitUI.HideSecrets", frm.Name
 End Sub
 
 ' Show (reveal True) or hide the text of SecretBox nm, and set its eye

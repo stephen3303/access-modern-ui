@@ -9,7 +9,7 @@ Public Function TestKit(ByVal root As String) As String
     Dim grid As Form, host As Form, c As Control, cols As Variant, i As Long
     Dim rows As DAO.Recordset, ids As Object, height As Long
     Dim text As String, fitted As String, measured As Long
-    Dim db As DAO.Database, badName As Long, badScale As Long
+    Dim db As DAO.Database, badName As Long, badScale As Long, badView As Long
     g_SrcRoot = root & "\kit": UseBuildPalette
     CurrentDb.Execute "CREATE TABLE test_rows (id LONG PRIMARY KEY, category TEXT(60), description TEXT(255))"
     For i = 1 To 23
@@ -181,5 +181,12 @@ Public Function TestKit(ByVal root As String) As String
     Check Not host.btn2.Visible And Not host.btn3.Visible, "Message dialog shows unused buttons"
     Check host.btn1.Left + host.btn1.Width = host.btn3.Left + host.btn3.Width, "Message OK button is not right-aligned"
     DoCmd.Close acForm, "dlgMessage", acSaveNo
+    ' SecretBox refuses a continuous form: one eye would show every row.
+    NewForm "", 1, px(300), px(100)
+    On Error Resume Next
+    SecretBox "secret", "", 0, 0, px(160), px(30): badView = Err.Number: Err.Clear
+    On Error GoTo 0
+    DoCmd.Close acForm, F.Name, acSaveNo
+    Check badView = 5, "SecretBox accepted a continuous form"
     TestKit = checks & " kit checks passed"
 End Function
