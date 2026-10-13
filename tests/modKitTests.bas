@@ -188,6 +188,7 @@ Public Function TestKit(ByVal root As String) As String
     SetGridColumns sf, "fit", DefaultLayout(3)
     Set grid = sf.Form
     height = grid.txtCol2.Left + grid.txtCol2.Width          ' right edge of all the columns
+    host.fit2.Tag = host.fit2.Tag & "|id"                     ' as a sortable caption's
     SetGridColumns sf, "fit", "2,0,1h"
     Set grid = sf.Form
     Check Abs(grid.txtCol0.Left + grid.txtCol0.Width - height) <= px(2), "Shown columns did not fill the table as far as all of them"
@@ -195,6 +196,8 @@ Public Function TestKit(ByVal root As String) As String
     Check Not grid.txtCol1.Visible And Not host.fit1.Visible, "Hidden column or caption still shows"
     Check Abs(host.fit2.Left - (sf.Left + grid.txtCol2.Left)) <= 15, "Caption did not follow its column"
     Check grid.txtCol0.Width > px(160), "Shown columns did not widen into the hidden one's space"
+    Check grid.txtCol1.Width <= 15, "Hidden column kept its width (can push the form past its limit)"
+    Check Right$(host.fit2.Tag, 3) = "|id", "Caption lost a later Tag part (sort field)"
     On Error Resume Next
     SetGridColumns sf, "fit", "0,1"
     Check Err.Number = 5, "Bad column layout was applied"

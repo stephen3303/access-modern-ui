@@ -61,20 +61,23 @@ Public Sub SetGridColumns(sf As Control, ByVal prefix As String, ByVal layout As
         Err.Raise 5, "modGridCols.SetGridColumns", "The layout """ & layout & """ doesn't fit the " & n & " columns of " & g.Name & "."
     End If
     ' Rewrite each column's design position (Tag "caption|left|width", which
-    ' GridFit scales) in the new order. Hidden columns keep a position at the
-    ' left edge so they never push the form wider.
+    ' GridFit scales) in the new order, keeping its design width as a fourth
+    ' part. A hidden column gets no width at the left edge: GridFit scales
+    ' hidden columns too, and at a large ratio their design width would push
+    ' the form past its 22-inch limit (error 2100).
     x = px(8)
     For k = 0 To n - 1
         Set c = g.Controls("txtCol" & order(k))
-        t = Split(c.Tag, "|")
+        t = Split(c.Tag & "|||", "|")
         w = Val(t(2))
+        If Val(t(3)) > 0 Then w = Val(t(3))
         If shown(k) Then
-            c.Tag = t(0) & "|" & x & "|" & w
+            c.Tag = SetTagParts(c.Tag, 1, x, w, w)
             SetCaption host, prefix, order(k), x, w, True
             x = x + w
         Else
-            c.Tag = t(0) & "|" & px(8) & "|" & w
-            SetCaption host, prefix, order(k), px(8), w, False
+            c.Tag = SetTagParts(c.Tag, 1, 0, 0, w)
+            SetCaption host, prefix, order(k), px(8), px(8), False     ' no width, as the column
         End If
         allW = allW + w
         SetVisible c, shown(k)
@@ -97,9 +100,21 @@ Private Sub SetCaption(host As Form, ByVal prefix As String, ByVal i As Long, By
     If Len(prefix) = 0 Then Exit Sub
     If Not CtlExists(host, prefix & i) Then Exit Sub
     Set c = host.Controls(prefix & i)
-    c.Tag = Split(c.Tag, "|")(0) & "|" & offset & "|" & (w - px(8))
+    c.Tag = SetTagParts(c.Tag, 1, offset, w - px(8))   ' later parts (a sort field) stay
     SetVisible c, visible
 End Sub
+
+' tag with its "|"-separated parts from index first on replaced by vals; the
+' other parts stay as they were.
+Private Function SetTagParts(ByVal tag As String, ByVal first As Long, ParamArray vals() As Variant) As String
+    Dim t() As String, i As Long
+    t = Split(tag, "|")
+    If UBound(t) < first + UBound(vals) Then ReDim Preserve t(first + UBound(vals))
+    For i = 0 To UBound(vals)
+        t(first + i) = CStr(vals(i))
+    Next
+    SetTagParts = Join(t, "|")
+End Function
 
 ' ---------------------------------------------------------------------------
 ' The chooser
@@ -173,7 +188,7 @@ Public Function ParseLayout(ByVal layout As String, ByVal n As Long, order() As 
         s = LCase$(Trim$(parts(k)))
         shown(k) = Right$(s, 1) <> "h"
         If Not shown(k) Then s = Left$(s, Len(s) - 1)
-        If Len(s) = 0 Or Not s Like String(Len(s), "#") Then Exit Function
+        If Len(s) = 0 Or Len(s) > 4 Or Not s Like String(Len(s), "#") Then Exit Function
         i = CLng(s)
         If i >= n Then Exit Function
         If seen(i) Then Exit Function
@@ -238,14 +253,14 @@ End Function
 Public Sub BuildColumnsDialog()
     Dim c As Control, listY As Long, listH As Long, sideX As Long, btnY As Long
     listY = px(64): listH = px(240)
-    sideX = SP_DIALOG + px(220) + px(12)
+    sideX = px(SP_DIALOG) + px(220) + px(12)
     btnY = listY + listH + px(20)
-    NewDialog "Columns", px(360), btnY + px(30) + SP_DIALOG
+    NewDialog "Columns", px(360), btnY + px(30) + px(SP_DIALOG)
     Ev F, "OnLoad"
     Set c = Lbl("lblHint", "Choose the columns this table shows and their order. Double-click a column to hide or show it.", _
-        SP_DIALOG, px(20), px(312), px(36), 9, False, CLR_MUTED_FG)
-    ' Hidden index, caption, state. 200 + 80px leaves room for the scroll bar.
-    Set c = Lst("lstCols", "", SP_DIALOG, listY, px(220), listH, 3, "0;" & px(130) & ";" & px(70))
+        px(SP_DIALOG), px(20), px(312), px(36), 9, False, CLR_MUTED_FG)
+    ' Hidden position, caption (130px) and state (70px): 20px left for the scroll bar.
+    Set c = Lst("lstCols", "", px(SP_DIALOG), listY, px(220), listH, 3, "0;" & px(130) & ";" & px(70))
     c.RowSourceType = "Value List"
     c.ColumnHeads = False
     Ev c, "AfterUpdate", "OnDblClick"
@@ -253,9 +268,9 @@ Public Sub BuildColumnsDialog()
     Btn "btnDown", "Move down", sideX, listY + px(38), px(80), px(30), "outline"
     Btn "btnToggle", "Hide", sideX, listY + px(76), px(80), px(30), "outline"
     Btn "btnReset", "Reset", sideX, listY + px(126), px(80), px(30), "ghost"
-    Set c = Btn("btnApply", "Apply", px(360) - SP_DIALOG - px(88) - px(8) - px(88), btnY, px(88), px(30), "primary")
+    Set c = Btn("btnApply", "Apply", px(360) - px(SP_DIALOG) - px(88) - px(8) - px(88), btnY, px(88), px(30), "primary")
     c.Default = True
-    Set c = Btn("btnCancel", "Cancel", px(360) - SP_DIALOG - px(88), btnY, px(88), px(30), "outline")
+    Set c = Btn("btnCancel", "Cancel", px(360) - px(SP_DIALOG) - px(88), btnY, px(88), px(30), "outline")
     c.Cancel = True
     SaveForm "dlgColumns"
 End Sub
