@@ -121,7 +121,7 @@ them, and the shell (`frmMain`) last.
 | modUIKit (kit) | Build-time control builders (section 6) |
 | modKitUI (kit) | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `KitMsgBox`, `CheckRequired`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
-| modKitUtil (kit) | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `SetVisible`, `SetEnabled` |
+| modKitUtil (kit) | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `CenterOnApp`, `SetVisible`, `SetEnabled` |
 | modDarkMode (kit), modPalette (gen), modTheme (gen) | Palette engine (section 7) |
 | modPng (kit) | Draws anti-aliased PNGs for rounded pills, card corners and progress capsules |
 | modWrap | GDI text measurement (`MeasureText`) and word wrap for fixed-height rows |
@@ -490,6 +490,10 @@ Write app-specific helpers next to the builds that use them. Examples:
     dialog set `TempVars("DialogResult") = "ok"`.
   - Other results come back in named TempVars.
   - Dialog input comes through `OpenArgs`.
+  - Every dialog's `Form_Load` ends with `CenterOnApp Me`, after anything that changes
+    its size. It centres the dialog over the Access window, on that window's monitor,
+    and pulls it back inside the monitor's work area. `AutoCenter` alone can open a
+    dialog high or on another monitor.
 - **List subforms** (continuous forms of cards or rows) call back to their host with
   `Me.Parent.<PublicProc>`.
 

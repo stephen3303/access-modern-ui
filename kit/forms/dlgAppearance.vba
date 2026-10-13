@@ -21,6 +21,7 @@ Private Sub Form_Load()
             Me("boxRow" & i).BorderColor = Th(CLR_PRIMARY)
         End If
     Next
+    CenterOnApp Me                  ' over Access, on its monitor (modKitUtil)
     Exit Sub
 Err_Handler:
     HandleError "dlgAppearance.Form_Load"

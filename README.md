@@ -39,7 +39,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 | modGridOut | `PrintGrid` and `ExportGrid`: print or export a table as the user sees it |
 | modCsv | UTF-8 text files, RFC 4180 CSV read/write, query-to-CSV export |
 | modCrypto | SHA-256 through Windows CNG, salted password hashing |
-| modKitUtil | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `SetVisible`, `SetEnabled` |
+| modKitUtil | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `CenterOnApp`, `SetVisible`, `SetEnabled` |
 
 ## Starting a new app with the kit
 
@@ -103,7 +103,7 @@ Control heights and font sizes never scale. `TabStrip` and `LayoutFilterRow` alr
 | Builder | What it does |
 |---|---|
 | `NewForm recSrc, view, w, h` | Start a form. `view` is 0 for single, 1 for continuous. Sets `ThemeForm` as its Open hook. |
-| `NewDialog caption, w, h` | Modal pop-up dialog that sizes to its design |
+| `NewDialog caption, w, h` | Modal pop-up dialog that sizes to its design. Its code-behind's `Form_Load` should end with `CenterOnApp Me` (the builder can't add it). |
 | `NewReport recSrc, w` | Start a report. Reports use the `PRINT_` colors and are never repainted. |
 | `SaveForm name [, codeName]` | Save under the final name and attach `src\forms\<name>.vba` as the code-behind |
 | `Trace s` / `BuildTrace` | Record build steps, so a failed build reports where it stopped |
