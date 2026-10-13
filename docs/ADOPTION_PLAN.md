@@ -272,6 +272,6 @@ the SPM todo list asks.
 
 | Phase | Tasks | Done |
 |---|---|---|
-| 1 Kit harvest | K1–K7 | 7 (awaiting the click-through on Stephen's machine) |
+| 1 Kit harvest | K1–K7 | 7 (demo tested in Access 2026-10-12; card corners, hover flicker and the zebra selected row still need a look on screen) |
 | 2 SABER | S1–S4 | 0 |
 | 3 SPM | P1–P5 | 0 |
