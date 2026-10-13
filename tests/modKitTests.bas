@@ -9,14 +9,15 @@ Public Function TestKit(ByVal root As String) As String
     Dim grid As Form, host As Form, c As Control, cols As Variant, i As Long
     Dim rows As DAO.Recordset, ids As Object, height As Long
     Dim text As String, fitted As String, measured As Long
-    Dim db As DAO.Database, badName As Long, badScale As Long
+    Dim db As DAO.Database, badName As Long, badScale As Long, badView As Long
     g_SrcRoot = root & "\kit": UseBuildPalette
     CurrentDb.Execute "CREATE TABLE test_rows (id LONG PRIMARY KEY, category TEXT(60), description TEXT(255))"
     For i = 1 To 23
         CurrentDb.Execute "INSERT INTO test_rows VALUES (" & i & ",'Long category','Description " & i & "')"
     Next
-    cols = Array("category|Category|160|c", "description|Description|300|t")
+    cols = Array("category|Category|160|c", "description|Description|300|ts")
     BuildGrid "subTest", cols, px(600)
+    BuildGrid "subTestName", Array("name|Name|200|s"), px(300)
     NewForm "", 0, px(200), px(60)
     Txt "ringC", "", 0, 0, px(100), px(30)
     Btn "ringSave", "Save", px(110), 0, px(80), px(30)
@@ -26,6 +27,7 @@ Public Function TestKit(ByVal root As String) As String
     GridHeaders "sortHead", cols, px(24), px(40), sortSf:="sfRows"
     SubF "sfRows", "Form.subTest", px(24), px(82), px(600), px(180)
     SubF "sfReuse", "Form.subTest", px(24), px(320), px(600), px(180)
+    SubF "sfName", "Form.subTestName", px(24), px(700), px(300), px(50)
     GridFooter "sfRows", "pager", "id"
     Lbl "filter0", "All (23)", 0, 0, px(100), px(30)
     Lbl "filter1", "Retirement (2)", 0, 0, px(100), px(30)
@@ -46,6 +48,8 @@ Public Function TestKit(ByVal root As String) As String
     c.Name = "plainTxt"                    ' takes the focus with no ring hooks of its own
     Txt "reqA", "", 0, px(660), px(80), px(30)
     Txt "reqB", "", px(100), px(660), px(80), px(30)
+    Toggle "tglTest", "", px(220), px(663), onChange:="ToggleChanged"
+    SecretBox "secret", "", px(400), px(700), px(160), px(30)     ' clear of the ring, required and toggle fields
     SaveForm "frmTest", "testHost"
     DoCmd.OpenForm "frmTest"
     Set host = Forms("frmTest"): Set grid = host.sfRows.Form
@@ -54,6 +58,13 @@ Public Function TestKit(ByVal root As String) As String
     measured = MeasureText("Exact fit", 9, 400)
     Check FitSingleLineText("Exact fit", measured) = "Exact fit", "Exact-fit text was truncated"
     Check FitSingleLineText("Text", 0) = "", "Zero-width text overflows"
+    Check IsNull(GridMark(Null, "a")), "Null search cell differs"
+    Check GridMark("a<b & c", "") = "a&lt;b &amp; c", "Unsearched cell not escaped"
+    Check GridMark("a   b", "") = "a &nbsp; b", "Cell spaces collapsed"
+    Check GridMark(" a", "") = "&nbsp;a", "Leading space collapsed"
+    Check GridMark("Pump overhaul", "pump") Like "*</font> overhaul", "Space after a match changed"
+    text = GridMark("Pump pump", "PUMP")
+    Check UBound(Split(text, "</font>")) = 2 And InStr(text, ">Pump</font> <") > 0, "Search matches not marked"
     measured = MeasureText(ChrW(&H2026), 9, 400)
     Check FitSingleLineText("Long text", measured - 1) = "", "Tiny cell emits overflowing ellipsis"
     text = "Wide WWW and narrow iii characters in a long description"
@@ -112,6 +123,17 @@ Public Function TestKit(ByVal root As String) As String
     Check Not host.pillBound.Visible And Not host.pillBound_bg.Visible, "Hidden bound pill left its image"
     SetVisible host.pillBound, True
     Check host.pillBound.Visible And host.pillBound_bg.Visible, "Shown bound pill lost its image"
+    ' SecretBox: hidden on open, the eye shows then hides it, HideSecrets hides it again.
+    Check host.secret.Width = px(126) And host.eye_secret.Left = px(530), "Secret field pair is not 160px"
+    Check host.secret.InputMask = SECRET_MASK, "Secret field opens shown"
+    ToggleSecret host, "secret"
+    Check host.secret.InputMask = "" And host.eye_secret.ControlTipText = "Hide", "Eye did not show the secret"
+    Check Screen.ActiveControl.Name = "secret", "Eye left the focus off its field"
+    ToggleSecret host, "secret"
+    Check host.secret.InputMask = SECRET_MASK And host.eye_secret.Caption = ChrW(EYE_SHOW), "Eye did not hide the secret"
+    ToggleSecret host, "secret"
+    HideSecrets host
+    Check host.secret.InputMask = SECRET_MASK And host.eye_secret.ControlTipText = "Show", "HideSecrets left the secret shown"
     grid.RecordSource = "SELECT * FROM test_rows ORDER BY id"
     ' Click-to-sort captions: ascending with an up arrow, then reversed; the arrow moves with the column.
     Check host.head1.OnClick = "" And Right$(host.head1.Tag, 1) = "|", "Unsortable caption has a sort click"
@@ -188,6 +210,27 @@ Public Function TestKit(ByVal root As String) As String
     Check TagWidth(Array("Short", "Longest category")) = PillTextWidth("Longest category"), "Widest label differs"
     Check FileExists(CStr(ColumnPillPng(CLR_PRIMARY, 240, 26, PillTextWidth("Longest category")))), "Pill image missing"
     Check FileExists(RoundedCardPng(600, 200, CLR_SURFACE, CLR_BORDER)), "Rounded card missing"
+    Check Not Nz(host.tglTest_val, False), "Unbound switch did not start off"
+    ToggleSwitch host, "tglTest"
+    Check host.tglTest_val, "Switch click did not turn it on"
+    Check InStr(Nz(host.tglTest_bg.Properties("ControlSource").Value, ""), "TogglePng(") > 0, "Switch track is not bound"
+    ToggleSwitch host, "tglTest"
+    Check Not host.tglTest_val, "Second switch click did not turn it off"
+    Check host.toggleChanges = 2, "Switch onChange did not run once per change"
+    host.tglTest_val.Locked = True
+    ToggleSwitch host, "tglTest"
+    Check Not host.tglTest_val, "Locked switch changed"
+    Check host.toggleChanges = 2, "Locked switch ran onChange"
+    host.tglTest_val.Locked = False
+    Check FileExists(CStr(TogglePng(True, CLR_PRIMARY, CLR_MUTED_FG, CLR_SURFACE, 44, 24))), "Switch image missing"
+    Check FileExists(CStr(RingPng(CLR_PRIMARY, 52, 32))), "Focus ring image missing"
+    Check Not host.tglTest_ring.Visible, "Focus ring shows without focus"
+    host.tglTest.SetFocus
+    Check host.tglTest_ring.Visible, "Focused switch shows no ring"
+    host.txtFocusSink.SetFocus
+    Check Not host.tglTest_ring.Visible, "Focus ring stayed after focus left"
+    host.ringA.SetFocus: host.tglTest.SetFocus
+    Check host.ringA.BorderColor = CLR_INPUT_BORDER, "Input kept its focus ring while the switch had the focus"
     host.ringA.SetFocus
     Check host.ringA.BorderColor = CLR_PRIMARY, "Focused input lacks its focus ring"
     host.ringB.SetFocus
@@ -217,6 +260,13 @@ Public Function TestKit(ByVal root As String) As String
     ResizeGrid grid, px(200), cols
     Check grid.ScrollBars = 3, "Narrow grid clips minimum columns instead of scrolling"
     Check grid.txtCol1.Width >= px(292), "Narrow grid discarded Description width"
+    GridHighlight host.sfRows, "desc"
+    Check InStr(Nz(grid.txtCol1, ""), ">Desc</font>") > 0, "Table search match not marked"
+    GridHighlight host.sfRows, ""
+    Check InStr(Nz(grid.txtCol1, ""), "<font") = 0, "Cleared table search left a mark"
+    host.sfName.Form.RecordSource = "SELECT id, description AS name FROM test_rows ORDER BY id"
+    GridHighlight host.sfName, "desc"
+    Check InStr(Nz(host.sfName.Form.txtCol0, ""), ">Desc</font>ription 1") > 0, "Search column named name shows the wrong value"
     host.reqA = "   "
     host.reqB = Null
     text = RequiredMissing(host, "reqA=First;reqB=Second", fitted)
@@ -234,6 +284,23 @@ Public Function TestKit(ByVal root As String) As String
     Check Not host.btn2.Visible And Not host.btn3.Visible, "Message dialog shows unused buttons"
     Check host.btn1.Left + host.btn1.Width = host.btn3.Left + host.btn3.Width, "Message OK button is not right-aligned"
     DoCmd.Close acForm, "dlgMessage", acSaveNo
+    ' SecretBox refuses a continuous form: one eye would show every row.
+    NewForm "", 1, px(300), px(100)
+    On Error Resume Next
+    SecretBox "secret", "", 0, 0, px(160), px(30): badView = Err.Number: Err.Clear
+    On Error GoTo 0
+    DoCmd.Close acForm, F.Name, acSaveNo
+    Check badView = 5, "SecretBox accepted a continuous form"
+    Check CompareVersions("1.10.0", "1.9.2") = 1, "Version parts compared as text"
+    Check CompareVersions("v1.2", "1.2.0") = 0, "Missing version part not read as 0"
+    Check CompareVersions("1.0.0", "1.0.1-beta") = -1, "Version suffix not ignored"
+    Check ReleasedVersion("") = "", "Blank release folder read a version"
+    text = CurrentProject.Path & "\version-test"          ' the run's own folder (native-smoke.ps1)
+    EnsureFolder text
+    WriteTextFile text & "\" & KIT_VERSION_FILE, vbCrLf & " 1.4.0 " & vbCrLf & "notes"
+    Check ReleasedVersion(text & "\") = "1.4.0", "Release folder version misread"
+    Kill text & "\" & KIT_VERSION_FILE: RmDir text
+    Check ReleasedVersion(text) = "", "Missing version file read a version"
     Check FederalHoliday(#10/12/2026#) = "Columbus Day", "Columbus Day 2026 missing"
     Check FederalHoliday(#5/25/2026#) = "Memorial Day", "Memorial Day 2026 missing"
     Check FederalHoliday(#11/26/2026#) = "Thanksgiving Day", "Thanksgiving 2026 missing"
