@@ -6,7 +6,8 @@ Option Explicit
 ' every color role has its own value. Every form calls ThemeForm from its Open
 ' event; for any other palette that repaints the form's colors, conditional
 ' formats and pill images through modPalette.PaletteOf. Runtime code wraps
-' palette colors in Th().
+' palette colors in Th(). On Windows 11, ThemeTitleBar also colors pop-up
+' dialogs' title bars and borders.
 '
 ' The choice is kept per Windows user (registry, HKCU\Software\VB and VBA
 ' Program Settings\<APP_NAME>\UI, value Theme = the palette key). Until a user
@@ -14,6 +15,19 @@ Option Explicit
 
 Private Const PROPS As String = "BackColor,ForeColor,BorderColor,HoverColor,PressedColor,HoverForeColor,PressedForeColor"
 Private m_pal As Long               ' 0 = not read yet, else the palette index (1 = light)
+
+' Windows 11 lets an app color a window's title bar and border (DWM). Pop-up
+' forms are real top-level windows, so dialogs can take the palette instead
+' of showing a white title bar over a dark dialog. Older Windows rejects the
+' attributes and keeps its own title bar.
+Private Declare PtrSafe Function DwmSetWindowAttribute Lib "dwmapi" ( _
+    ByVal hwnd As LongPtr, ByVal dwAttribute As Long, ByRef pvAttribute As Long, _
+    ByVal cbAttribute As Long) As Long
+
+Private Const DWMWA_USE_IMMERSIVE_DARK_MODE As Long = 20   ' light or dark caption buttons
+Private Const DWMWA_BORDER_COLOR As Long = 34
+Private Const DWMWA_CAPTION_COLOR As Long = 35
+Private Const DWMWA_TEXT_COLOR As Long = 36
 
 ' Index of the current palette. Read once per session, then cached.
 Public Function CurrentPalette() As Long
@@ -71,9 +85,15 @@ End Function
 ' page, which rebuilds every form from its light design.
 Public Sub SetPalette(ByVal i As Long)
     Dim pg As String
+    Dim frm As Form
     If i < 1 Or i > PALETTE_COUNT Or i = CurrentPalette() Then Exit Sub
     m_pal = i
     SaveSetting APP_NAME, "UI", "Theme", PaletteKey(i)
+    ' Pop-ups still open keep their contents until reopened, but their title
+    ' bars follow the new palette now (forms opened later get it in ThemeForm).
+    For Each frm In Forms
+        ThemeTitleBar frm
+    Next
     If IsFormOpen("frmMain") Then
         pg = Forms("frmMain").PageKey
         Forms("frmMain").Reopen pg
@@ -86,6 +106,7 @@ End Sub
 Public Function ThemeForm(frm As Object)
     Dim c As Control, i As Long
     On Error GoTo Fail
+    ThemeTitleBar frm                   ' every palette, light included
     If CurrentPalette() = 1 Then Exit Function
     For i = 0 To 4
         If HasSection(frm, i) Then
@@ -100,6 +121,34 @@ Public Function ThemeForm(frm As Object)
 Fail:
     LogError "modDarkMode.ThemeForm", "form " & frm.Name
 End Function
+
+' Color a pop-up form's title bar and border with the current palette: the
+' caption matches the dialog background (CLR_DIALOG), with CLR_FG text and a
+' CLR_BORDER edge. Forms inside the Access window (frmMain, pages, subforms)
+' have no title bar of their own and are skipped. Before Windows 11 the calls
+' fail with an HRESULT, which is ignored, so the title bar stays as Windows
+' draws it. Any other problem is logged, never shown.
+Public Sub ThemeTitleBar(frm As Object)
+    Dim h As LongPtr
+    On Error GoTo Fail
+    If Not frm.PopUp Then Exit Sub
+    h = frm.hwnd
+    If h = 0 Then Exit Sub
+    SetDwmLong h, DWMWA_USE_IMMERSIVE_DARK_MODE, IIf(IsDark(), 1, 0)
+    SetDwmLong h, DWMWA_CAPTION_COLOR, Th(CLR_DIALOG)
+    SetDwmLong h, DWMWA_TEXT_COLOR, Th(CLR_FG)
+    SetDwmLong h, DWMWA_BORDER_COLOR, Th(CLR_BORDER)
+    Exit Sub
+Fail:
+    LogError "modDarkMode.ThemeTitleBar", "form " & frm.Name
+End Sub
+
+' One DWM attribute holding a 4-byte value (a COLORREF, which has the same
+' layout as a VBA color, or a BOOL). The HRESULT is ignored on purpose: a
+' failure means this Windows can't do it, and the default title bar is fine.
+Private Sub SetDwmLong(ByVal h As LongPtr, ByVal attr As Long, ByVal v As Long)
+    DwmSetWindowAttribute h, attr, v, 4
+End Sub
 
 ' Forms only have the sections they were built with (detail, maybe header/footer).
 Private Function HasSection(frm As Object, ByVal i As Long) As Boolean

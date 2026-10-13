@@ -643,6 +643,12 @@ A page that lists records and shows the selected one beside the list:
      - Conditional formats.
      - Colors embedded as numbers in pill-image `ControlSource` expressions.
    - Controls tagged `darkonly` become visible in dark palettes.
+   - Pop-up forms (dialogs) also get a themed title bar and border in every palette,
+     light included: `ThemeTitleBar` sets the caption to `CLR_DIALOG`, its text to
+     `CLR_FG` and the border to `CLR_BORDER` through `DwmSetWindowAttribute`, and turns
+     on dark caption buttons in dark palettes. `SetPalette` reapplies it to pop-ups that
+     are open. Windows 10 and older reject the attributes and keep the default title
+     bar; nothing is shown or logged.
    - Code that sets a color at run time **must** wrap it: `lbl.ForeColor = Th(CLR_MUTED_FG)`.
    - The choice is saved per Windows user with `SaveSetting APP, "UI", "Theme",
      paletteKey`. With no saved choice, it follows the Windows app mode (light or dark).
