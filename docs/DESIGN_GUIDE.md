@@ -493,8 +493,8 @@ Write app-specific helpers next to the builds that use them. Examples:
   first page), call `CheckForUpdate APP_VERSION, <release folder>`.
   - The release folder is wherever users copy the app from. The release script writes
     `version.txt` there, holding the release's version (`1.2.0`) on its first line.
-  - A newer version gets one information `KitMsgBox` naming both versions and the folder.
-    The app keeps running; nothing is copied for the user.
+  - A newer version gets one information `KitMsgBox` naming both versions and the folder,
+    once per session. The app keeps running; nothing is copied for the user.
   - A blank folder or a missing file skips the check. A read failure is logged with
     `LogError` and never shown, so an offline share can't stop the app opening.
 

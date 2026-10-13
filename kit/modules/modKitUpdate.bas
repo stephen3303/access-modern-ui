@@ -7,19 +7,24 @@ Option Explicit
 ' version.txt, naming that copy's version ("1.2.0"). At startup the app calls
 ' CheckForUpdate with its own version and the folder. When the file names a
 ' newer version, the user gets one KitMsgBox saying which version and where to
-' get it. A blank folder, a missing folder or file, or a file that can't be
+' get it, once per session (reopening the main window doesn't repeat it). A blank folder, a missing folder or file, or a file that can't be
 ' read never stops the app opening: the check is skipped, and a failed read is
 ' logged (LogError) without a message.
 '
-' The app provides APP_NAME (the notice's title) and LogError (modErrors).
+' The app provides APP_NAME (named in the notice) and LogError (modErrors).
 
 Public Const KIT_VERSION_FILE As String = "version.txt"
 
+Private m_checked As Boolean      ' CheckForUpdate already ran this session
+
 ' Show the notice when the release folder's version.txt names a version newer
-' than current. True when the notice was shown.
+' than current. True when the notice was shown. Only the first call in a
+' session checks; later calls return False.
 Public Function CheckForUpdate(ByVal current As String, ByVal folder As String) As Boolean
     Dim latest As String
     On Error GoTo Fail
+    If m_checked Then Exit Function
+    m_checked = True
     latest = ReleasedVersion(folder)
     If Len(latest) = 0 Then Exit Function
     If CompareVersions(latest, current) <= 0 Then Exit Function
