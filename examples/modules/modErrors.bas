@@ -79,7 +79,7 @@ Public Sub HandleError(ByVal source As String, Optional ByVal context As String 
     Else
         msg = msg & "The details are saved in " & LogFilePath() & "."
     End If
-    MsgBox msg, vbExclamation, APP_NAME
+    KitMsgBox msg, vbExclamation, APP_NAME          ' centred over Access (modKitUI)
 End Sub
 
 ' Add context to the error being handled and pass it up to the caller. Use in

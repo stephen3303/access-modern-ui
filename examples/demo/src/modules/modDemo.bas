@@ -105,7 +105,7 @@ Public Function Notify(ByVal msg As String, Optional ByVal style As VbMsgBoxStyl
         End If
         If (style And vbYesNo) = vbYesNo Then Notify = vbYes Else Notify = vbOK
     Else
-        Notify = MsgBox(msg, style, APP_NAME)
+        Notify = KitMsgBox(msg, style, APP_NAME)    ' centred over Access (modKitUI)
     End If
 End Function
 

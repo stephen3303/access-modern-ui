@@ -3,8 +3,9 @@ Option Explicit
 
 ' Access UI kit - run-time helpers for pages built with modUIKit: tables that
 ' scale their columns (GridFit), list/detail pages (SelectFirstRow,
-' ShowDetail, ClearDetail), and tabs and filter chips with counts (SetCount,
-' StyleChip). Colors set here go through Th() so they follow the palette.
+' ShowDetail, ClearDetail), tabs and filter chips with counts (SetCount,
+' StyleChip), and messages in the kit's look (KitMsgBox). Colors set here go
+' through Th() so they follow the palette.
 
 ' Width the table's vertical scroll bar takes (twips).
 Private Const SCROLL_W As Long = 300
@@ -12,6 +13,13 @@ Private Const SCROLL_W As Long = 300
 Private Const MAX_FORM_W As Long = 31680
 ' The DateBox the date picker (dlgDatePick) is open for (PickDate).
 Private m_dateTarget As Control
+' The message the message dialog (dlgMessage) is showing (KitMsgBox), and the
+' button chosen in it.
+Private m_msgOpen As Boolean
+Private m_msgText As String
+Private m_msgStyle As Long
+Private m_msgTitle As String
+Private m_msgAnswer As Long
 
 ' ---------------------------------------------------------------------------
 ' Tables
@@ -248,6 +256,60 @@ End Function
 Public Sub SetDateTarget(ByVal v As Variant)
     If m_dateTarget Is Nothing Then Exit Sub
     m_dateTarget.Value = v
+End Sub
+
+' ---------------------------------------------------------------------------
+' Messages
+' ---------------------------------------------------------------------------
+
+' MsgBox in the kit's look: opens the message dialog (dlgMessage, built by
+' BuildMessageDialog) and waits for a button. Windows centres a MsgBox on the
+' monitor, so on a large or second screen it opens outside Access and Access
+' waits behind it; dlgMessage is centred over Access like the app's other
+' dialogs. Takes the buttons vbOKOnly, vbOKCancel, vbYesNo and vbYesNoCancel,
+' an icon (vbInformation, vbExclamation, vbQuestion, vbCritical) and
+' vbDefaultButton2/3, and returns vbOK, vbCancel, vbYes or vbNo like MsgBox.
+' Any other button set, a message while one is already showing, or a dialog
+' that can't open (not built yet) uses MsgBox itself.
+Public Function KitMsgBox(ByVal msg As String, Optional ByVal style As VbMsgBoxStyle = vbOKOnly, _
+        Optional ByVal title As String = "") As VbMsgBoxResult
+    Dim btns As Long
+    btns = style And 7
+    If m_msgOpen Then GoTo Plain
+    If Not (btns = vbOKOnly Or btns = vbOKCancel Or btns = vbYesNo Or btns = vbYesNoCancel) Then GoTo Plain
+    On Error GoTo Plain
+    m_msgText = msg
+    m_msgStyle = style
+    m_msgTitle = title
+    m_msgAnswer = 0
+    m_msgOpen = True
+    DoCmd.OpenForm "dlgMessage", WindowMode:=acDialog
+    m_msgOpen = False
+    If m_msgAnswer = 0 Then        ' closed some other way: as Esc
+        m_msgAnswer = Choose(btns + 1, vbOK, vbCancel, vbCancel, vbCancel, vbNo, vbCancel)
+    End If
+    KitMsgBox = m_msgAnswer
+    Exit Function
+Plain:
+    m_msgOpen = False
+    KitMsgBox = MsgBox(msg, style, title)
+End Function
+
+' What the open message dialog shows, and its answer (dlgMessage calls these).
+Public Function KitMsgText() As String
+    KitMsgText = m_msgText
+End Function
+
+Public Function KitMsgStyle() As Long
+    KitMsgStyle = m_msgStyle
+End Function
+
+Public Function KitMsgTitle() As String
+    KitMsgTitle = m_msgTitle
+End Function
+
+Public Sub SetKitMsgAnswer(ByVal answer As Long)
+    m_msgAnswer = answer
 End Sub
 
 ' ---------------------------------------------------------------------------

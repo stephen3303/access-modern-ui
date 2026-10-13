@@ -280,6 +280,29 @@ Public Sub BuildDatePicker()
     SaveForm "dlgDatePick"
 End Sub
 
+' The message dialog KitMsgBox opens (dlgMessage, code in forms\dlgMessage.vba):
+' an icon, the message in 10pt text wrapping across a 336px column (room for
+' 14 lines), and up to three 88px buttons along the bottom right. dlgMessage
+' sets the icon and buttons for each message, and shrinks the dialog to the
+' lines the message takes. Build it with the app's other dialogs.
+Public Sub BuildMessageDialog()
+    Dim c As Control, msgH As Long, btnY As Long, i As Long
+    msgH = 14 * CLng(10 * 20 * 1.36)                ' 14 lines of 10pt text
+    btnY = px(22) + msgH + px(20)
+    NewDialog "Message", px(420), btnY + px(30) + px(16)
+    F.CloseButton = False                           ' Esc or a button closes it, like MsgBox
+    Ev F, "OnLoad"
+    Set c = Lbl("lblIcon", ChrW(&HE946), px(20), px(20), px(32), px(32), 20, False, CLR_PRIMARY)
+    c.FontName = "Segoe MDL2 Assets": c.FontWeight = 400: c.TextAlign = 2
+    Set c = Lbl("lblMsg", "", px(64), px(22), px(336), msgH, 10, False, CLR_FG)
+    c.TopMargin = 0
+    For i = 1 To 3
+        Set c = Btn("btn" & i, "OK", px(420) - px(20) - (4 - i) * px(88) - (3 - i) * px(8), btnY, px(88), px(30), _
+            IIf(i = 1, "primary", "outline"))
+    Next
+    SaveForm "dlgMessage"
+End Sub
+
 ' Background box for a continuous-form row: paints (with conditional colors)
 ' but can never take focus. Disabled + locked keeps the normal appearance.
 Public Function RowBack(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long) As Control

@@ -119,7 +119,7 @@ them, and the shell (`frmMain`) last.
 | modBuildUI, modBuildPages, modBuildPages2 | `Build_<form>` procedures, one per form, grouped by area |
 | modUI | Run-time UI helpers: `NavTo`, badges/pills painting, `ShowTip`, the app's hooks (`BadgeColors`, `StatusVariant`) |
 | modUIKit (kit) | Build-time control builders (section 6) |
-| modKitUI (kit) | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `SetCount`, `StyleChip` |
+| modKitUI (kit) | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `KitMsgBox`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
 | modKitUtil (kit) | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `SetVisible`, `SetEnabled` |
 | modDarkMode (kit), modPalette (gen), modTheme (gen) | Palette engine (section 7) |
@@ -154,6 +154,9 @@ saved queries can read `[TempVars]![X]`. Expose it through accessor functions su
 **Silent mode.** `g_Silent` is True during the build and tests. In that mode, `Notify`
 prints to the debug window, raises on warnings and answers Yes to questions, and
 `HandleError` raises the error again, so nothing can block the invisible Access.
+Otherwise both show their message with the kit's `KitMsgBox`, never `MsgBox`: Windows
+centres a `MsgBox` on the monitor, so on a large or second screen it opens outside
+Access and Access waits behind it.
 
 ---
 
@@ -237,7 +240,7 @@ End Sub
 ```
 
 - `HandleError(source, [context], [intro])` reads `Err`, calls `LogError`, turns off the
-  hourglass, and shows a friendly `MsgBox`: "Something went wrong, so that action didn't
+  hourglass, and shows a friendly message (`KitMsgBox`): "Something went wrong, so that action didn't
   finish." plus the description, the error number and "saved in the error log as entry
   N…".
 - In `BeforeUpdate` handlers, also set `Cancel = True`.
@@ -767,7 +770,8 @@ The Appearance dialog grows by itself, because it is built from `PALETTE_COUNT`.
    `QueueNav`/`ShowPage`/`RefreshNav`, and `PageKey`/`Reopen`.
 6. For each page, write a `Build_pg<Name>` using `PageHeader`, cards, grids and buttons,
    and a `src/forms/pg<Name>.vba` where every handler uses the standard error handler.
-7. Copy the dialogs: `dlgAppearance`, `BuildDatePicker` (for date fields), and a non-modal `dlgHelp` with `help.txt` and the F1
+7. Copy the dialogs: `dlgAppearance`, `BuildMessageDialog` (for `Notify` and `HandleError`),
+   `BuildDatePicker` (for date fields), and a non-modal `dlgHelp` with `help.txt` and the F1
    `AutoKeys` macro.
 8. Write `README.md` and `DEVELOPING.md` using the structure in section 4, linking to the
    kit's README for the builder catalog.
