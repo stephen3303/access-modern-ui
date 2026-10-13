@@ -66,6 +66,10 @@ access/
   - `-UiOnly`: rebuilds forms and reports inside the existing front end.
 - Load order: `kit/modules`, then `src/modules`, then `modTheme.bas`. Each file is
   normalized to CRLF and **ASCII**, then loaded with `LoadFromText(5, ...)`.
+- Line numbers: the build numbers its copy of every module and form's code
+  (`VbaLineNumbers.ps1`, from the kit's `tools/`) so `Erl` names the failing line. Each
+  line gets its own line number in the source file. The files in git are never numbered:
+  edit the source, not the built front end. `-NoLineNumbers` builds without them.
 - It compiles everything first (`RunCommand 126`), so syntax errors stop the build before
   any work runs.
 - It calls `BuildAll(srcRoot, outDir, uiOnly, frontEndOnly)` through `Application.Run`.
@@ -257,6 +261,14 @@ Fail:
 
 `RaiseAgain` builds a call trail, innermost first. The trail is keyed to the current
 error's number and description, so a stale trail is never attached to an unrelated error.
+
+`LogError` and `RaiseAgain` add the failing line (`Erl`, from the build's line numbers)
+to the procedure name: `pgAdmin.btnSave_Click line 42` is line 42 of
+`src/forms/pgAdmin.vba`. `Erl` is per procedure, so for an error passed up by
+`RaiseAgain` each trail entry and the entry point name the line of their own call.
+Lines VBA won't take a number on (`Case`, `Else`, `ElseIf`, `Loop`, `Next`, a line
+starting with a label) are logged at the numbered line before them, e.g. a failing
+`Case 1: DoThing` at its `Select Case` line.
 
 **Small helpers** have no handler. Errors bubble to the nearest handler, so one failure
 produces one log entry.
@@ -857,7 +869,8 @@ The Appearance dialog grows by itself, because it is built from `PALETTE_COUNT`.
 
 ## 8. Starting a new app in this style (checklist)
 
-1. Copy `kit/`, `examples/build.ps1` and `tools/make_themes.py` from this repository.
+1. Copy `kit/`, `examples/build.ps1`, `tools/VbaLineNumbers.ps1` and `tools/make_themes.py`
+   from this repository.
    Set `APP_NAME` (the palette choice is saved under it in the registry).
 2. In `make_themes.py`, set the roles, `FIXED` and `PALETTES`, then run it.
 3. Write modErrors (start from `examples/modules/modErrors.bas`; only the context columns

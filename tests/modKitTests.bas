@@ -331,5 +331,6 @@ Public Function TestKit(ByVal root As String) As String
     Check CenteredStart(1700, 2300, 400, 0, 1920) = 1520, "Dialog left past the work area's right edge"
     Check CenteredStart(-300, 300, 400, 0, 1920) = 0, "Dialog left past the work area's left edge"
     Check CenteredStart(0, 1000, 1200, 0, 1000) = 0, "Oversized dialog hides its title bar"
+    Check ErrorLineSource() = "test line 8", "Error log did not record the failing line (Erl)"
     TestKit = checks & " kit checks passed"
 End Function
