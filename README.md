@@ -16,6 +16,7 @@ kit/forms/dlgMessage.vba      code-behind for the message dialog (BuildMessageDi
 kit/forms/subGrid.vba         code-behind for BuildGrid tables
 tools/make_themes.py          generates the build palette and the palette modules, checks contrast
 tools/AccessWatch.ps1         makes a build script report Visual Basic and Access dialogs instead of hanging
+tools/VbaLineNumbers.ps1      numbers the build copy of the code so the error log names the failing line
 examples/build.ps1            build script that loads the kit, then the app, then calls BuildAll
 examples/modules/             modErrors (error handler and log), Build_dlgAppearance
 examples/palette/             make_themes.py output for the 8 shipped palettes
@@ -43,7 +44,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 
 ## Starting a new app with the kit
 
-1. Copy `kit\` into the app's `access\` folder, and `examples\build.ps1` next to it. Copy `tools\make_themes.py` to `access\tools\`.
+1. Copy `kit\` into the app's `access\` folder, and `examples\build.ps1` and `tools\VbaLineNumbers.ps1` next to it. Copy `tools\make_themes.py` to `access\tools\`.
 2. In `make_themes.py`:
    - Set the color roles (`P`) and the palettes (`PALETTES`).
    - Set `FIXED` to the colors that must never change with the palette.

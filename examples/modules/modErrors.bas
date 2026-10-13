@@ -35,6 +35,12 @@ Option Explicit
 '
 ' If the back end can't be written (often the cause of the error), the entry
 ' goes to %LOCALAPPDATA%\<APP_NAME>\logs\errors.log instead.
+'
+' The build numbers the lines of its copy of every module (tools\VbaLineNumbers.ps1;
+' the source in git stays un-numbered), so Erl says which line failed. LogError
+' and RaiseAgain add it to the procedure name, e.g. "pgAdmin.btnSave_Click line 42",
+' which is line 42 of src\forms\pgAdmin.vba. A copy built without numbers logs
+' the name alone.
 
 ' Context added by RaiseAgain, innermost first. Kept with the error it belongs
 ' to, so a trail left by an error that was later ignored isn't attached to an
@@ -52,6 +58,7 @@ Private m_busy As Boolean           ' an error while logging must not log again
 Public Function LogError(ByVal source As String, Optional ByVal context As String = "") As Long
     Dim num As Long, desc As String, errSrc As String, trail As String
     num = Err.Number: desc = Err.Description: errSrc = Err.Source
+    source = SourceWithLine(source)
     If m_trailNum = num And m_trailDesc = desc Then trail = m_trail
     m_trail = "": m_trailNum = 0: m_trailDesc = ""
     If m_busy Then Exit Function
@@ -89,11 +96,22 @@ End Sub
 Public Sub RaiseAgain(ByVal source As String, Optional ByVal context As String = "")
     Dim num As Long, desc As String, errSrc As String
     num = Err.Number: desc = Err.Description: errSrc = Err.Source
+    source = SourceWithLine(source)
     If m_trailNum <> num Or m_trailDesc <> desc Then m_trail = ""
     m_trail = m_trail & IIf(Len(m_trail) > 0, vbCrLf, "") & source & IIf(Len(context) > 0, " (" & context & ")", "")
     m_trailNum = num: m_trailDesc = desc
     Err.Raise num, errSrc, desc
 End Sub
+
+' source with the line of the error being handled added (" line 42"), from Erl.
+' Erl is 0 when the failing procedure has no line numbers, and then source is
+' returned as is. Call it while the error is still current (before any On Error
+' or Resume, which clear it).
+Public Function SourceWithLine(ByVal source As String) As String
+    Dim ln As Long
+    ln = Erl
+    SourceWithLine = source & IIf(ln > 0, " line " & ln, "")
+End Function
 
 Private Function WriteLogRow(ByVal num As Long, ByVal desc As String, ByVal errSrc As String, ByVal source As String, _
                              ByVal trail As String, ByVal context As String) As Long

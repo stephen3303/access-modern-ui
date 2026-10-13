@@ -19,6 +19,9 @@ cd examples\demo
 .\build.ps1 -UiOnly    # rebuild code and forms, keep the data
 ```
 
+The code loaded into KitDemo.accdb has line numbers so the error log names the failing
+line (`-NoLineNumbers` leaves them out). Edit the files here, not the built copy.
+
 Then open `examples\demo\KitDemo.accdb`. The build stops and prints any Visual Basic or
 Access dialog it meets (a compile error, an error message) instead of hanging.
 
