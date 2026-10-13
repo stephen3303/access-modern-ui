@@ -223,6 +223,8 @@ new features in one pass.
   bars are `Progress` capsules. The Find Past Comments changes were already in SABER.
   The editable Commands and Library lists stay inline editors, not tables. `lblCompletion`
   is 15pt.
+- [ ] Checked by eye in one light and one dark palette (Team Members, Reports, Progress,
+  Grading and the History and Find Past Comments dialogs). S4 is done when this is ticked.
 
 ---
 
@@ -292,5 +294,5 @@ the SPM todo list asks.
 | Phase | Tasks | Done |
 |---|---|---|
 | 1 Kit harvest | K1–K7 | 7 (demo tested in Access 2026-10-12; card corners, hover and the zebra selected row checked by eye) |
-| 2 SABER | S1–S4 | 4 (built and smoke-tested in Access 2026-10-13; visuals still to be checked by eye) |
+| 2 SABER | S1–S4 | 3 (S1–S3 done; S4 built and smoke-tested in Access 2026-10-13, waiting on the check by eye) |
 | 3 SPM | P1–P5 | 0 |
