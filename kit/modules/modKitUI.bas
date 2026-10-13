@@ -5,8 +5,7 @@ Option Explicit
 ' scale their columns (GridFit), list/detail pages (SelectFirstRow,
 ' ShowDetail, ClearDetail), tabs and filter chips with counts (SetCount,
 ' StyleChip), focus rings on inputs (FocusRing), and messages in the kit's
-' look (KitMsgBox). Colors set here go
-' through Th() so they follow the palette.
+' look (KitMsgBox). Colors set here go through Th() so they follow the palette.
 
 ' Width the table's vertical scroll bar takes (twips).
 Private Const SCROLL_W As Long = 300
