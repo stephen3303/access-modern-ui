@@ -51,8 +51,10 @@ End Function
 ' Try first; only on 2165 move the focus away and try again. When nothing else
 ' on the form can take the focus, disabling c drops it (Access allows that),
 ' then c is hidden and its Enabled setting put back.
+' A rounded pill's image (<name>_bg) goes with it, see PillImageVisible.
 Public Sub SetVisible(c As Control, ByVal v As Boolean)
     Dim wasEnabled As Boolean
+    PillImageVisible c, v
     If c.Visible = v Then Exit Sub
     On Error GoTo Focused
     c.Visible = v
@@ -69,6 +71,26 @@ Park:
         c.Enabled = False
         c.Visible = v
         c.Enabled = wasEnabled
+    End If
+End Sub
+
+' The pill image <name>_bg behind c (RoundCF, PillLabel), if c has one, follows
+' c: hiding c hides it, so a card that is closed or cleared leaves no empty
+' pill behind. Showing c shows a bound image again (its ControlSource picks
+' the color, or none); a painted image stays as the app's paint left it,
+' since only a fresh paint knows its color.
+Private Sub PillImageVisible(c As Control, ByVal v As Boolean)
+    Dim im As Control, src As String
+    On Error Resume Next
+    Set im = OwnerForm(c).Controls(c.Name & "_bg")
+    ' Read through Properties: im.ControlSource raises 438 on an image control.
+    src = Nz(im.Properties("ControlSource").Value, "")
+    On Error GoTo 0
+    If im Is Nothing Then Exit Sub
+    If Not v Then
+        im.Visible = False
+    ElseIf Len(src) > 0 Then
+        im.Visible = True
     End If
 End Sub
 

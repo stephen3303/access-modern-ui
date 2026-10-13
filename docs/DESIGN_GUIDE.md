@@ -501,6 +501,9 @@ Write app-specific helpers next to the builds that use them. Examples:
     `ControlSource = "=PillPng(Switch(cond1,color1,...),w,h)"` built from the control's
     conditional formats. Call it **last**, because `CF` makes the control opaque again.
   - Pills painted in code: `PaintBadge` or `PillBack lbl, color`.
+  - Hide a pill with `SetVisible`, never `.Visible = False`: `SetVisible` hides its
+    `_bg` image too, so closing or clearing a card leaves no empty pill behind.
+    Showing it again restores a bound image; repaint a painted pill to show its image.
   - Badge variants (shadcn): `success`, `warning`, `info`, `destructive`, `default`,
     `outline`, `secondary`. `BadgeColors(variant)` returns `Array(back, fore)`.
 - **Cards**: `Card` draws a `CLR_SURFACE` box with a 1px `CLR_BORDER` border, a 10pt 600
