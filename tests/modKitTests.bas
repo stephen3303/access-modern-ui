@@ -106,10 +106,10 @@ Public Function TestKit(ByVal root As String) As String
     Check host.head1.OnClick = "" And Right$(host.head1.Tag, 1) = "|", "Unsortable caption has a sort click"
     Check host.sortHead1.OnClick = "=GridSort([Form],""sfRows"",""sortHead"",1)", "Sortable caption has no sort click"
     GridSort host, "sfRows", "sortHead", 1
-    Check grid.OrderByOn And grid.OrderBy Like "*description]", "First caption click did not sort ascending"
+    Check grid.OrderByOn And grid.OrderBy Like "*description], [[]id]", "First caption click did not sort ascending"
     Check host.sortHead1.Caption = "DESCRIPTION " & ChrW(&H25B2), "Ascending caption lacks its arrow"
     GridSort host, "sfRows", "sortHead", 1
-    Check grid.OrderBy Like "*description] DESC", "Second caption click did not reverse the sort"
+    Check grid.OrderBy Like "*description] DESC, [[]id]", "Second caption click did not reverse the sort"
     Check host.sortHead1.Caption = "DESCRIPTION " & ChrW(&H25BC), "Descending caption lacks its arrow"
     With grid.RecordsetClone
         .MoveFirst

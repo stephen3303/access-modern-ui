@@ -584,6 +584,7 @@ Public Sub BuildGrid(ByVal finalName As String, ByVal cols As Variant, ByVal w A
     F.Tag = "grid:" & w
     F.ScrollBars = 0                        ' GridScroll shows it when the rows overflow
     F.OnCurrent = "=GridScroll([Form])"
+    F.OrderByOnLoad = False                 ' a sort saved with the form would show no arrow (GridSort)
     ' A fit table's host sizes these (GridFit); anchored, they would stretch
     ' the form past the columns and stop GridFit narrowing it.
     Set c = RowBack("txtBg", 0, 0, w, h): If Not fit Then Anchor c, 2, 0
@@ -649,7 +650,7 @@ Private Sub PillCol(c As Control, ByVal field As String)
     RoundCF c, first
 End Sub
 
- Column captions for a BuildGrid table whose subform sits at (x, y + px(22)).
+' Column captions for a BuildGrid table whose subform sits at (x, y + px(22)).
 ' band = True draws them on a CLR_INSET strip w wide (default: the columns'
 ' widths), which stretches with the window like the table. sortSf names the
 ' table's subform control on the same form: then clicking a caption sorts the
