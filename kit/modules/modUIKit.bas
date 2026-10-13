@@ -756,8 +756,15 @@ Private Sub PillCol(c As Control, ByVal field As String)
 End Sub
 
 ' Column captions for a BuildGrid table whose subform sits at (x, y + px(22)).
-' band = True draws them on a CLR_INSET strip w wide (default: the columns'
-' widths), which stretches with the window like the table. sortSf names the
+' Each caption is as wide as its column's cells, so a right-aligned or
+' centred caption lines up with them. w is the table's width: given, the last
+' caption reaches the table's right edge and stretches with the window, like
+' the last column; fit = True (a table built with fit:=True, which GridFit
+' scales) keeps it at its column's width instead. Without w the last caption
+' is its column's width (a left-aligned one at least 200px, room for a long
+' caption). band = True draws the captions on a CLR_INSET strip w
+' wide (default: the columns' widths), which stretches with the window like
+' the table. sortSf names the
 ' table's subform control on the same form: then clicking a caption sorts the
 ' table by that column (GridSort), and a second click reverses it. A column
 ' sorts by its field, or by a fifth part "field|caption|width|options|sort
@@ -767,8 +774,13 @@ End Sub
 ' for GridFit and GridSort.
 Public Sub GridHeaders(ByVal prefix As String, ByVal cols As Variant, ByVal x As Long, ByVal y As Long, _
                        Optional ByVal parentCtl As String = "", Optional ByVal band As Boolean = False, _
-                       Optional ByVal w As Long = 0, Optional ByVal sortSf As String = "")
+                       Optional ByVal w As Long = 0, Optional ByVal sortSf As String = "", _
+                       Optional ByVal fit As Boolean = False)
     Dim c As Control, i As Long, p() As String, cx As Long, cy As Long, cw As Long, opts As String, key As String
+    Dim fill As Boolean
+    ' The last column's cells stretch to the table's right edge (BuildGrid),
+    ' unless the table is fit; only a given w says where that edge is.
+    fill = w > 0 And Not fit
     If band Then
         If w = 0 Then
             w = px(16)
@@ -784,8 +796,20 @@ Public Sub GridHeaders(ByVal prefix As String, ByVal cols As Variant, ByVal x As
         p = Split(cols(i), "|")
         opts = ""
         If UBound(p) >= 3 Then opts = p(3)
-        cw = IIf(i = UBound(cols), px(200), px(Val(p(2))) - px(8))
+        ' As wide as the column's cells: BuildGrid's cell is its column less
+        ' 8px, and a filling last column ends 8px inside the table.
+        cw = px(Val(p(2))) - px(8)
+        If i = UBound(cols) Then
+            If fill Then
+                cw = x + w - cx - px(16)
+            ElseIf Not fit And InStr(opts, "r") = 0 And InStr(opts, "c") = 0 And InStr(opts, "p") = 0 Then
+                ' Left-aligned, so the width doesn't move the text: room for a
+                ' caption longer than the column, as before w was given.
+                If cw < px(200) Then cw = px(200)
+            End If
+        End If
         Set c = Lbl(prefix & i, UCase$(p(1)), cx, cy, cw, px(16), 8, True, CLR_MUTED_FG, acDetail, parentCtl)
+        If i = UBound(cols) And fill Then Anchor c, 2, 0
         If InStr(opts, "r") > 0 Then c.TextAlign = 3
         If InStr(opts, "c") > 0 Or InStr(opts, "p") > 0 Then c.TextAlign = 2
         key = ""

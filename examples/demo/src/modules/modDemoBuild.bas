@@ -222,7 +222,7 @@ Private Sub Build_pgCards()
 
     y = px(250): h = PAGE_H - y - px(16)
     Card "Items", "Items in a rounded card", CX, y, CW(), h, , 2, 2
-    GridHeaders "hdrItems", CardCols(), CX + px(16), y + px(40)
+    GridHeaders "hdrItems", CardCols(), CX + px(16), y + px(40), w:=CW() - px(32)
     Set c = SubF("sfItems", "subGridCards", CX + px(16), y + px(62), CW() - px(32), h - px(78)): Anchor c, 2, 2
     SaveForm "pgCards"
 End Sub
@@ -244,9 +244,9 @@ Private Sub Build_pgTables()
     Set c = Cbo("cboCategory", "", "(All categories);Engineering;Weapons;Supply;Navigation;Medical", x + px(240), y, px(170), px(28))
     Ev c, "AfterUpdate"
     y = px(170)
-    GridHeaders "hdrOpt", OptionCols(), CX, y, "", True, CW(), "sfOptions"
+    GridHeaders "hdrOpt", OptionCols(), CX, y, "", True, CW(), "sfOptions", True
     Set c = SubF("sfOptions", "subGridOptions", CX, y + px(22), CW(), PAGE_H - y - px(38)): Anchor c, 2, 2
-    GridHeaders "hdrPlain", PlainCols(), CX, y, sortSf:="sfPlain"
+    GridHeaders "hdrPlain", PlainCols(), CX, y, w:=CW(), sortSf:="sfPlain"
     Set c = SubF("sfPlain", "subGridPlain", CX, y + px(22), CW(), PAGE_H - y - px(38)): Anchor c, 2, 2
     c.Visible = False
     Set c = Lbl("lblEmpty", "No items match.", CX, y + px(60), CW(), px(20), 10, False, CLR_MUTED_FG)
@@ -270,7 +270,7 @@ Private Sub Build_pgList()
     SearchBox x + px(10), y, px(220)
     y = px(124): h = PAGE_H - y - px(16)
     Card "List", "Items", CX, y, lw, h, , 2, 2
-    GridHeaders "hdrList", ListCols(), CX + px(16), y + px(40), sortSf:="sfList"
+    GridHeaders "hdrList", ListCols(), CX + px(16), y + px(40), w:=ListW() - px(32), sortSf:="sfList"
     Set c = SubF("sfList", "subGridList", CX + px(16), y + px(62), lw - px(32), h - px(78)): Anchor c, 2, 2
     Set c = Lbl("lblEmpty", "No items match.", CX + px(16), y + px(100), lw - px(32), px(20), 10, False, CLR_MUTED_FG)
     c.TextAlign = 2: c.Visible = False: Anchor c, 2, 0
