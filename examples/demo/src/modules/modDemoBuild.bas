@@ -275,7 +275,7 @@ End Sub
 Private Sub Build_frmMain()
     Dim c As Control, i As Long, pages As Variant, y As Long
     NewForm "", 0, px(200) + PAGE_W, PAGE_H
-    Ev F, "OnLoad", "OnTimer"
+    Ev F, "OnLoad", "OnTimer", "OnResize"
     F.Caption = APP_NAME
     Set c = Box("boxSide", 0, 0, px(200), PAGE_H, CLR_SIDEBAR): Anchor c, 0, 2
     Lbl "lblBrand", APP_NAME, px(20), px(20), px(160), px(26), 13, True, CLR_WHITE

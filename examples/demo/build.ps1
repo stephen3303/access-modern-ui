@@ -15,7 +15,7 @@ $repo = Split-Path -Parent (Split-Path -Parent $demo)
 $fe = Join-Path $demo 'KitDemo.accdb'
 
 # SaveForm attaches <srcRoot>\forms\<name>.vba, so stage the demo's forms and
-# the kit's forms (subGrid, dlgAppearance) in one folder.
+# the kit's forms (subGrid, dlgAppearance, dlgDatePick) in one folder.
 $stage = Join-Path $env:TEMP 'KitDemoSrc'
 Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force (Join-Path $stage 'forms') | Out-Null

@@ -15,6 +15,10 @@ Private m_trace As String
 Public Const REPORT_W As Long = 10800
 ' Corner radius of rounded cards (px).
 Public Const CARD_RADIUS As Long = 12
+' DateBox: the text box (120 px, fits "dd mmm yyyy" at 10pt) and the whole
+' field with its 30px calendar button 4px to the right (154 px).
+Public Const DATEBOX_W As Long = 1800
+Public Const DATEFIELD_W As Long = 2310
 ' Badge variants a status pill can take (BadgeColors).
 Private Const BADGE_VARIANTS As String = "success,warning,info,destructive,default,outline,secondary"
 
@@ -225,6 +229,57 @@ Public Function Txt(ByVal nm As String, ByVal src As String, ByVal x As Long, By
     Set Txt = c
 End Function
 
+' Date entry: a DATEBOX_W text box nm bound to src (dd mmm yyyy, left-aligned
+' like text, Access's own picker icon off) and a calendar button cal_<nm>
+' 4px to its right, h tall like the box, that opens the kit's date picker for
+' it (PickDate, dlgDatePick: build it with BuildDatePicker). The pair takes
+' DATEFIELD_W. Returns the text box.
+Public Function DateBox(ByVal nm As String, ByVal src As String, ByVal x As Long, ByVal y As Long, ByVal h As Long, _
+        Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control
+    Dim c As Control, b As Control
+    Set c = Txt(nm, src, x, y, DATEBOX_W, h, 10, sec, parentCtl)
+    c.Format = "dd mmm yyyy"
+    c.TextAlign = 1
+    c.ShowDatePicker = 0
+    Set b = Btn("cal_" & nm, ChrW(&HE787), x + DATEBOX_W + px(4), y, px(30), h, "outline", sec, parentCtl)
+    b.FontName = "Segoe MDL2 Assets"
+    b.FontSize = 10
+    b.FontWeight = 400
+    b.TabStop = False
+    b.ControlTipText = "Choose a date"
+    b.OnClick = "=PickDate([Form],""" & nm & """)"
+    Set DateBox = c
+End Function
+
+' The date picker a DateBox's calendar button opens (dlgDatePick, code in
+' forms\dlgDatePick.vba): previous and next month arrows around the month's
+' name, the weekday initials, six weeks of day cells (34 x 30px on a 34 x 32
+' grid), and Today, Clear and Cancel. Build it with the app's other dialogs.
+Public Sub BuildDatePicker()
+    Dim c As Control, i As Long
+    NewDialog "Choose a date", px(270), px(316)
+    Ev F, "OnLoad"
+    Set c = Link("lnkPrev", ChrW(&HE76B), px(16), px(12), px(28), px(28), "=MoveMonth(-1)", 10, CLR_FG)
+    c.FontName = "Segoe MDL2 Assets": c.TextAlign = 2: c.ControlTipText = "Previous month"
+    Set c = Lbl("lblMonth", "Month", px(44), px(12), px(182), px(28), 11, True)
+    c.TextAlign = 2
+    Set c = Link("lnkNext", ChrW(&HE76C), px(226), px(12), px(28), px(28), "=MoveMonth(1)", 10, CLR_FG)
+    c.FontName = "Segoe MDL2 Assets": c.TextAlign = 2: c.ControlTipText = "Next month"
+    For i = 0 To 6
+        Set c = Lbl("wd" & i, Mid$("SuMoTuWeThFrSa", i * 2 + 1, 2), px(16) + i * px(34), px(48), px(34), px(18), 8, True, CLR_MUTED_FG)
+        c.TextAlign = 2
+    Next
+    For i = 0 To 41
+        Set c = Link("d" & i, "1", px(16) + (i Mod 7) * px(34), px(70) + (i \ 7) * px(32), px(34), px(30), _
+            "=PickDay(" & i & ")", 10, CLR_FG)
+        c.TextAlign = 2
+    Next
+    Link "lnkToday", "Today", px(16), px(273), px(56), px(24), "=PickToday()", 9
+    Link "lnkClear", "Clear", px(76), px(273), px(56), px(24), "=PickClear()", 9
+    Set c = Btn("btnCancel", "Cancel", px(164), px(270), px(90), px(30), "outline"): c.Cancel = True
+    SaveForm "dlgDatePick"
+End Sub
+
 ' Background box for a continuous-form row: paints (with conditional colors)
 ' but can never take focus. Disabled + locked keeps the normal appearance.
 Public Function RowBack(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long) As Control
@@ -372,6 +427,20 @@ Public Function Box(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal 
     Set Box = c
 End Function
 
+' A 1px rule (hairline line control) from (x, y), w long and flat (h = 0),
+' or h long and upright (w = 0), in color. Use it, not a 1px filled Box, for
+' dividers and edges: Access paints a filled 15-twip rectangle 2 device
+' pixels thick, a hairline always 1.
+Public Function Rule(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
+        ByVal color As Long, Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control
+    Dim c As Control
+    Set c = Mk(acLine, nm, x, y, w, h, sec, parentCtl)
+    c.BorderStyle = 1
+    c.BorderWidth = 0
+    c.BorderColor = color
+    Set Rule = c
+End Function
+
 ' Subform control showing the form srcObj.
 Public Function SubF(ByVal nm As String, ByVal srcObj As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
         Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control
@@ -391,9 +460,11 @@ End Function
 ' read-only columns with row lines and a highlighted selected row, in place
 ' of a list box. cols holds one "field|caption|width px|options" per column;
 ' options: "r" right-aligned, "c" centered, "b" bold, "m" muted, "p" a
-' rounded status pill colored by the app's StatusVariant(value). The last
+' rounded status pill colored by the app's StatusVariant(value), "w" wraps
+' onto rowLines lines (rather than cutting text off mid-word; text longer
+' than that stops at the end of the last line). The last
 ' column takes the rest of the width (and stretches with the form); with
-' rowLines > 1 it wraps onto that many lines. back is the color of what the
+' rowLines > 1 it always wraps. back is the color of what the
 ' table sits on. zebra fills every other row with CLR_ROW2. rowPx sets the
 ' row height (default: from rowLines). fit = True keeps the last column at
 ' its own width, for tables the host scales with GridFit. The record source
@@ -404,12 +475,14 @@ Public Sub BuildGrid(ByVal finalName As String, ByVal cols As Variant, ByVal w A
                      Optional ByVal back As Long = CLR_SURFACE, Optional ByVal zebra As Boolean = False, _
                      Optional ByVal rowPx As Long = 0, Optional ByVal fit As Boolean = False)
     Dim c As Control, i As Long, p() As String, x As Long, cw As Long, h As Long, last As Boolean, ty As Long, th As Long
-    Dim opts As String
+    Dim opts As String, wrap As Boolean
     h = IIf(rowPx > 0, px(rowPx), px(12) + rowLines * px(18))
     NewForm "", 1, w, h
     F.Section(acDetail).BackColor = back
     F.Section(acDetail).AlternateBackColor = IIf(zebra, CLR_ROW2, back)
     F.Tag = "grid:" & w
+    F.ScrollBars = 0                        ' GridScroll shows it when the rows overflow
+    F.OnCurrent = "=GridScroll([Form])"
     ' A fit table's host sizes these (GridFit); anchored, they would stretch
     ' the form past the columns and stop GridFit narrowing it.
     Set c = RowBack("txtBg", 0, 0, w, h): If Not fit Then Anchor c, 2, 0
@@ -427,14 +500,20 @@ Public Sub BuildGrid(ByVal finalName As String, ByVal cols As Variant, ByVal w A
         last = (i = UBound(cols))
         cw = IIf(last And Not fit, w - x - px(8), px(Val(p(2))))
         If InStr(opts, "p") > 0 Then
-            Set c = RO("txtCol" & i, p(0), x, (h - px(20)) \ 2, cw - px(8), px(20), 8, True, CLR_FG)
+            ' A pill fills its cell, so in the last column it stops 8px further
+            ' in, clear of the table's scrollbar.
+            Set c = RO("txtCol" & i, p(0), x, (h - px(20)) \ 2, cw - px(8) - IIf(last And Not fit, px(8), 0), px(20), 8, True, CLR_FG)
             c.TextAlign = 2
         Else
-            ty = IIf(last And rowLines > 1, px(6), (h - px(18)) \ 2)
-            th = IIf(last And rowLines > 1, h - px(12), px(18))
+            wrap = rowLines > 1 And (last Or InStr(opts, "w") > 0)
+            ty = IIf(wrap, px(6), (h - px(18)) \ 2)
+            ' A wrapped cell is exactly rowLines lines of 9pt text (VCenter's
+            ' line height) plus 2px for descenders, so longer text stops at a
+            ' line's end instead of showing the top of the next line.
+            th = IIf(wrap, rowLines * CLng(9 * 20 * 1.36) + px(2), px(18))
             Set c = RO("txtCol" & i, p(0), x, ty, cw - px(8), th, 9, InStr(opts, "b") > 0, _
                 IIf(InStr(opts, "m") > 0, CLR_MUTED_FG, CLR_FG))
-            If last And rowLines > 1 Then c.TopMargin = 0
+            If wrap Then c.TopMargin = 0
             If InStr(opts, "r") > 0 Then c.TextAlign = 3
             If InStr(opts, "c") > 0 Then c.TextAlign = 2
         End If
@@ -446,7 +525,7 @@ Public Sub BuildGrid(ByVal finalName As String, ByVal cols As Variant, ByVal w A
         If InStr(opts, "p") > 0 Then PillCol c, p(0)
         x = x + cw
     Next
-    Set c = Box("boxRowLine", 0, h - px(1), w, px(1), CLR_BORDER): If Not fit Then Anchor c, 2, 0
+    Set c = Rule("boxRowLine", 0, h - px(1), w, 0, CLR_BORDER): If Not fit Then Anchor c, 2, 0
     SaveForm finalName, "subGrid"
 End Sub
 
@@ -660,9 +739,23 @@ Private Function PillImage(c As Control) As Control
 End Function
 
 ' Blue left accent bar used beside section titles in the dark theme.
-Public Sub AccentBar(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal h As Long, Optional ByVal parentCtl As String = "")
-    DarkOnly Box(nm, x, y, px(3), h, CLR_PRIMARY, -1, acDetail, parentCtl)
-End Sub
+Public Function AccentBar(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal h As Long, _
+        Optional ByVal parentCtl As String = "") As Control
+    Dim c As Control
+    Set c = Box(nm, x, y, px(3), h, CLR_PRIMARY, -1, acDetail, parentCtl)
+    DarkOnly c
+    Set AccentBar = c
+End Function
+
+' AccentBar beside a title label whose top is at labelTop, in size-pt text:
+' it spans the text itself (0.3 to 1.1 of the font's pixel height below the
+' label's top, cap tops to baseline), not the label or a subtitle under it.
+Public Function TitleBar(ByVal nm As String, ByVal x As Long, ByVal labelTop As Long, ByVal size As Integer, _
+        Optional ByVal parentCtl As String = "") As Control
+    Dim fpx As Long
+    fpx = (size * 4 + 1) \ 3                  ' points to pixels at 96 dpi
+    Set TitleBar = AccentBar(nm, x, labelTop + px((fpx * 3) \ 10), px((fpx * 8) \ 10), parentCtl)
+End Function
 
 ' Hidden in light palettes; ThemeForm shows it in dark ones.
 Public Sub DarkOnly(c As Control)
@@ -692,19 +785,35 @@ End Sub
 ' Card: a CLR_SURFACE panel with a 1px CLR_BORDER border and rounded corners,
 ' with a 10pt title and a dark-only accent bar beside it (title "" draws
 ' neither). Access only draws square corners, so each corner is a small image
-' (box<nm>_c1 to _c4) showing CardPng over the square box; ThemeForm repaints
-' it with the palette. back is the color the card sits on. hAnchor / vAnchor
-' anchor the card (see Anchor) and the corners follow. square = True leaves
-' the corners square, for a card where a subform or another control that
-' repaints often would cover a corner (images under them flicker).
-' Controls: box<nm>, box<nm>_c1..4, bar<nm>, lbl<nm>Hdr.
+' (box<nm>_c1 to _c4) showing CardPng; ThemeForm repaints it with the
+' palette. The fill (box<nm>) has no border of its own: Access paints a
+' rectangle's right and bottom border a pixel past its corner images, which
+' showed as a thin square line along those edges. Instead the four straight
+' edges are 1px rules (box<nm>_t, _b, _l, _r) that stop at the corner images.
+' back is the color the card sits on. hAnchor / vAnchor anchor the card (see
+' Anchor) and the corners and edges follow. square = True leaves the corners
+' square (and keeps the box's own border), for a card where a subform or
+' another control that repaints often would cover a corner (images under
+' them flicker).
+' Controls: box<nm>, box<nm>_c1..4, box<nm>_t/_b/_l/_r, bar<nm>, lbl<nm>Hdr.
 Public Sub Card(ByVal nm As String, ByVal title As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
         Optional ByVal parentCtl As String = "", Optional ByVal hAnchor As Integer = 0, Optional ByVal vAnchor As Integer = 0, _
         Optional ByVal back As Long = CLR_BG, Optional ByVal square As Boolean = False)
     Dim c As Control, k As Long, r As Long, farX As Boolean, farY As Boolean
-    Set c = Box("box" & nm, x, y, w, h, CLR_SURFACE, CLR_BORDER, acDetail, parentCtl): Anchor c, hAnchor, vAnchor
-    If Not square Then
+    If square Then
+        Set c = Box("box" & nm, x, y, w, h, CLR_SURFACE, CLR_BORDER, acDetail, parentCtl): Anchor c, hAnchor, vAnchor
+    Else
         r = px(CARD_RADIUS)
+        ' The fill stops a pixel short on the right and bottom, inside the edges.
+        Set c = Box("box" & nm, x, y, w - px(1), h - px(1), CLR_SURFACE, -1, acDetail, parentCtl): Anchor c, hAnchor, vAnchor
+        Set c = Rule("box" & nm & "_t", x + r, y, w - 2 * r, 0, CLR_BORDER, acDetail, parentCtl)
+        Anchor c, hAnchor, EdgeAnchor(vAnchor, False)
+        Set c = Rule("box" & nm & "_b", x + r, y + h - px(1), w - 2 * r, 0, CLR_BORDER, acDetail, parentCtl)
+        Anchor c, hAnchor, EdgeAnchor(vAnchor, True)
+        Set c = Rule("box" & nm & "_l", x, y + r, 0, h - 2 * r, CLR_BORDER, acDetail, parentCtl)
+        Anchor c, EdgeAnchor(hAnchor, False), vAnchor
+        Set c = Rule("box" & nm & "_r", x + w - px(1), y + r, 0, h - 2 * r, CLR_BORDER, acDetail, parentCtl)
+        Anchor c, EdgeAnchor(hAnchor, True), vAnchor
         For k = 1 To 4
             farX = (k = 2 Or k = 3)
             farY = (k >= 3)
@@ -715,8 +824,7 @@ Public Sub Card(ByVal nm As String, ByVal title As String, ByVal x As Long, ByVa
         Next
     End If
     If Len(title) > 0 Then
-        Set c = Box("bar" & nm, x + px(8), y + px(10), px(3), px(20), CLR_PRIMARY, -1, acDetail, parentCtl)
-        DarkOnly c
+        Set c = TitleBar("bar" & nm, x + px(8), y + px(10), 10, parentCtl)
         Anchor c, IIf(hAnchor = 1, 1, 0), IIf(vAnchor = 1, 1, 0)
         Set c = Lbl("lbl" & nm & "Hdr", title, x + px(14), y + px(10), w - px(28), px(20), 10, True, CLR_FG, acDetail, parentCtl)
         Anchor c, hAnchor, IIf(vAnchor = 1, 1, 0)
@@ -748,7 +856,7 @@ End Function
 ' tip: explanation shown by a "?" beside the title (TitleTip). lblSubtitle is
 ' filled at run time by pages that show context under the title.
 Public Sub PageHeader(ByVal title As String, ByVal tip As String, Optional ByVal x As Long = 480)
-    AccentBar "barTitle", x - px(14), px(24), px(48)
+    TitleBar "barTitle", x - px(14), px(22), 15
     Lbl "lblTitle", title, x, px(22), px(560), px(30), 15, True
     Lbl "lblSubtitle", "", x, px(52), px(700), px(20), 9, False, CLR_MUTED_FG
     If Len(tip) > 0 Then TitleTip "tipTitle", tip, Replace(title, "&&", "&"), x, px(22), px(30), 15, ""
@@ -815,7 +923,7 @@ Public Sub TabStrip(ByVal x As Long, ByVal y As Long, ByVal totalW As Long, ByVa
         Box "ul_" & k, x, y + px(28), w, px(2), CLR_PRIMARY
         x = x + w + px(4)
     Next
-    Set c = Box("boxTabLine", x0, y + px(30), totalW, px(1), CLR_BORDER)
+    Set c = Rule("boxTabLine", x0, y + px(30), totalW, 0, CLR_BORDER)
     Anchor c, 2, 0
 End Sub
 

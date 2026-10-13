@@ -26,6 +26,7 @@ End Sub
 Private Sub Form_Resize()
     On Error GoTo Err_Handler
     GridFit Me.sfOptions, "hdrOpt"
+    GridScrollAll Me
     Exit Sub
 Err_Handler:
     HandleError "pgTables.Form_Resize"

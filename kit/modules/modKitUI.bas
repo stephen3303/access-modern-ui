@@ -10,6 +10,8 @@ Option Explicit
 Private Const SCROLL_W As Long = 300
 ' Widest a form can be: 22 inches (twips).
 Private Const MAX_FORM_W As Long = 31680
+' The DateBox the date picker (dlgDatePick) is open for (PickDate).
+Private m_dateTarget As Control
 
 ' ---------------------------------------------------------------------------
 ' Tables
@@ -100,6 +102,52 @@ Private Function HasCtl(f As Form, ByVal nm As String) As Boolean
     HasCtl = Not c Is Nothing
 End Function
 
+' Show a table's vertical scroll bar only when its rows don't all fit:
+' Access draws the bar on a continuous form whatever its content. A BuildGrid
+' table calls this from its OnCurrent, which fires whenever its record source
+' is set or requeried (and once before the host sets it: no record source,
+' no rows). Rows are counted only until one more than fits, so a large linked
+' table isn't read to the end on every row change. A failure is logged, not
+' shown: it only leaves the bar.
+Public Function GridScroll(g As Form)
+    Dim n As Long, sb As Integer, rowH As Long, fits As Long
+    On Error GoTo Fail
+    rowH = g.Section(acDetail).Height
+    If Len(g.RecordSource) > 0 And rowH > 0 Then
+        fits = g.InsideHeight \ rowH
+        With g.RecordsetClone
+            If Not (.BOF And .EOF) Then .MoveFirst   ' a new clone's position isn't defined
+            Do While Not .EOF And n <= fits
+                n = n + 1
+                .MoveNext
+            Loop
+        End With
+    End If
+    ' Only the vertical bar (2) changes; a horizontal one (1, set by ResizeGrid) stays.
+    sb = (g.ScrollBars And 1) Or IIf(n * rowH > g.InsideHeight, 2, 0)
+    If g.ScrollBars <> sb Then g.ScrollBars = sb
+    Exit Function
+Fail:
+    If Err.Number = 7951 Then Exit Function     ' no recordset yet: nothing to scroll
+    LogError "modKitUI.GridScroll", g.Name
+End Function
+
+' GridScroll for every BuildGrid table on frm and on the forms inside it.
+' Call it from the window's Form_Resize: a table anchored to the window
+' changes height without its OnCurrent firing. A subform still loading (the
+' window resizes as it opens) is skipped; GridScroll logs its own failures.
+Public Sub GridScrollAll(frm As Form)
+    Dim c As Control
+    On Error Resume Next
+    For Each c In frm.Controls
+        If c.ControlType = acSubform Then
+            If Len(c.SourceObject) > 0 Then
+                If c.Form.Tag Like "grid:*" Then GridScroll c.Form Else GridScrollAll c.Form
+            End If
+        End If
+    Next
+End Sub
+
 ' Select the first row of a BuildGrid table and tell the host, as a click
 ' would (its GridClick grid, False). Returns the row's id, or Null when the
 ' table is empty (then nothing is called). Call it after the list loads or
@@ -164,6 +212,42 @@ End Sub
 Private Sub SaveDetail(sf As Control)
     If Len(sf.SourceObject) = 0 Then Exit Sub
     If sf.Form.Dirty Then sf.Form.Dirty = False
+End Sub
+
+' ---------------------------------------------------------------------------
+' Date fields
+' ---------------------------------------------------------------------------
+
+' Click on a DateBox's calendar button: open the date picker for the box nm
+' and wait for it to close. Does nothing while the box is disabled or locked,
+' or its form is read-only (AllowEdits off, unless on a record being added).
+Public Function PickDate(frm As Form, ByVal nm As String)
+    Dim c As Control
+    On Error GoTo Fail
+    Set c = frm.Controls(nm)
+    If Not c.Enabled Or c.Locked Then Exit Function
+    If Not frm.AllowEdits And Not (frm.NewRecord And frm.AllowAdditions) Then Exit Function
+    c.SetFocus
+    Set m_dateTarget = c
+    DoCmd.OpenForm "dlgDatePick", WindowMode:=acDialog
+    Set m_dateTarget = Nothing
+    Exit Function
+Fail:
+    Set m_dateTarget = Nothing
+    HandleError "modKitUI.PickDate", nm
+End Function
+
+' The open date picker's box: its value (Null when none is open), and
+' setting it. Setting a value does not fire the box's own update events; the
+' record's BeforeUpdate still checks it when it is saved.
+Public Function DateTargetValue() As Variant
+    DateTargetValue = Null
+    If Not m_dateTarget Is Nothing Then DateTargetValue = m_dateTarget.Value
+End Function
+
+Public Sub SetDateTarget(ByVal v As Variant)
+    If m_dateTarget Is Nothing Then Exit Sub
+    m_dateTarget.Value = v
 End Sub
 
 ' ---------------------------------------------------------------------------

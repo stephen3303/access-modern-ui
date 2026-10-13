@@ -43,7 +43,7 @@ access/
   kit/
     modules/*.bas            reusable: modUIKit, modKitUI, modDarkMode, modPng, modGridOut,
                              modCsv, modCrypto, modKitUtil (copied unchanged from the kit)
-    forms/*.vba              kit code-behind: subGrid, dlgAppearance
+    forms/*.vba              kit code-behind: subGrid, dlgAppearance, dlgDatePick
   src/
     modules/*.bas            the app's own standard modules (incl. generated modPalette)
     themes/light/modTheme.bas   build palette constants (generated)
@@ -119,7 +119,7 @@ them, and the shell (`frmMain`) last.
 | modBuildUI, modBuildPages, modBuildPages2 | `Build_<form>` procedures, one per form, grouped by area |
 | modUI | Run-time UI helpers: `NavTo`, badges/pills painting, `ShowTip`, the app's hooks (`BadgeColors`, `StatusVariant`) |
 | modUIKit (kit) | Build-time control builders (section 6) |
-| modKitUI (kit) | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `SetCount`, `StyleChip` |
+| modKitUI (kit) | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
 | modKitUtil (kit) | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `SetVisible`, `SetEnabled` |
 | modDarkMode (kit), modPalette (gen), modTheme (gen) | Palette engine (section 7) |
@@ -327,12 +327,22 @@ End Sub
 - **Controls**
   - `Lbl`: transparent label.
   - `Txt`: input with `CLR_INPUT_BG`, a 1px `CLR_INPUT_BORDER` border and inner margins.
-  - `RO`: read-only text, borderless, transparent, no tab stop.
+  - `DateBox`: a date input, 120px wide, with its date left-aligned like text, and a
+    30px outline calendar button 4px to its right that opens the kit's date picker
+    (`PickDate`, `dlgDatePick`, built by `BuildDatePicker`): a month of day cells with
+    previous and next arrows, the box's date highlighted, today in bold, and Today,
+    Clear and Cancel. Access's own picker is off: it shows only on focus, and
+    `acCmdShowDatePicker` is refused once it is off. The pair is 154px
+    (`DATEFIELD_W`), so it fits a half-width field column.
+  - `RO`: read-only text, borderless, transparent, no tab stop. Show read-only dates
+    left-aligned (`TextAlign = 1`) so they line up with text values.
   - `Cbo`, `Lst`, `Chk`
   - `Btn ... kind`: `primary`, `outline`, `ghost`, `destructive` or `nav`, each with
     themed hover and pressed colors and `Shape = 1` for rounded corners.
   - `Link`: clickable label.
   - `Box`: rectangle; pass -1 for no fill or no border.
+  - `Rule`: a 1px hairline (a line control), flat (h = 0) or upright (w = 0). Use it
+    for every divider and edge: Access paints a filled 1px `Box` 2 device pixels thick.
   - `RowBack`: row background that paints but never takes focus.
   - `Img`, `SubF`, `TabCtl`
   - `TabStrip x, y, w, handler, "key|Caption", ...`: a tab given as `"key|Caption|n"`
@@ -342,20 +352,29 @@ End Sub
   - `Progress nm, expr, x, y, w, h`: a rounded progress capsule (section 6.6).
 - **Page furniture**
   - `PageHeader title, tip`: 15pt bold title at y = 22px, 9pt muted subtitle at
-    y = 52px, a "?" tip and a dark-only accent bar.
-  - `TitleTip`, `AccentBar`/`DarkOnly`
+    y = 52px, a "?" tip and a dark-only accent bar the height of the title's text
+    (it does not reach the subtitle).
+  - `TitleTip`, `AccentBar`/`DarkOnly`, `TitleBar` (an accent bar sized to a title's
+    font: cap tops to baseline)
   - `ContextBanner`: inset box with an icon, name, subline and optional pill.
 - **Tables**
   - `BuildGrid name, cols, w, [rowLines], [back]`: a styled read-only table. It is a
     continuous form, not a list box.
     - Each column is `"field|caption|widthPx|opts"`. Options: `r` right-aligned,
-      `c` centered, `b` bold, `m` muted, `p` a status pill. A pill column draws the
+      `c` centered, `b` bold, `m` muted, `p` a status pill, `w` wraps onto `rowLines`
+      lines (the last column always wraps when `rowLines` > 1); text longer than that
+      stops at the end of the last line. Never let a cell cut text off mid-word: widen
+      the column or make it wrap. A pill column draws the
       value as a rounded badge whose variant comes from the app's
       `StatusVariant(value)` (it gets a Variant, which may be Null, and returns a
       `BadgeColors` variant or "" for no pill). Map statuses there, never as colors.
-    - The last column takes the remaining width and stretches with the window.
+    - The last column takes the remaining width and stretches with the window. A pill
+      in the last column stops 8px further in, so it clears the table's scrollbar.
     - Rows are separated by a 1px line, and the selected row is highlighted in
       `CLR_PRIMARY_SOFT`.
+    - The vertical scroll bar shows only when the rows overflow (`GridScroll`, the
+      table's OnCurrent). The window's `Form_Resize` calls `GridScrollAll Me`, since
+      a table anchored to the window changes height without a Current event.
     - Optional arguments, all off by default so existing tables don't change:
       - `zebra:=True` fills every other row with `CLR_ROW2`. The selected row still
         turns `CLR_PRIMARY_SOFT`.
@@ -419,7 +438,8 @@ Write app-specific helpers next to the builds that use them. Examples:
   Captions sit about 18px above their input.
 - **Compact** size, for toolbars, filter rows, and actions inside cards, panels and
   table rows: buttons 28px and inputs (search boxes, filter combos) 26px to 28px, text
-  still 9pt. Use one size per row. No other heights: no 24, 26 or 30px buttons.
+  still 9pt. Use one size per row. No other heights: no 24, 26 or 30px buttons. The one
+  exception is the `DateBox` calendar button, which takes its input's 30px height.
 - Vertical rhythm for stacked fields: 38px.
 - Cards and KPI tiles are separated by 12px gaps.
 - A KPI tile is 78px tall: a surface box with a 1px border, a 4px colored accent strip
@@ -476,12 +496,15 @@ Write app-specific helpers next to the builds that use them. Examples:
   - Badge variants (shadcn): `success`, `warning`, `info`, `destructive`, `default`,
     `outline`, `secondary`. `BadgeColors(variant)` returns `Array(back, fore)`.
 - **Cards**: `Card` draws a `CLR_SURFACE` box with a 1px `CLR_BORDER` border, a 10pt 600
-  title at (x + 14px, y + 10px) and a dark-only 3px accent bar beside it. Its corners
+  title at (x + 14px, y + 10px) and a dark-only 3px accent bar beside it, the height of the title's text. Its corners
   are rounded (12px): each corner is a small image control showing `CardPng(fill,
   border, back, r, corner)`, laid over the box's square corner. `back` is the color the
-  card sits on (default `CLR_BG`), which fills outside the arc. Anchor the card with
-  `hAnchor`/`vAnchor`; the corners follow, so a card that stretches with the window
-  keeps round corners.
+  card sits on (default `CLR_BG`), which fills outside the arc. The box itself has no
+  border: Access paints a rectangle's right and bottom border a pixel past the corner
+  images, which shows as a thin square line. The four straight edges are 1px
+  `CLR_BORDER` rules (`box<nm>_t`, `_b`, `_l`, `_r`) that stop at the corner images.
+  Anchor the card with `hAnchor`/`vAnchor`; the corners and edges follow, so a card
+  that stretches with the window keeps round corners.
   - Keep content at least 12px in from the card's edge so nothing covers a corner. An
     image under a subform flickers when the subform repaints, so a card whose corner a
     subform must cover uses `square:=True`.
@@ -744,7 +767,7 @@ The Appearance dialog grows by itself, because it is built from `PALETTE_COUNT`.
    `QueueNav`/`ShowPage`/`RefreshNav`, and `PageKey`/`Reopen`.
 6. For each page, write a `Build_pg<Name>` using `PageHeader`, cards, grids and buttons,
    and a `src/forms/pg<Name>.vba` where every handler uses the standard error handler.
-7. Copy the dialogs: `dlgAppearance`, and a non-modal `dlgHelp` with `help.txt` and the F1
+7. Copy the dialogs: `dlgAppearance`, `BuildDatePicker` (for date fields), and a non-modal `dlgHelp` with `help.txt` and the F1
    `AutoKeys` macro.
 8. Write `README.md` and `DEVELOPING.md` using the structure in section 4, linking to the
    kit's README for the builder catalog.
