@@ -802,6 +802,7 @@ Public Sub GridHeaders(ByVal prefix As String, ByVal cols As Variant, ByVal x As
         If i = UBound(cols) Then
             If fill Then
                 cw = x + w - cx - px(16)
+                If InStr(opts, "p") > 0 Then cw = cw - px(8)   ' BuildGrid's pill clears the scrollbar
             ElseIf Not fit And InStr(opts, "r") = 0 And InStr(opts, "c") = 0 And InStr(opts, "p") = 0 Then
                 ' Left-aligned, so the width doesn't move the text: room for a
                 ' caption longer than the column, as before w was given.
