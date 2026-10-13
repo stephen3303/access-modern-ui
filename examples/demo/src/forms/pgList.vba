@@ -98,9 +98,11 @@ Private Function FilterText() As String
     FilterText = s
 End Function
 
-' Apply the chip and search, then open the first item (or show the empty state).
+' Apply the chip and search, mark the search in the rows, then open the
+' first item (or show the empty state).
 Private Sub RefreshPage()
     FilterGrid Me.sfList, ItemFilter(Status(m_chip), m_search)
+    GridHighlight Me.sfList, m_search
     RefreshCounts
     If IsNull(SelectFirstRow(Me.sfList)) Then ClearDetail Me, "sfDetail"
 End Sub

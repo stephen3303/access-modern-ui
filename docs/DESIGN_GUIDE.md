@@ -42,7 +42,8 @@ access/
   build.ps1                  drives Access via COM; loads modules, calls BuildAll
   kit/
     modules/*.bas            reusable: modUIKit, modKitUI, modDarkMode, modPng, modGridOut,
-                             modCsv, modCrypto, modKitUtil, modTrust (copied unchanged from the kit)
+                             modCsv, modCrypto, modKitUtil, modBackdrop, modTrust (copied unchanged
+                             from the kit)
     forms/*.vba              kit code-behind: subGrid, dlgAppearance, dlgDatePick
   src/
     modules/*.bas            the app's own standard modules (incl. generated modPalette)
@@ -66,6 +67,10 @@ access/
   - `-UiOnly`: rebuilds forms and reports inside the existing front end.
 - Load order: `kit/modules`, then `src/modules`, then `modTheme.bas`. Each file is
   normalized to CRLF and **ASCII**, then loaded with `LoadFromText(5, ...)`.
+- Line numbers: the build numbers its copy of every module and form's code
+  (`VbaLineNumbers.ps1`, from the kit's `tools/`) so `Erl` names the failing line. Each
+  line gets its own line number in the source file. The files in git are never numbered:
+  edit the source, not the built front end. `-NoLineNumbers` builds without them.
 - It compiles everything first (`RunCommand 126`), so syntax errors stop the build before
   any work runs.
 - It calls `BuildAll(srcRoot, outDir, uiOnly, frontEndOnly)` through `Application.Run`.
@@ -77,8 +82,9 @@ access/
 - Runs named steps, setting `m_step = "..."` before each so a failure names the step:
   create back end, link, local tables, seed, assets, user interface, help, startup.
 - Startup options it sets:
-  - The first form (the login form, or the splash screen when there is one) through the
-    kit's `BuildTrustCheck "<form>"`, not StartUpForm. Call it after anything that sets
+  - The first form (the login form or `frmMain`, or the kit's optional splash screen
+    `frmSplash` from `BuildSplash`, which opens it) through the kit's
+    `BuildTrustCheck "<form>"`, not StartUpForm. Call it after anything that sets
     StartUpForm, since it removes it. It adds an `AutoExec` macro (replacing any the app
     had) that opens the form when the code is on, and opens `dlgTrust` instead when Access
     has turned the code off. When Access would still ask next time (not a Trusted
@@ -87,6 +93,7 @@ access/
     how to add the folder in the Trust Center. Code never changes Trust Center settings.
     The check reads the user's (HKCU) settings and policies only, not machine-wide (HKLM)
     policy locations, so on such a PC the page can show when it isn't needed.
+  - `HideAccessSplash`, called just before `BuildTrustCheck`, hides Access's own splash.
   - Hidden: the DB window, document tabs and datasheet schema.
   - Name AutoCorrect off.
   - AppTitle.
@@ -128,12 +135,13 @@ them, and the shell (`frmMain`) last.
 | modBuildUI, modBuildPages, modBuildPages2 | `Build_<form>` procedures, one per form, grouped by area |
 | modUI | Run-time UI helpers: `NavTo`, badges/pills painting, `ShowTip`, the app's hooks (`BadgeColors`, `StatusVariant`) |
 | modUIKit (kit) | Build-time control builders (section 6) |
-| modKitUI (kit) | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `KitMsgBox`, `CheckRequired`, `SetCount`, `StyleChip` |
+| modKitUI (kit) | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSwitch`, `ToggleFocus`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `CheckRequired`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
 | modTrust (kit) | `BuildTrustCheck` startup, `TrustNeeded`, `InTrustedLocation`, `ShowTrustHelp` (the `dlgTrust` page on trusting the folder) |
 | modKitUtil (kit) | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `CenterOnApp`, `SetVisible`, `SetEnabled` |
+| modBackdrop (kit) | `DimApp`, `UndimApp`: the dimmed backdrop behind modal dialogs |
 | modDarkMode (kit), modPalette (gen), modTheme (gen) | Palette engine (section 7) |
-| modPng (kit) | Draws anti-aliased PNGs for rounded pills, card corners and progress capsules |
+| modPng (kit) | Draws anti-aliased PNGs for rounded pills, card corners, progress capsules and toggle switches |
 | modWrap | GDI text measurement (`MeasureText`) and word wrap for fixed-height rows |
 | modCsv, modZip (kit / app) | CSV I/O, ZIP |
 | Domain modules | Business logic, one module per area; they enforce rules so they hold from any caller |
@@ -268,6 +276,14 @@ Fail:
 `RaiseAgain` builds a call trail, innermost first. The trail is keyed to the current
 error's number and description, so a stale trail is never attached to an unrelated error.
 
+`LogError` and `RaiseAgain` add the failing line (`Erl`, from the build's line numbers)
+to the procedure name: `pgAdmin.btnSave_Click line 42` is line 42 of
+`src/forms/pgAdmin.vba`. `Erl` is per procedure, so for an error passed up by
+`RaiseAgain` each trail entry and the entry point name the line of their own call.
+Lines VBA won't take a number on (`Case`, `Else`, `ElseIf`, `Loop`, `Next`, a line
+starting with a label) are logged at the numbered line before them, e.g. a failing
+`Case 1: DoThing` at its `Select Case` line.
+
 **Small helpers** have no handler. Errors bubble to the nearest handler, so one failure
 produces one log entry.
 
@@ -336,10 +352,13 @@ End Sub
 - **Forms**
   - `NewForm recSrc, view(0 single/1 continuous), w, h`
   - `NewDialog caption, w, h`: pop-up, modal, auto-center, dialog border, `CLR_DIALOG`
-    background.
+    background, and `OnClose = "=BackdropOnClose()"`, which removes a dim a VBA reset
+    left behind (a dialog with its own `Form_Close` calls `BackdropOnClose` from it). A reset
+    between `DimApp` and the dialog opening leaves the dim on until the next kit dialog opens or closes.
   - `NewReport recSrc, w`: Letter portrait, 0.5 in margins, `REPORT_W = 10800`, pop-up
     preview.
   - `SaveForm`, `Trace`
+  - `BuildSplash [nextForm], [subtitle], [glyph]`: the startup splash screen (section 6.5).
 - **Controls**
   - `Lbl`: transparent label.
   - `Txt`: input with `CLR_INPUT_BG`, a 1px `CLR_INPUT_BORDER` border and inner margins.
@@ -356,9 +375,23 @@ End Sub
     Access's own picker is off: it shows only on focus, and
     `acCmdShowDatePicker` is refused once it is off. The pair is 154px
     (`DATEFIELD_W`), so it fits a half-width field column.
+  - `SecretBox`: passwords and other sensitive values (PINs, SSNs, access codes). The
+    text shows as asterisks (input mask `Password`, which also blocks copying while it is
+    hidden), with a
+    30px outline eye button 4px to its right: an eye (E890) to show the text, an eye
+    struck through (ED1A) to hide it again (`ToggleSecret`). The form calls
+    `HideSecrets Me` in `Form_Current`, so a value shown on one record is hidden on the
+    next. Use it for every sensitive field. Masking only hides the text on screen:
+    a password box is unbound, or hashed (`HashPassword`) in `BeforeUpdate`, before it
+    is saved, and other sensitive values stay readable in tables, queries and exports.
+    Single-record forms only: a continuous form shares one mask across its rows, so
+    `SecretBox` raises error 5 when built on one.
   - `RO`: read-only text, borderless, transparent, no tab stop. Show read-only dates
     left-aligned (`TextAlign = 1`) so they line up with text values.
   - `Cbo`, `Lst`, `Chk`
+  - `Toggle nm, src, x, y, [w], [h], [onChange]`: an on/off switch for a yes/no field
+    (section 6.6). Use it for settings and flags that take effect at once; keep `Chk`
+    for a choice saved with the rest of a form.
   - `Btn ... kind`: `primary`, `outline`, `ghost`, `destructive` or `nav`, each with
     themed hover and pressed colors and `Shape = 1` for rounded corners.
   - `Link`: clickable label.
@@ -386,7 +419,8 @@ End Sub
       `c` centered, `b` bold, `m` muted, `p` a status pill, `w` wraps onto `rowLines`
       lines (the last column always wraps when `rowLines` > 1); text longer than that
       stops at the end of the last line. Never let a cell cut text off mid-word: widen
-      the column or make it wrap. A pill column draws the
+      the column or make it wrap. `s` marks the text matching the page's search box.
+      A pill column draws the
       value as a rounded badge whose variant comes from the app's
       `StatusVariant(value)` (it gets a Variant, which may be Null, and returns a
       `BadgeColors` variant or "" for no pill). Map statuses there, never as colors.
@@ -406,6 +440,15 @@ End Sub
         every column in proportion. Call `GridFit Me.sfList, "hdrList"` from the
         host's `Form_Resize`; it also moves the captions `GridHeaders` drew with that
         prefix. Columns never get narrower than designed.
+    - **Search matches are marked.** On a page with a search box, give every column
+      the search looks in the `s` option, and call `GridHighlight Me.sfList, term` with
+      the box's text whenever it changes (with the filter). Each match shows in
+      `CLR_WARNING_FG` on `CLR_WARNING_BG`, ignoring case; `""` clears the marks. An `s`
+      column is a rich text box showing `GridMark([txtSrc<i>], [txtFind])`, where the
+      hidden `txtSrc<i>` is bound to the field (a bare `[name]` in an expression would
+      be the form's Name). `PrintGrid` and `ExportGrid` print and export that field.
+      Use `s` on text columns only: not on pills, and not on dates or numbers, whose
+      `Format` a rich text cell doesn't apply.
     - **Clicking a row opens it.** There are no `>` or Open buttons in rows: the row
       click selects the record and the host's `GridClick` shows it (in a detail panel,
       section 6.8, or a dialog).
@@ -471,8 +514,9 @@ Write app-specific helpers next to the builds that use them. Examples:
   Captions sit about 18px above their input.
 - **Compact** size, for toolbars, filter rows, and actions inside cards, panels and
   table rows: buttons 28px and inputs (search boxes, filter combos) 26px to 28px, text
-  still 9pt. Use one size per row. No other heights: no 24, 26 or 30px buttons. The one
-  exception is the `DateBox` calendar button, which takes its input's 30px height.
+  still 9pt. Use one size per row. No other heights: no 24, 26 or 30px buttons. The
+  exceptions are the `DateBox` calendar and `SecretBox` eye buttons, which take their
+  input's 30px height.
 - Vertical rhythm for stacked fields: 38px.
 - Cards and KPI tiles are separated by 12px gaps.
 - **Designer spacing.** The values in this section are the default. A designer who wants a
@@ -515,14 +559,45 @@ Write app-specific helpers next to the builds that use them. Examples:
 - **Dialogs**:
   - `RunDialog(name, openArgs)` opens the form with `acDialog` and returns True when the
     dialog set `TempVars("DialogResult") = "ok"`.
+  - While a dialog is open the app behind it is dimmed, like a web modal: a see-through
+    layer of `CLR_SIDEBAR` (45%) over the Access window. `RunDialog` and `KitMsgBox` do
+    this themselves and remove the dim when the dialog closes, or fails to open.
+    `RunDialog name, openArgs, False` opens one undimmed. A modal form opened any other way
+    calls `DimApp` before it and `UndimApp` after, on the error path too. The date picker
+    is a small drop-down, so it isn't dimmed.
+  - A dialog that wires its own close handler (`Ev F, "OnClose"`) replaces
+    `=BackdropOnClose()` from `NewDialog`, so its `Form_Close` calls `BackdropOnClose` itself.
   - Other results come back in named TempVars.
   - Dialog input comes through `OpenArgs`.
   - Every dialog's `Form_Load` ends with `CenterOnApp Me`, after anything that changes
     its size. It centres the dialog over the Access window, on that window's monitor,
     and pulls it back inside the monitor's work area. `AutoCenter` alone can open a
     dialog high or on another monitor.
+- **Splash screen** (optional): the app starts on `frmSplash` (`BuildSplash`), a borderless 480 x 280px
+  pop-up in `CLR_SIDEBAR` with the app's MDL2 glyph, its name in 20pt white, a subtitle,
+  and a footer under a `CLR_SIDEBAR_LINE` hairline: a status line on the left and the
+  version on the right. `ThemeForm` gives it the user's palette. Once it has painted, its
+  timer opens `nextForm` (the login form or `frmMain`); that form's Load does the start-up
+  work (version checks, linking) and calls `SplashStatus "..."` to say what it is doing.
+  The splash closes when the form is open, and stays at least 1.2 seconds so it doesn't
+  flash. `KitMsgBox` closes it first, so a start-up error is never hidden behind it.
+  A plain `MsgBox` or a file dialog doesn't close it, so call `CloseSplash` before one
+  (for example a back-end file picker at start-up).
+  `HideAccessSplash` writes the 1 x 1 pixel `<database name>.bmp` that replaces Access's
+  own splash. It is a build output: ignore it in git and ship it beside the front end.
 - **List subforms** (continuous forms of cards or rows) call back to their host with
   `Me.Parent.<PublicProc>`.
+- **New version notice**: once the app has opened (after sign-in checks, before the
+  first page), call `CheckForUpdate APP_VERSION, <release folder>`.
+  - The release folder is wherever users copy the app from. The release script writes
+    `version.txt` there, holding the release's version (`1.2.0`) on its first line.
+  - A newer version gets one information `KitMsgBox` naming both versions and the folder,
+    once per session. The app keeps running; nothing is copied for the user.
+  - Pass `advice` (third argument) when "copy the new version from the folder" is the
+    wrong next step, for example when the app's data lives inside its own file.
+  - A blank folder or a missing file skips the check. A read failure is logged with
+    `LogError` and never shown, so an offline share can't stop the app opening. An
+    unreachable network folder can still delay opening by about 20 seconds.
 
 ### 6.6 Visual components
 
@@ -575,6 +650,21 @@ Write app-specific helpers next to the builds that use them. Examples:
   `expr` is a field such as `"[percent_done]"` or a number; values are clamped to 0-100
   and Null shows an empty track. It is bound, so it follows the record in a continuous
   form. Give it a fixed width: the image keeps its shape, so don't anchor it to stretch.
+- **Toggle switch**: `Toggle` draws a 44 x 24px rounded track with a round knob
+  (`TogglePng`): `CLR_PRIMARY` with the knob on the right when on, `CLR_MUTED_FG`
+  with it on the left when off, the knob `CLR_SURFACE`, so the track and knob keep well
+  over 3:1 against the surface and each other in Navy and Midnight. Center the track on its row: in a
+  30px input row it sits 3px down. Access has no switch, so it is a hidden check box
+  `<nm>_val` bound to the field (the value), the track image `<nm>_bg` bound to it, and a
+  transparent button `<nm>` on top that takes clicks, the Tab stop and Space
+  (`ToggleSwitch`). A transparent button draws no focus, so a `CLR_PRIMARY` ring
+  (`<nm>_ring`, 2px wide, 2px outside the track) shows while it has the focus, and an input's
+  `FocusRing` comes off as it does for a button; leave 4px clear around the track for it. A value set in code fires no `AfterUpdate`, so pass
+  `onChange`, a Public Sub in the form's code-behind, to act on a change (for example,
+  save the record at once). A misspelled `onChange` shows error 438 on the first click.
+  Hide it with `SetVisible` on `<nm>`, and the track goes too; `SetEnabled` on `<nm>`
+  stops clicks and the Tab stop but doesn't dim the track. Use it on single forms only:
+  in a continuous form the ring shows on every row.
 - **Empty states**: a centered muted 10pt label shown in place of an empty list.
 - **Search box placeholder**: `Format = "@;""Search by ..."""`.
 - **Hierarchical trees and wrapped rows**:
@@ -816,7 +906,8 @@ The Appearance dialog grows by itself, because it is built from `PALETTE_COUNT`.
 
 ## 8. Starting a new app in this style (checklist)
 
-1. Copy `kit/`, `examples/build.ps1` and `tools/make_themes.py` from this repository.
+1. Copy `kit/`, `examples/build.ps1`, `tools/VbaLineNumbers.ps1` and `tools/make_themes.py`
+   from this repository.
    Set `APP_NAME` (the palette choice is saved under it in the registry).
 2. In `make_themes.py`, set the roles, `FIXED` and `PALETTES`, then run it.
 3. Write modErrors (start from `examples/modules/modErrors.bas`; only the context columns
@@ -836,7 +927,8 @@ The Appearance dialog grows by itself, because it is built from `PALETTE_COUNT`.
    and a `src/forms/pg<Name>.vba` where every handler uses the standard error handler.
 7. Copy the dialogs: `dlgAppearance`, `BuildMessageDialog` (for `Notify` and `HandleError`),
    `BuildDatePicker` (for date fields), and a non-modal `dlgHelp` with `help.txt` and the F1
-   `AutoKeys` macro.
+   `AutoKeys` macro. Optionally add the splash screen with `BuildSplash` and
+   `HideAccessSplash`, and pass `frmSplash` to `BuildTrustCheck` as the startup form.
 8. Write `README.md` and `DEVELOPING.md` using the structure in section 4, linking to the
    kit's README for the builder catalog.
 9. Check every page in a light palette and a dark palette. There is no automated UI test,
