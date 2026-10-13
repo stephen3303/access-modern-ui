@@ -145,7 +145,8 @@ End Function
 
 ' Mark every item's due date on the date picker ("Due: <name>"), replacing
 ' the marks made before. Called when frmMain opens and after an item is saved.
-' An error is logged and leaves the marks made so far.
+' An error goes to HandleError (logged and shown) and leaves the marks made
+' so far; the recordset closes when it goes out of scope.
 Public Sub MarkDueDates()
     Dim db As DAO.Database, rs As DAO.Recordset
     On Error GoTo Err_Handler
@@ -159,7 +160,6 @@ Public Sub MarkDueDates()
     rs.Close
     Exit Sub
 Err_Handler:
-    If Not rs Is Nothing Then rs.Close
     HandleError "modDemo.MarkDueDates"
 End Sub
 

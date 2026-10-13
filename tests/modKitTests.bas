@@ -185,7 +185,7 @@ Public Function TestKit(ByVal root As String) As String
     Check FederalHoliday(#9/7/2026#) = "Labor Day", "Labor Day 2026 missing"
     Check FederalHoliday(#11/11/2026#) = "Veterans Day", "Veterans Day 2026 missing"
     Check FederalHoliday(#12/25/2026#) = "Christmas Day", "Christmas Day 2026 missing"
-    Check FederalHoliday(#1/1/1970#) = "", "Holiday rules applied before 1971"
+    Check FederalHoliday(#11/11/1977#) = "", "Holiday rules applied before 1978"
     ClearMarkedDates
     MarkDate #10/20/2026 9:00:00 AM#, "Report due"
     MarkDate #10/20/2026#, "Drill"
