@@ -215,6 +215,8 @@ Public Function GridMark(ByVal v As Variant, ByVal term As Variant) As Variant
     GridMark = out & HtmlText(s)
     Exit Function
 Fail:
+    Resume Unmarked                         ' leave the handler, so a second error is trapped too
+Unmarked:
     On Error Resume Next
     GridMark = HtmlText(CStr(v))
 End Function
@@ -227,6 +229,7 @@ Private Function HtmlText(ByVal s As String) As String
     s = Replace(s, ">", "&gt;")
     s = Replace(s, vbTab, "    ")
     s = Replace(s, "  ", " &nbsp;")
+    If Left$(s, 1) = " " Then s = "&nbsp;" & Mid$(s, 2)
     s = Replace(s, vbCrLf, "<br>")
     HtmlText = Replace(s, vbLf, "<br>")
 End Function

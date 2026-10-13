@@ -392,8 +392,11 @@ End Sub
       the search looks in the `s` option, and call `GridHighlight Me.sfList, term` with
       the box's text whenever it changes (with the filter). Each match shows in
       `CLR_WARNING_FG` on `CLR_WARNING_BG`, ignoring case; `""` clears the marks. An `s`
-      column is a rich text box showing `GridMark(field, [txtFind])`, so `PrintGrid`
-      and `ExportGrid` still print and export the plain field. Not for pill columns.
+      column is a rich text box showing `GridMark([txtSrc<i>], [txtFind])`, where the
+      hidden `txtSrc<i>` is bound to the field (a bare `[name]` in an expression would
+      be the form's Name). `PrintGrid` and `ExportGrid` print and export that field.
+      Use `s` on text columns only: not on pills, and not on dates or numbers, whose
+      `Format` a rich text cell doesn't apply.
     - **Clicking a row opens it.** There are no `>` or Open buttons in rows: the row
       click selects the record and the host's `GridClick` shows it (in a detail panel,
       section 6.8, or a dialog).

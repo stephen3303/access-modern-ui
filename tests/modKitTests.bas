@@ -47,6 +47,7 @@ Public Function TestKit(ByVal root As String) As String
     Check IsNull(GridMark(Null, "a")), "Null search cell differs"
     Check GridMark("a<b & c", "") = "a&lt;b &amp; c", "Unsearched cell not escaped"
     Check GridMark("a   b", "") = "a &nbsp; b", "Cell spaces collapsed"
+    Check GridMark(" a", "") = "&nbsp;a", "Leading space collapsed"
     text = GridMark("Pump pump", "PUMP")
     Check UBound(Split(text, "</font>")) = 2 And InStr(text, ">Pump</font> <") > 0, "Search matches not marked"
     measured = MeasureText(ChrW(&H2026), 9, 400)
