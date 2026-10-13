@@ -266,7 +266,10 @@ Public Function TestKit(ByVal root As String) As String
     Check CenteredStart(0, 1000, 1200, 0, 1000) = 0, "Oversized dialog hides its title bar"
     ' Backdrop: nested dims share one layer, and a dialog that fails to open
     ' leaves the app undimmed.
-    DimApp: DimApp: UndimApp
+    ' One call per line: "DimApp:" at the start of a line is a line label, not a call.
+    DimApp
+    DimApp
+    UndimApp
     Check AppDimmed(), "Inner dialog removed the outer dialog's dim"
     UndimApp
     Check Not AppDimmed(), "Dim left on after its last dialog"
