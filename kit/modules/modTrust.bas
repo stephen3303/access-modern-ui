@@ -200,27 +200,33 @@ Err_Handler:
 End Function
 
 ' True when folder (default: the app's own) is inside a Trusted Location
-' Access will honor: listed in the user's or the policy Trusted Locations,
+' Access will honor: listed in the policy Trusted Locations, or the user's own
+' when policy allows them,
 ' with "subfolders" ticked when folder is below it, network locations allowed
 ' when it is on a network drive, and trusted locations not turned off by
 ' policy. False if the settings can't be read, so the worst case is showing
 ' the trust page when it wasn't needed.
 Public Function InTrustedLocation(Optional ByVal folder As String = "") As Boolean
-    Dim roots As Variant, root As Variant, allowNet As Boolean, isNet As Boolean, onList As Boolean
+    Dim pol As String, common As String, usr As String, allowNet As Boolean, isNet As Boolean, onList As Boolean
     On Error GoTo Fail
     If Len(folder) = 0 Then folder = CurrentProject.Path
     folder = NormPath(folder)
-    roots = Array("Software\Policies\Microsoft\Office\" & Application.Version & "\Access\Security\Trusted Locations", _
-                  "Software\Microsoft\Office\" & Application.Version & "\Access\Security\Trusted Locations")
-    If RegDword(roots(0), "", "AllLocationsDisabled", 0) = 1 Then Exit Function
+    ' Policy locations for Access, policy locations for every Office app
+    ' (Security Settings\Trust Center), and the user's own.
+    pol = "Software\Policies\Microsoft\Office\" & Application.Version & "\Access\Security\Trusted Locations"
+    common = "Software\Policies\Microsoft\Office\" & Application.Version & "\Common\Security\Trusted Locations"
+    usr = "Software\Microsoft\Office\" & Application.Version & "\Access\Security\Trusted Locations"
+    If RegDword(pol, "", "AllLocationsDisabled", 0) = 1 Then Exit Function
+    If RegDword(common, "", "AllLocationsDisabled", 0) = 1 Then Exit Function
     ' A policy setting wins over the user's own.
-    allowNet = (RegDword(roots(0), "", "AllowNetworkLocations", RegDword(roots(1), "", "AllowNetworkLocations", 0)) = 1)
+    allowNet = (RegDword(pol, "", "AllowNetworkLocations", RegDword(usr, "", "AllowNetworkLocations", 0)) = 1)
     isNet = (Left$(folder, 2) = "\\")
     If Not isNet And Mid$(folder, 2, 1) = ":" Then isNet = (GetDriveTypeW(StrPtr(Left$(folder, 3))) = DRIVE_REMOTE)
     If isNet And Not allowNet Then Exit Function
-    For Each root In roots
-        If ListHas(CStr(root), folder) Then onList = True: Exit For
-    Next
+    onList = ListHas(pol, folder) Or ListHas(common, folder)
+    ' "Allow mix of policy and user locations" turned off: Access ignores the
+    ' user's own locations.
+    If Not onList And RegDword(common, "", "Allow User Locations", 1) <> 0 Then onList = ListHas(usr, folder)
     InTrustedLocation = onList
     Exit Function
 Fail:
@@ -230,6 +236,7 @@ End Function
 ' True when one of the Location keys under root covers folder.
 Private Function ListHas(ByVal root As String, ByVal folder As String) As Boolean
     Dim hKey As LongPtr, i As Long, nm As String, n As Long, p As String, subs As Boolean
+    If Right$(folder, 1) <> "\" Then folder = folder & "\"
     If RegOpenKeyExW(HKEY_CURRENT_USER, StrPtr(root), 0, KEY_READ, hKey) <> ERROR_SUCCESS Then Exit Function
     Do
         nm = String$(256, vbNullChar): n = 256
@@ -239,7 +246,10 @@ Private Function ListHas(ByVal root As String, ByVal folder As String) As Boolea
         If Len(p) > 0 Then
             p = NormPath(p)
             subs = (RegDword(root, nm, "AllowSubfolders", 0) = 1)
-            If folder = p Or (subs And Left$(folder, Len(p) + 1) = p & "\") Then ListHas = True: Exit Do
+            ' Compare with a closing backslash on both: a drive root (c:\) already
+            ' has one, so add it only to other paths.
+            If Right$(p, 1) <> "\" Then p = p & "\"
+            If folder = p Or (subs And Left$(folder, Len(p)) = p) Then ListHas = True: Exit Do
         End If
         i = i + 1
     Loop
