@@ -6,8 +6,8 @@ test changes to it. It has one local table of fictional items and three pages:
 | Page | Shows |
 |---|---|
 | Cards and progress | `Card` (rounded and square), `Progress` at 0, 37 and 100 percent, a table inside a rounded card |
-| Tables | `BuildGrid` with every option (header band, zebra rows, status pills, 38px rows, proportional fit through `GridFit`) next to a default table; the column chooser (Columns, top right) for the first table; `TabStrip` and chips with counts; search and a category filter to the right of the chips |
-| List and detail | The list/detail pattern (`SelectFirstRow`, `ShowDetail`, `ClearDetail`), `PrintGrid` and `ExportGrid` |
+| Tables | `BuildGrid` with every option (header band, zebra rows, status pills, 38px rows, proportional fit through `GridFit`) next to a default table, both sorted by clicking a column caption; the column chooser (Columns, top right) for the first table; `TabStrip` and chips with counts; search and a category filter to the right of the chips |
+| List and detail | The list/detail pattern (`SelectFirstRow`, `ShowDetail`, `ClearDetail`), click-to-sort captions, `PrintGrid` and `ExportGrid` in the list's sort; the Due field is a `DateBox` whose date picker marks federal holidays and every item's due date (`MarkDate`); a compact `Toggle` switch (Flagged for review) on the detail panel's Save row |
 
 Appearance in the sidebar switches palettes.
 
@@ -34,10 +34,25 @@ watching for Visual Basic error dialogs as well as the error log:
   chip and tab counts follow the search and category. Columns opens the column chooser:
   hiding a column widens the rest and hides its caption, Move up/down reorders columns and
   captions together, Reset puts the design back, Cancel changes nothing, and the last shown
-  column can't be hidden. The choice is still there after closing and reopening the demo.
+  column can't be hidden. The choice is still there after closing and reopening the demo,
+  and clicking a caption still sorts after columns are moved.
+- Focus ring: clicking or tabbing into the search box, the category filter or a detail
+  field turns its border the palette's primary color, and leaving it restores the border,
+  with no flicker and the text not moving.
+- Dialogs: Appearance and the card buttons' messages open centred over Access, on its
+  monitor, with Access restored, maximized, or moved partly off the edge of a screen.
 - List and detail: the first row opens on load and after each filter; a click shows that
   row; editing and saving updates the list; a search with no match shows both empty
   states; Print previews and Export writes exactly the rows shown, with the captions.
+- Date picker (Due's calendar button): October 2026 shows Columbus Day (12th) underlined in
+  the danger color and item due dates (1st, 4th, 7th...) in the warning color, with
+  tooltips naming them; July 2026 marks Friday the 3rd as Independence Day (observed).
+  Changing an item's due date and saving moves its mark.
+- Toggle (Flagged for review, left of Save in the detail panel): clicking the track or its
+  label, or Tab to it and Space, slides the knob and saves the record at once; the track is
+  the palette's primary color when on and its muted text color when off; a ring shows while
+  it has the focus, inside the panel. The table gained a column, so build without
+  `-UiOnly` once.
 
 ## Files
 

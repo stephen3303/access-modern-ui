@@ -2,15 +2,16 @@ Option Compare Database
 Option Explicit
 
 ' List and detail (see Build_pgList). Clicking a row shows it in the detail
-' panel; the first row opens whenever the list changes. Print and Export use
-' the rows the list shows.
+' panel; the first row opens whenever the list changes. Clicking a column
+' caption sorts the list (GridSort). Print and Export use the rows the list
+' shows, in its order.
 
 Private m_chip As Long
 Private m_search As String
 
 Private Sub Form_Load()
     On Error GoTo Err_Handler
-    Me.sfList.Form.RecordSource = "SELECT id, name, owner, status, Format(due_date,'dd mmm yyyy') AS due " & _
+    Me.sfList.Form.RecordSource = "SELECT id, name, owner, status, Format(due_date,'dd mmm yyyy') AS due, due_date " & _
         "FROM demo_item ORDER BY due_date"
     RefreshPage
     Exit Sub
