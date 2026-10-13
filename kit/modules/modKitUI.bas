@@ -173,12 +173,14 @@ End Sub
 ' ---------------------------------------------------------------------------
 
 ' Click on a DateBox's calendar button: open the date picker for the box nm
-' and wait for it to close. Does nothing while the box is disabled or locked.
+' and wait for it to close. Does nothing while the box is disabled or locked,
+' or its form is read-only (AllowEdits off, unless on a record being added).
 Public Function PickDate(frm As Form, ByVal nm As String)
     Dim c As Control
     On Error GoTo Fail
     Set c = frm.Controls(nm)
     If Not c.Enabled Or c.Locked Then Exit Function
+    If Not frm.AllowEdits And Not (frm.NewRecord And frm.AllowAdditions) Then Exit Function
     c.SetFocus
     Set m_dateTarget = c
     DoCmd.OpenForm "dlgDatePick", WindowMode:=acDialog
