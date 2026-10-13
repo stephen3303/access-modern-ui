@@ -156,6 +156,26 @@ Public Function ItemCount(ByVal status As String, ByVal search As String, Option
     ItemCount = DCount("*", "demo_item", IIf(Len(w) > 0, w, "True"))
 End Function
 
+' Mark every item's due date on the date picker ("Due: <name>"), replacing
+' the marks made before. Called when frmMain opens and after an item is saved.
+' An error goes to HandleError (logged and shown) and leaves the marks made
+' so far; the recordset closes when it goes out of scope.
+Public Sub MarkDueDates()
+    Dim db As DAO.Database, rs As DAO.Recordset
+    On Error GoTo Err_Handler
+    ClearMarkedDates
+    Set db = CurrentDb
+    Set rs = db.OpenRecordset("SELECT name, due_date FROM demo_item WHERE due_date IS NOT NULL", dbOpenSnapshot)
+    Do Until rs.EOF
+        MarkDate rs!due_date, "Due: " & Nz(rs!name, "(no name)")
+        rs.MoveNext
+    Loop
+    rs.Close
+    Exit Sub
+Err_Handler:
+    HandleError "modDemo.MarkDueDates"
+End Sub
+
 ' Apply a filter to a table (subform control): "" shows every row.
 Public Sub FilterGrid(sf As Control, ByVal where As String)
     sf.Form.Filter = where
