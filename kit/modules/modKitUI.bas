@@ -39,11 +39,15 @@ Public Sub GridFit(sf As Control, Optional ByVal prefix As String = "")
     ' grows when a control's right edge pushes it, and moving a column past
     ' its edge raises error 5. So widen the row background first (it pushes
     ' the form out), place the columns, then shrink the background.
+    ' Resizing the form can leave an earlier reference to it dead (error 5 on
+    ' any use), so it is read from sf again before each use.
     If newW > g.Width Then
         If HasCtl(g, "txtBg") Then g.Controls("txtBg").Width = newW
+        Set g = sf.Form
         If HasCtl(g, "boxRowLine") Then g.Controls("boxRowLine").Width = newW
     End If
     Do
+        Set g = sf.Form
         Set c = Nothing
         On Error Resume Next
         Set c = g.Controls("txtCol" & i)
@@ -52,6 +56,8 @@ Public Sub GridFit(sf As Control, Optional ByVal prefix As String = "")
         t = Split(c.Tag, "|")
         If UBound(t) >= 2 Then
             FitCtl c, CLng(Val(t(1)) * ratio), CLng(Val(t(2)) * ratio) - px(8)
+            Set g = sf.Form
+            Set c = g.Controls("txtCol" & i)
             If HasCtl(g, c.Name & "_bg") Then FitCtl g.Controls(c.Name & "_bg"), c.Left, c.Width
         End If
         If Len(prefix) > 0 Then
@@ -65,8 +71,11 @@ Public Sub GridFit(sf As Control, Optional ByVal prefix As String = "")
         End If
         i = i + 1
     Loop
+    Set g = sf.Form
     If HasCtl(g, "txtBg") Then FitCtl g.Controls("txtBg"), 0, newW
+    Set g = sf.Form
     If HasCtl(g, "boxRowLine") Then FitCtl g.Controls("boxRowLine"), 0, newW
+    Set g = sf.Form
     ' Narrowing the form is cosmetic (no empty strip to scroll to), and
     ' Access may ignore it.
     If newW < g.Width Then
