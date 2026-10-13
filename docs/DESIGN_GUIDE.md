@@ -119,9 +119,9 @@ them, and the shell (`frmMain`) last.
 | modBuildUI, modBuildPages, modBuildPages2 | `Build_<form>` procedures, one per form, grouped by area |
 | modUI | Run-time UI helpers: `NavTo`, badges/pills painting, `ShowTip`, the app's hooks (`BadgeColors`, `StatusVariant`) |
 | modUIKit (kit) | Build-time control builders (section 6) |
-| modKitUI (kit) | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `KitMsgBox`, `SetCount`, `StyleChip` |
+| modKitUI (kit) | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `KitMsgBox`, `CheckRequired`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
-| modKitUtil (kit) | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `SetVisible`, `SetEnabled` |
+| modKitUtil (kit) | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `CenterOnApp`, `SetVisible`, `SetEnabled` |
 | modDarkMode (kit), modPalette (gen), modTheme (gen) | Palette engine (section 7) |
 | modPng (kit) | Draws anti-aliased PNGs for rounded pills, card corners and progress capsules |
 | modWrap | GDI text measurement (`MeasureText`) and word wrap for fixed-height rows |
@@ -146,6 +146,9 @@ README.md lists them:
 rule is checked again in the module function the button calls. A validation failure the
 user can fix is not an error: the function returns `False` with a message in a `ByRef
 errMsg`, and the form shows it in an inline red label (`lblMsg`, `CLR_ERROR`).
+Empty required fields are checked first, on the form's Save, with the kit's
+`CheckRequired`: it outlines every empty one in `CLR_DESTRUCTIVE`, lists them all in one
+message and puts the focus on the first, so the user fixes them in one pass.
 
 **Session state** lives in `TempVars`. Nothing about the session is written to tables, and
 saved queries can read `[TempVars]![X]`. Expose it through accessor functions such as
@@ -330,6 +333,8 @@ End Sub
 - **Controls**
   - `Lbl`: transparent label.
   - `Txt`: input with `CLR_INPUT_BG`, a 1px `CLR_INPUT_BORDER` border and inner margins.
+    A field box (not an `=` expression) and a `Cbo` show the focus ring: the border turns
+    `CLR_PRIMARY` while the field has the focus (`FocusRing`, see §6.7).
   - `DateBox`: a date input, 120px wide, with its date left-aligned like text, and a
     30px outline calendar button 4px to its right that opens the kit's date picker
     (`PickDate`, `dlgDatePick`, built by `BuildDatePicker`): a month of day cells with
@@ -404,9 +409,20 @@ End Sub
       `GridClick(grid, dbl)`.
     - Each column's `Tag` holds its caption and design position, which `GridFit` and
       modGridOut read.
-  - `GridHeaders prefix, cols, x, y, [parentCtl], [band], [w]` puts the captions above
-    the grid in 8pt bold muted uppercase. `band:=True` draws them on a 22px `CLR_INSET`
+  - `GridHeaders prefix, cols, x, y, [parentCtl], [band], [w], [sortSf]` puts the
+    captions above the grid in 8pt bold muted uppercase. `band:=True` draws them on a 22px `CLR_INSET`
     strip, `w` wide (default: the columns' widths), that stretches with the window.
+    - **Click to sort.** `sortSf:="sfList"` (the table's subform control) makes each
+      caption sort the table by its column (`GridSort`): the first click sorts
+      ascending, the next reverses. The sorted caption shows ▲ or ▼ after the text, or
+      before it on a right-aligned column; the others show none. A column sorts by its
+      field; give a fifth part, `"due|Due|80||due_date"`, when the cell shows formatted
+      text (a date through `Format`) and the record source also returns the real
+      field. A computed column (`"=..."`) sorts only with a fifth part.
+    - The sort is the table's `OrderBy`, so `PrintGrid` and `ExportGrid` follow it. Rows
+      with the same value keep id order. Sort a table in code through `GridSort` so its
+      arrow stays right. A paginated table (`GridFooter`) goes back to page 1 in the new
+      order (`RestartTablePages`).
   - `PrintGrid gridForm, title, [subtitle]` and `ExportGrid gridForm, path` (modGridOut)
     print or export a table as the user sees it: its visible columns with their
     captions, and the rows its filter and sort show. `PrintGrid` builds a report
@@ -497,6 +513,10 @@ Write app-specific helpers next to the builds that use them. Examples:
     dialog set `TempVars("DialogResult") = "ok"`.
   - Other results come back in named TempVars.
   - Dialog input comes through `OpenArgs`.
+  - Every dialog's `Form_Load` ends with `CenterOnApp Me`, after anything that changes
+    its size. It centres the dialog over the Access window, on that window's monitor,
+    and pulls it back inside the monitor's work area. `AutoCenter` alone can open a
+    dialog high or on another monitor.
 - **List subforms** (continuous forms of cards or rows) call back to their host with
   `Me.Parent.<PublicProc>`.
 
@@ -570,6 +590,21 @@ Write app-specific helpers next to the builds that use them. Examples:
   only through `SetVisible` and `SetEnabled` (error 2164 for a focused control being
   disabled). Both also cover a subform, tab control or option group that holds the
   focus, and fall back to the first free tab stop on a form with no sink.
+- **Focus ring**: `Txt` and `Cbo` set `OnGotFocus`/`OnLostFocus` to `=FocusRing(...)`,
+  which paints the border `CLR_PRIMARY` and then gives back the color it found (so a
+  required field's red outline survives tabbing through). Only `BorderColor` changes: a wider
+  border would eat into the text area and shift the text, and an extra ring control
+  would have to be shown and hidden on every focus change (flicker). Locked fields,
+  read-only forms and continuous-form rows get no ring (one control's border is every
+  row's). Only one field is ringed at a time, and `SubF` sets the subform control's
+  `OnEnter`/`OnExit` to `FocusRingEnter`/`FocusRingClear`: Access fires no LostFocus for
+  a field inside a subform when the focus moves out to the main form, and no GotFocus
+  when it comes back to the same field. `Btn`, `Chk`, `Lst` and the focus sink clear
+  the ring on GotFocus (`FocusRingClear`), because the subform's Enter re-rings its
+  last field before a click on its Save button lands. Setting these events later
+  (`Ev c, "OnGotFocus"`) replaces the ring, so such a handler calls
+  `FocusRing Me, "<name>", True` (`False` on LostFocus), or `FocusRingEnter` /
+  `FocusRingClear` for a subform control, itself.
 - Read-only row text with no click handler is set to `Enabled = False` +
   `Locked = True`. That keeps its normal look while it can never take focus.
 - **Disabled controls ignore theme colors.** Lock controls instead of disabling them when

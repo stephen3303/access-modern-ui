@@ -18,11 +18,16 @@ Public Function TestKit(ByVal root As String) As String
     cols = Array("category|Category|160|c", "description|Description|300|ts")
     BuildGrid "subTest", cols, px(600)
     BuildGrid "subTestName", Array("name|Name|200|s"), px(300)
+    NewForm "", 0, px(200), px(60)
+    Txt "ringC", "", 0, 0, px(100), px(30)
+    Btn "ringSave", "Save", px(110), 0, px(80), px(30)
+    SaveForm "subRing"
     NewForm "", 0, px(700), px(700)
     GridHeaders "head", cols, px(24), px(60)
+    GridHeaders "sortHead", cols, px(24), px(40), sortSf:="sfRows"
     SubF "sfRows", "Form.subTest", px(24), px(82), px(600), px(180)
     SubF "sfReuse", "Form.subTest", px(24), px(320), px(600), px(180)
-    SubF "sfName", "Form.subTestName", px(24), px(645), px(300), px(50)
+    SubF "sfName", "Form.subTestName", px(24), px(700), px(300), px(50)
     GridFooter "sfRows", "pager", "id"
     Lbl "filter0", "All (23)", 0, 0, px(100), px(30)
     Lbl "filter1", "Retirement (2)", 0, 0, px(100), px(30)
@@ -36,6 +41,13 @@ Public Function TestKit(ByVal root As String) As String
     Set c = Lbl("pillPaint", "Open", 0, px(620), px(80), px(20)): PillLabel c
     Set c = Txt("pillBound", "=""Open""", px(100), px(620), px(80), px(20))
     CF c, "True", CLR_PRIMARY, CLR_WHITE: RoundCF c
+    Txt "ringA", "", px(200), px(620), px(80), px(30)
+    Cbo "ringB", "", "One;Two", px(290), px(620), px(80), px(30)
+    SubF "sfRing", "Form.subRing", px(400), px(620), px(200), px(60)
+    Set c = CreateControl(F.Name, acTextBox, acDetail, "", "", px(610), px(620), px(60), px(30))
+    c.Name = "plainTxt"                    ' takes the focus with no ring hooks of its own
+    Txt "reqA", "", 0, px(660), px(80), px(30)
+    Txt "reqB", "", px(100), px(660), px(80), px(30)
     SaveForm "frmTest", "testHost"
     DoCmd.OpenForm "frmTest"
     Set host = Forms("frmTest"): Set grid = host.sfRows.Form
@@ -110,6 +122,22 @@ Public Function TestKit(ByVal root As String) As String
     SetVisible host.pillBound, True
     Check host.pillBound.Visible And host.pillBound_bg.Visible, "Shown bound pill lost its image"
     grid.RecordSource = "SELECT * FROM test_rows ORDER BY id"
+    ' Click-to-sort captions: ascending with an up arrow, then reversed; the arrow moves with the column.
+    Check host.head1.OnClick = "" And Right$(host.head1.Tag, 1) = "|", "Unsortable caption has a sort click"
+    Check host.sortHead1.OnClick = "=GridSort([Form],""sfRows"",""sortHead"",1)", "Sortable caption has no sort click"
+    GridSort host, "sfRows", "sortHead", 1
+    Check grid.OrderByOn And grid.OrderBy Like "*description], [[]id]", "First caption click did not sort ascending"
+    Check host.sortHead1.Caption = "DESCRIPTION " & ChrW(&H25B2), "Ascending caption lacks its arrow"
+    GridSort host, "sfRows", "sortHead", 1
+    Check grid.OrderBy Like "*description] DESC, [[]id]", "Second caption click did not reverse the sort"
+    Check host.sortHead1.Caption = "DESCRIPTION " & ChrW(&H25BC), "Descending caption lacks its arrow"
+    With grid.RecordsetClone
+        .MoveFirst
+        Check !description = "Description 9", "Rows are not in descending order"
+    End With
+    GridSort host, "sfRows", "sortHead", 0
+    Check host.sortHead0.Caption = "CATEGORY " & ChrW(&H25B2) And host.sortHead1.Caption = "DESCRIPTION", "Arrow stayed on the old column"
+    grid.OrderBy = "": grid.OrderByOn = False
     height = host.sfRows.Height
     LayoutTableFooter host, "sfRows", "pager", "id"
     Check Not host.pagerCount.Visible, "Unmarked table has footer"
@@ -147,6 +175,15 @@ Public Function TestKit(ByVal root As String) As String
     Loop
     Check ids.Count = 20, "Pager omitted records"
     Check Not host.pagerNext.Enabled, "Last page permits advance"
+    ' Sorting a paginated table starts again at page 1 of the whole filtered set.
+    GridSort host, "sfRows", "sortHead", 1
+    With grid.RecordsetClone
+        .MoveFirst
+        Check !description = "Description 10", "Sorted pager kept the old order's page"
+    End With
+    Check host.pagerCount.Caption Like "Showing 1-* of 20", "Sorted pager did not return to page 1"
+    grid.OrderBy = "": grid.OrderByOn = False
+    LayoutTableFooter host, "sfRows", "pager", "id"
     SetTablePagination host.sfRows, False
     LayoutTableFooter host, "sfRows", "pager", "id"
     Check host.sfRows.Tag = "AppTag", "Opt-out lost app tag"
@@ -160,8 +197,27 @@ Public Function TestKit(ByVal root As String) As String
     Check TagWidth(Array("Short", "Longest category")) = PillTextWidth("Longest category"), "Widest label differs"
     Check FileExists(CStr(ColumnPillPng(CLR_PRIMARY, 240, 26, PillTextWidth("Longest category")))), "Pill image missing"
     Check FileExists(RoundedCardPng(600, 200, CLR_SURFACE, CLR_BORDER)), "Rounded card missing"
-    grid.txtCol0.SetFocus: grid.RowClick
-    Check Screen.ActiveControl.Name = "txtFocusSink", "Row click left text focused"
+    host.ringA.SetFocus
+    Check host.ringA.BorderColor = CLR_PRIMARY, "Focused input lacks its focus ring"
+    host.ringB.SetFocus
+    Check host.ringA.BorderColor = CLR_INPUT_BORDER, "Input kept its focus ring after losing the focus"
+    Check host.ringB.BorderColor = CLR_PRIMARY, "Focused combo box lacks its focus ring"
+    host.ringA.BorderColor = CLR_DESTRUCTIVE: host.ringA.SetFocus: host.ringB.SetFocus
+    Check host.ringA.BorderColor = CLR_DESTRUCTIVE, "Focus ring lost the input's own border color"
+    host.sfRing.SetFocus: host.sfRing.Form.ringC.SetFocus
+    Check host.sfRing.Form.ringC.BorderColor = CLR_PRIMARY, "Subform input lacks its focus ring"
+    host.plainTxt.SetFocus
+    Check host.sfRing.Form.ringC.BorderColor = CLR_INPUT_BORDER, "Subform input kept its ring when the focus left the subform"
+    host.sfRing.SetFocus
+    Check host.sfRing.Form.ringC.BorderColor = CLR_PRIMARY, "Subform input lost its ring when the focus came back"
+    host.plainTxt.SetFocus: host.sfRing.SetFocus: host.sfRing.Form.ringSave.SetFocus
+    Check host.sfRing.Form.ringC.BorderColor = CLR_INPUT_BORDER, "Subform input kept its ring while its Save button had the focus"
+    host.ringB.Locked = True: host.ringA.SetFocus: host.ringB.SetFocus
+    Check host.ringB.BorderColor = CLR_INPUT_BORDER, "Locked input shows a focus ring"
+    ' The ring checks leave the focus on a host control; move it into the grid
+    ' first, or Screen.ActiveControl stays on the host.
+    host.sfRows.SetFocus: grid.txtCol0.SetFocus: grid.RowClick
+    Check Screen.ActiveControl.Name = "txtFocusSink", "Row click left text focused (" & Screen.ActiveControl.Name & ")"
     Check host.callbackGrid = "sfRows", "Grid callback used wrong parent"
     Check CLng(grid.txtSel) = CLng(grid!id), "Row click lost record selection"
     host.sfReuse.Form.RecordSource = "SELECT * FROM test_rows ORDER BY id"
@@ -177,6 +233,15 @@ Public Function TestKit(ByVal root As String) As String
     host.sfName.Form.RecordSource = "SELECT id, description AS name FROM test_rows ORDER BY id"
     GridHighlight host.sfName, "desc"
     Check InStr(Nz(host.sfName.Form.txtCol0, ""), ">Desc</font>ription 1") > 0, "Search column named name shows the wrong value"
+    host.reqA = "   "
+    host.reqB = Null
+    text = RequiredMissing(host, "reqA=First;reqB=Second", fitted)
+    Check text = ChrW(&H2022) & " First" & vbCrLf & ChrW(&H2022) & " Second", "Required list differs"
+    Check fitted = "reqA", "First missing required field differs"
+    Check host.reqA.BorderColor = Th(CLR_DESTRUCTIVE), "Missing required field not outlined"
+    host.reqA = "x"
+    Check RequiredMissing(host, "reqA=First", fitted) = "" And fitted = "", "Filled required field reported"
+    Check host.reqA.BorderColor = Th(CLR_INPUT_BORDER), "Filled required field kept its outline"
     DoCmd.Close acForm, "frmTest", acSaveNo
     BuildMessageDialog
     DoCmd.OpenForm "dlgMessage"
@@ -185,5 +250,12 @@ Public Function TestKit(ByVal root As String) As String
     Check Not host.btn2.Visible And Not host.btn3.Visible, "Message dialog shows unused buttons"
     Check host.btn1.Left + host.btn1.Width = host.btn3.Left + host.btn3.Width, "Message OK button is not right-aligned"
     DoCmd.Close acForm, "dlgMessage", acSaveNo
+    ' Dialog placement (CenterOnApp): centred on the Access window, pulled back
+    ' inside the monitor's work area, and never above or left of it.
+    Check CenteredStart(0, 1000, 400, 0, 1000) = 300, "Dialog not centred on Access"
+    Check CenteredStart(1920, 3840, 400, 1920, 3840) = 2680, "Dialog not centred on the second monitor"
+    Check CenteredStart(1700, 2300, 400, 0, 1920) = 1520, "Dialog left past the work area's right edge"
+    Check CenteredStart(-300, 300, 400, 0, 1920) = 0, "Dialog left past the work area's left edge"
+    Check CenteredStart(0, 1000, 1200, 0, 1000) = 0, "Oversized dialog hides its title bar"
     TestKit = checks & " kit checks passed"
 End Function
