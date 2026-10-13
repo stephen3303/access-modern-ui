@@ -129,5 +129,12 @@ Public Function TestKit(ByVal root As String) As String
     Check grid.ScrollBars = 3, "Narrow grid clips minimum columns instead of scrolling"
     Check grid.txtCol1.Width >= px(292), "Narrow grid discarded Description width"
     DoCmd.Close acForm, "frmTest", acSaveNo
+    BuildMessageDialog
+    DoCmd.OpenForm "dlgMessage"
+    Set host = Forms("dlgMessage")
+    Check host.btn1.Caption = "OK" And host.btn1.Visible And host.btn1.Default And host.btn1.Cancel, "Message dialog lacks its OK button"
+    Check Not host.btn2.Visible And Not host.btn3.Visible, "Message dialog shows unused buttons"
+    Check host.btn1.Left + host.btn1.Width = host.btn3.Left + host.btn3.Width, "Message OK button is not right-aligned"
+    DoCmd.Close acForm, "dlgMessage", acSaveNo
     TestKit = checks & " kit checks passed"
 End Function

@@ -32,6 +32,7 @@ Private Sub Form_Load()
     Next
     i = ((style And &H300) \ &H100) + 1
     If i > n Then i = 1
+    If i > 1 Then SwapLook Me.btn1, Me("btn" & i)   ' the default button looks primary
     Me("btn" & i).Default = True
     Me("btn" & n).Cancel = True
     Me("btn" & i).SetFocus
@@ -74,6 +75,18 @@ Private Sub ShowIcon(ByVal kind As Long)
         Me.lblIcon.Caption = ChrW(glyph)
         Me.lblIcon.ForeColor = clr
     End If
+End Sub
+
+' Swaps the colors of two buttons (the primary look moves to the default).
+Private Sub SwapLook(a As Control, b As Control)
+    Dim props As Variant, p As Variant, v As Long
+    props = Array("BackColor", "ForeColor", "BorderColor", "HoverColor", "PressedColor", _
+        "HoverForeColor", "PressedForeColor")
+    For Each p In props
+        v = a.Properties(CStr(p))
+        a.Properties(CStr(p)) = b.Properties(CStr(p))
+        b.Properties(CStr(p)) = v
+    Next
 End Sub
 
 ' Captions and answers for the first UBound(caps) + 1 buttons; the rest hide.

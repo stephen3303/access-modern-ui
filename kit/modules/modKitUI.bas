@@ -277,7 +277,7 @@ Public Function KitMsgBox(ByVal msg As String, Optional ByVal style As VbMsgBoxS
     btns = style And 7
     If m_msgOpen Then GoTo Plain
     If Not (btns = vbOKOnly Or btns = vbOKCancel Or btns = vbYesNo Or btns = vbYesNoCancel) Then GoTo Plain
-    On Error GoTo Plain
+    On Error GoTo Failed
     m_msgText = msg
     m_msgStyle = style
     m_msgTitle = title
@@ -290,8 +290,11 @@ Public Function KitMsgBox(ByVal msg As String, Optional ByVal style As VbMsgBoxS
     End If
     KitMsgBox = m_msgAnswer
     Exit Function
-Plain:
+Failed:
+    ' Only this message's own dialog failed to open; a message already showing
+    ' (Plain from the first line) keeps m_msgOpen set until it closes.
     m_msgOpen = False
+Plain:
     KitMsgBox = MsgBox(msg, style, title)
 End Function
 
