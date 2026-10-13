@@ -17,6 +17,16 @@ Err_Handler:
     HandleError "frmMain.Form_Load"
 End Sub
 
+' A resize doesn't fire a table's OnCurrent, so recheck which tables need a
+' scroll bar on every page shown (GridScrollAll).
+Private Sub Form_Resize()
+    On Error GoTo Err_Handler
+    GridScrollAll Me
+    Exit Sub
+Err_Handler:
+    HandleError "frmMain.Form_Resize"
+End Sub
+
 ' Key of the page being shown (SetPalette reopens on it; the error log records it).
 Public Property Get PageKey() As String
     PageKey = m_page
