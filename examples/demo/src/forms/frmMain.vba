@@ -10,6 +10,7 @@ Private m_pending As String
 Private Sub Form_Load()
     On Error GoTo Err_Handler
     DoCmd.Maximize
+    MarkDueDates            ' item due dates on the date picker
     ShowPage Nz(TempVars("StartPage"), "cards")
     TempVars("StartPage") = Null
     Exit Sub

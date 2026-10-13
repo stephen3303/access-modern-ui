@@ -169,5 +169,19 @@ Public Function TestKit(ByVal root As String) As String
     Check Not host.btn2.Visible And Not host.btn3.Visible, "Message dialog shows unused buttons"
     Check host.btn1.Left + host.btn1.Width = host.btn3.Left + host.btn3.Width, "Message OK button is not right-aligned"
     DoCmd.Close acForm, "dlgMessage", acSaveNo
+    Check FederalHoliday(#10/12/2026#) = "Columbus Day", "Columbus Day 2026 missing"
+    Check FederalHoliday(#5/25/2026#) = "Memorial Day", "Memorial Day 2026 missing"
+    Check FederalHoliday(#11/26/2026#) = "Thanksgiving Day", "Thanksgiving 2026 missing"
+    Check FederalHoliday(#7/3/2026#) = "Independence Day (observed)", "Saturday holiday not observed on Friday"
+    Check FederalHoliday(#7/4/2026#) = "", "Saturday holiday also marked on its own day"
+    Check FederalHoliday(#12/31/2021#) = "New Year's Day (observed)", "New Year's Day 2022 not observed on 31 December"
+    Check FederalHoliday(#6/19/2020#) = "", "Juneteenth marked before 2021"
+    Check FederalHoliday(#10/13/2026 3:00:00 PM#) = "", "Ordinary day marked as a holiday"
+    ClearMarkedDates
+    MarkDate #10/20/2026 9:00:00 AM#, "Report due"
+    MarkDate #10/20/2026#, "Drill"
+    Check MarkedDate(#10/20/2026#) = "Report due; Drill", "Marked date labels differ"
+    ClearMarkedDates
+    Check MarkedDate(#10/20/2026#) = "", "ClearMarkedDates left a mark"
     TestKit = checks & " kit checks passed"
 End Function

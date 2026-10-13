@@ -119,7 +119,7 @@ them, and the shell (`frmMain`) last.
 | modBuildUI, modBuildPages, modBuildPages2 | `Build_<form>` procedures, one per form, grouped by area |
 | modUI | Run-time UI helpers: `NavTo`, badges/pills painting, `ShowTip`, the app's hooks (`BadgeColors`, `StatusVariant`) |
 | modUIKit (kit) | Build-time control builders (section 6) |
-| modKitUI (kit) | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `KitMsgBox`, `SetCount`, `StyleChip` |
+| modKitUI (kit) | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `KitMsgBox`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
 | modKitUtil (kit) | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `SetVisible`, `SetEnabled` |
 | modDarkMode (kit), modPalette (gen), modTheme (gen) | Palette engine (section 7) |
@@ -334,7 +334,10 @@ End Sub
     30px outline calendar button 4px to its right that opens the kit's date picker
     (`PickDate`, `dlgDatePick`, built by `BuildDatePicker`): a month of day cells with
     previous and next arrows, the box's date highlighted, today in bold, and Today,
-    Clear and Cancel. Access's own picker is off: it shows only on focus, and
+    Clear and Cancel. US federal holidays (`FederalHoliday`, on their observed day)
+    are underlined in `CLR_DANGER_TEXT` and app dates (`MarkDate`, such as deadlines)
+    in `CLR_WARN_TEXT`, which wins when a day is both; the tooltip names every mark.
+    Days outside the month stay `CLR_MUTED_FG` with the underline and tooltip. Access's own picker is off: it shows only on focus, and
     `acCmdShowDatePicker` is refused once it is off. The pair is 154px
     (`DATEFIELD_W`), so it fits a half-width field column.
   - `RO`: read-only text, borderless, transparent, no tab stop. Show read-only dates

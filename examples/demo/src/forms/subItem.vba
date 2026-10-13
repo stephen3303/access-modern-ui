@@ -4,6 +4,15 @@ Option Explicit
 ' Detail panel of pgList: one item, editable. The page saves a changed item
 ' before it shows another; Save saves now and refreshes the list.
 
+' A saved item may have a new due date: redo the date picker's marks.
+Private Sub Form_AfterUpdate()
+    On Error GoTo Err_Handler
+    MarkDueDates
+    Exit Sub
+Err_Handler:
+    HandleError "subItem.Form_AfterUpdate"
+End Sub
+
 Private Sub txtPct_AfterUpdate()
     On Error GoTo Err_Handler
     Me.Recalc          ' redraw the progress capsule

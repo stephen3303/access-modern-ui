@@ -35,7 +35,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 | modUIKit | Build-time form and control builders (catalog below) |
 | modDarkMode | Palette engine: `ThemeForm` repaints each form on open, `Th()` gives runtime colors, and `SetPalette`/`ShowAppearance` switch palettes |
 | modPng | Anti-aliased PNGs for rounded shapes: `PillPng` (pills and badges), `CardPng` (card corners), `ProgressPng` (progress capsules), `ColumnPillPng` (uniform-width pills in a table column), `RoundedCardPng` (whole resizable card backgrounds), cached in `%LOCALAPPDATA%\<APP_NAME>\pills` |
-| modKitUI | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `KitMsgBox`, `SetCount`, `StyleChip` (catalog below) |
+| modKitUI | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `KitMsgBox`, `SetCount`, `StyleChip` (catalog below) |
 | modGridOut | `PrintGrid` and `ExportGrid`: print or export a table as the user sees it |
 | modCsv | UTF-8 text files, RFC 4180 CSV read/write, query-to-CSV export |
 | modCrypto | SHA-256 through Windows CNG, salted password hashing |
@@ -170,6 +170,8 @@ Control heights and font sizes never scale. `TabStrip` and `LayoutFilterRow` alr
 | `ShowDetail host, detailCtl, formName, where [, emptyCtl]` | List/detail pages: show the matching record in the detail subform, saving a changed one first, and hide the empty state |
 | `ClearDetail host, detailCtl [, emptyCtl]` | Empty the detail subform and show the empty state |
 | `PickDate frm, nm` | A `DateBox` calendar button's click: open the kit's date picker (`dlgDatePick`) for box `nm` and write the chosen date into it (not while the box is disabled or locked, or its form is read-only) |
+| `MarkDate d, label` / `ClearMarkedDates` | Mark an app date (a deadline, a drill) on the date picker with a tooltip label; a second label on the same day is added after "; ". Set marks before the picker opens, for example at startup from the app's deadlines table. |
+| `FederalHoliday d` | The US federal holiday on day `d`, on its observed day (a Saturday holiday on Friday, a Sunday one on Monday, "(observed)" added), or "". The date picker marks these on its own. |
 | `KitMsgBox msg [, style, title]` | `MsgBox` in the kit's look, centred over Access (a `MsgBox` is centred on the monitor, so on a large or second screen it opens outside Access). Takes OK, OK/Cancel, Yes/No and Yes/No/Cancel, the four icons and `vbDefaultButton2`/`3`, and returns what `MsgBox` would. Anything else, or a dialog that isn't built yet, falls back to `MsgBox`. Use it in the app's `Notify` and `HandleError`. |
 | `SetCount ctl, n` | Show a count after a tab or chip caption, "Name (n)" |
 | `StyleChip lbl, isOn [, n]` | Filter chip on or off, with an optional count |

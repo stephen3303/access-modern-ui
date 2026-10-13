@@ -5,6 +5,8 @@ Option Explicit
 ' builds it). It shows one month as day cells d0..d41, Sunday first, with the
 ' box's date highlighted and today in bold. A day click, Today or Clear writes
 ' into the box (SetDateTarget) and closes; Cancel or Esc closes unchanged.
+' US federal holidays (FederalHoliday) and the app's own dates (MarkDate) are
+' underlined, in the danger and warning text colors, with a tooltip naming them.
 
 Private m_month As Date     ' first day of the month shown
 
@@ -21,9 +23,12 @@ Err_Handler:
 End Sub
 
 ' Caption and paint the 42 day cells for m_month. Each cell's Tag holds its
-' date as a serial number.
+' date as a serial number. A marked day takes the warning color for an app
+' date (it wins over a holiday on the same day) or the danger color for a
+' holiday; days outside the month stay muted but keep the underline and tip.
 Private Sub ShowMonth()
     Dim first As Date, d As Date, i As Long, c As Control, v As Variant, sel As Date, hasSel As Boolean
+    Dim hol As String, app As String, clr As Long
     v = DateTargetValue()
     hasSel = IsDate(v)
     If hasSel Then sel = DateValue(v)
@@ -34,8 +39,25 @@ Private Sub ShowMonth()
         Set c = Me("d" & i)
         c.Caption = CStr(Day(d))
         c.Tag = CStr(CLng(d))
-        c.ForeColor = Th(IIf(Month(d) = Month(m_month), CLR_FG, CLR_MUTED_FG))
+        hol = FederalHoliday(d)
+        app = MarkedDate(d)
+        If Month(d) <> Month(m_month) Then
+            clr = CLR_MUTED_FG
+        ElseIf Len(app) > 0 Then
+            clr = CLR_WARN_TEXT
+        ElseIf Len(hol) > 0 Then
+            clr = CLR_DANGER_TEXT
+        Else
+            clr = CLR_FG
+        End If
+        c.ForeColor = Th(clr)
         c.FontWeight = IIf(d = Date, 700, 400)
+        c.FontUnderline = (Len(hol) + Len(app) > 0)
+        If Len(hol) > 0 And Len(app) > 0 Then
+            c.ControlTipText = hol & "; " & app
+        Else
+            c.ControlTipText = hol & app
+        End If
         If hasSel And d = sel Then
             c.BackStyle = 1
             c.BackColor = Th(CLR_PRIMARY_SOFT)
