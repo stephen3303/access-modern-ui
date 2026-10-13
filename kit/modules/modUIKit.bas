@@ -620,7 +620,7 @@ Public Sub BuildGrid(ByVal finalName As String, ByVal cols As Variant, ByVal w A
             If wrap Then c.TopMargin = 0
             If InStr(opts, "r") > 0 Then c.TextAlign = 3
             If InStr(opts, "c") > 0 Then c.TextAlign = 2
-            If InStr(opts, "s") > 0 Then SearchCol c, p(0)
+            If InStr(opts, "s") > 0 Then SearchCol c, p(0), i
         End If
         c.Tag = p(1) & "|" & x & "|" & cw
         c.OnClick = "=RowClick()"
@@ -654,18 +654,14 @@ Private Sub PillCol(c As Control, ByVal field As String)
 End Sub
 
 ' A grid column that marks the search term (option "s"): a rich text cell
-' showing GridMark(value, [txtFind]). modGridOut prints and exports the
-' field inside the GridMark call, not the marked text.
-Private Sub SearchCol(c As Control, ByVal field As String)
-    Dim ref As String
-    If Left$(field, 1) = "=" Then
-        ref = "(" & Mid$(field, 2) & ")"
-    ElseIf Left$(field, 1) = "[" Then
-        ref = field
-    Else
-        ref = "[" & field & "]"
-    End If
-    c.ControlSource = "=GridMark(" & ref & ",[txtFind])"
+' showing GridMark([txtSrc<i>], [txtFind]), where hidden txtSrc<i> is bound to
+' the column's field. The field goes through a control because a bare field
+' reference in an expression can bind to a form property instead ([name] is
+' the form's Name). modGridOut prints and exports txtSrc<i>'s source.
+Private Sub SearchCol(c As Control, ByVal field As String, ByVal i As Long)
+    Dim src As Control
+    Set src = RO("txtSrc" & i, field, 0, 0, px(4), px(4)): src.Visible = False
+    c.ControlSource = "=GridMark([txtSrc" & i & "],[txtFind])"
     c.TextFormat = 1                        ' acTextFormatHTMLRichText
 End Sub
 

@@ -17,10 +17,12 @@ Public Function TestKit(ByVal root As String) As String
     Next
     cols = Array("category|Category|160|c", "description|Description|300|ts")
     BuildGrid "subTest", cols, px(600)
+    BuildGrid "subTestName", Array("name|Name|200|s"), px(300)
     NewForm "", 0, px(700), px(700)
     GridHeaders "head", cols, px(24), px(60)
     SubF "sfRows", "Form.subTest", px(24), px(82), px(600), px(180)
     SubF "sfReuse", "Form.subTest", px(24), px(320), px(600), px(180)
+    SubF "sfName", "Form.subTestName", px(24), px(645), px(300), px(50)
     GridFooter "sfRows", "pager", "id"
     Lbl "filter0", "All (23)", 0, 0, px(100), px(30)
     Lbl "filter1", "Retirement (2)", 0, 0, px(100), px(30)
@@ -170,6 +172,9 @@ Public Function TestKit(ByVal root As String) As String
     Check InStr(Nz(grid.txtCol1, ""), ">Desc</font>") > 0, "Table search match not marked"
     GridHighlight host.sfRows, ""
     Check InStr(Nz(grid.txtCol1, ""), "<font") = 0, "Cleared table search left a mark"
+    host.sfName.Form.RecordSource = "SELECT id, description AS name FROM test_rows ORDER BY id"
+    GridHighlight host.sfName, "desc"
+    Check InStr(Nz(host.sfName.Form.txtCol0, ""), ">Desc</font>ription 1") > 0, "Search column named name shows the wrong value"
     DoCmd.Close acForm, "frmTest", acSaveNo
     BuildMessageDialog
     DoCmd.OpenForm "dlgMessage"

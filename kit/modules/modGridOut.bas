@@ -111,12 +111,9 @@ Private Function GridColumns(gridForm As Form) As Collection
         If c.Visible Then
             t = Split(c.Tag & "||", "|")
             src = c.ControlSource
-            ' A search column (BuildGrid option "s") shows
-            ' =GridMark(<field>,[txtFind]): use the field, not the marked text.
-            If Left$(src, 10) = "=GridMark(" Then
-                src = Mid$(src, 11, Len(src) - 10 - Len(",[txtFind])"))
-                If Left$(src, 1) = "(" Then src = "=" & Mid$(src, 2, Len(src) - 2)
-            End If
+            ' A search column (BuildGrid option "s") shows the marked text of
+            ' hidden txtSrc<i>: use that control's field instead.
+            If Left$(src, 10) = "=GridMark(" Then src = gridForm.Controls("txtSrc" & i).ControlSource
             out.Add Array(src, IIf(Len(t(0)) > 0, t(0), src), c.Width + px(8), c.Format, c.TextAlign)
         End If
         i = i + 1

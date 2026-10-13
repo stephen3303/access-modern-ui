@@ -178,11 +178,12 @@ End Function
 
 ' Mark term in the search columns (BuildGrid option "s") of the table shown
 ' in subform control sf. Call it with the page's search box text whenever
-' that changes; "" clears the marks. Text matches ignoring case, as a LIKE
-' filter does.
+' that changes; "" clears the marks. Text matches literally, ignoring case.
+' A table built before the "s" option (no txtFind) is left as it is.
 Public Sub GridHighlight(sf As Control, ByVal term As String)
     Dim g As Form
     Set g = sf.Form
+    If Not HasCtl(g, "txtFind") Then Exit Sub
     If StrComp(Nz(g.txtFind, ""), term, vbBinaryCompare) = 0 Then Exit Sub
     g.txtFind = IIf(Len(term) > 0, term, Null)
     g.Recalc
@@ -214,7 +215,8 @@ Public Function GridMark(ByVal v As Variant, ByVal term As Variant) As Variant
     GridMark = out & HtmlText(s)
     Exit Function
 Fail:
-    GridMark = v
+    On Error Resume Next
+    GridMark = HtmlText(CStr(v))
 End Function
 
 ' Text for a rich text box: the characters HTML reserves escaped, line breaks
