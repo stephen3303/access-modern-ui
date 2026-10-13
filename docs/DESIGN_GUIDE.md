@@ -119,7 +119,7 @@ them, and the shell (`frmMain`) last.
 | modBuildUI, modBuildPages, modBuildPages2 | `Build_<form>` procedures, one per form, grouped by area |
 | modUI | Run-time UI helpers: `NavTo`, badges/pills painting, `ShowTip`, the app's hooks (`BadgeColors`, `StatusVariant`) |
 | modUIKit (kit) | Build-time control builders (section 6) |
-| modKitUI (kit) | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `KitMsgBox`, `SetCount`, `StyleChip` |
+| modKitUI (kit) | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `KitMsgBox`, `KitInputBox`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
 | modKitUtil (kit) | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `SetVisible`, `SetEnabled` |
 | modDarkMode (kit), modPalette (gen), modTheme (gen) | Palette engine (section 7) |
@@ -156,7 +156,8 @@ prints to the debug window, raises on warnings and answers Yes to questions, and
 `HandleError` raises the error again, so nothing can block the invisible Access.
 Otherwise both show their message with the kit's `KitMsgBox`, never `MsgBox`: Windows
 centres a `MsgBox` on the monitor, so on a large or second screen it opens outside
-Access and Access waits behind it.
+Access and Access waits behind it. For the same reason a question the user types an
+answer to uses `KitInputBox`, never `InputBox`, with `masked:=True` for a PIN or password.
 
 ---
 
@@ -779,6 +780,7 @@ The Appearance dialog grows by itself, because it is built from `PALETTE_COUNT`.
 6. For each page, write a `Build_pg<Name>` using `PageHeader`, cards, grids and buttons,
    and a `src/forms/pg<Name>.vba` where every handler uses the standard error handler.
 7. Copy the dialogs: `dlgAppearance`, `BuildMessageDialog` (for `Notify` and `HandleError`),
+   `BuildInputDialog` (for `KitInputBox`),
    `BuildDatePicker` (for date fields), and a non-modal `dlgHelp` with `help.txt` and the F1
    `AutoKeys` macro.
 8. Write `README.md` and `DEVELOPING.md` using the structure in section 4, linking to the

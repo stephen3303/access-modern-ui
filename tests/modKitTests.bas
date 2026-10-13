@@ -169,5 +169,14 @@ Public Function TestKit(ByVal root As String) As String
     Check Not host.btn2.Visible And Not host.btn3.Visible, "Message dialog shows unused buttons"
     Check host.btn1.Left + host.btn1.Width = host.btn3.Left + host.btn3.Width, "Message OK button is not right-aligned"
     DoCmd.Close acForm, "dlgMessage", acSaveNo
+    BuildInputDialog
+    DoCmd.OpenForm "dlgInput"
+    Set host = Forms("dlgInput")
+    Check host.btnOK.Default And host.btnCancel.Cancel, "Input dialog lacks its Enter and Esc buttons"
+    Check host.btnCancel.Left + host.btnCancel.Width = px(400), "Input Cancel button is not right-aligned"
+    Check host.btnOK.Left + host.btnOK.Width + px(8) = host.btnCancel.Left, "Input OK button is not 8px left of Cancel"
+    Check Not host.txtPrompt.Visible And host.txtValue.Top = px(22), "Input dialog without a prompt keeps the prompt's space"
+    Check Len(host.txtValue.InputMask) = 0, "Unmasked input dialog masks its text"
+    DoCmd.Close acForm, "dlgInput", acSaveNo
     TestKit = checks & " kit checks passed"
 End Function

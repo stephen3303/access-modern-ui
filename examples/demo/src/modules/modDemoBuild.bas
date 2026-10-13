@@ -98,6 +98,7 @@ Private Sub BuildUserInterface()
     Build_pgList
     Build_dlgAppearance
     BuildMessageDialog             ' the kit's dlgMessage, for KitMsgBox
+    BuildInputDialog               ' the kit's dlgInput, for KitInputBox
     Build_frmMain
 End Sub
 
@@ -205,8 +206,10 @@ Private Sub Build_pgCards()
 
     x = CX + 2 * (w + px(16))
     Card "Square", "Square card", x, y, w, h, square:=True
-    Lbl "lblSquareBody", "Square corners: the fallback for a card where a subform or a control that repaints often covers a corner.", _
-        x + px(14), y + px(38), w - px(28), px(54), 9, False, CLR_MUTED_FG
+    Lbl "lblSquareBody", "Square corners: the fallback for a card where a subform or a control that repaints often covers a corner. " & _
+        "Its buttons ask a question (KitInputBox).", x + px(14), y + px(38), w - px(28), px(54), 9, False, CLR_MUTED_FG
+    Btn "btnSquareA", "Ask", x + px(14), y + h - px(42), px(96), px(28)
+    Btn "btnSquareB", "Ask masked", x + px(118), y + h - px(42), px(96), px(28), "outline"
 
     y = px(250): h = PAGE_H - y - px(16)
     Card "Items", "Items in a rounded card", CX, y, CW(), h, , 2, 2

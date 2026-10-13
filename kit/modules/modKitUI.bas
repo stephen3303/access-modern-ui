@@ -4,7 +4,8 @@ Option Explicit
 ' Access UI kit - run-time helpers for pages built with modUIKit: tables that
 ' scale their columns (GridFit), list/detail pages (SelectFirstRow,
 ' ShowDetail, ClearDetail), tabs and filter chips with counts (SetCount,
-' StyleChip), and messages in the kit's look (KitMsgBox). Colors set here go
+' StyleChip), and messages and questions in the kit's look (KitMsgBox,
+' KitInputBox). Colors set here go
 ' through Th() so they follow the palette.
 
 ' Width the table's vertical scroll bar takes (twips).
@@ -20,6 +21,14 @@ Private m_msgText As String
 Private m_msgStyle As Long
 Private m_msgTitle As String
 Private m_msgAnswer As Long
+' The question the input dialog (dlgInput) is asking (KitInputBox), and the
+' text typed (Null until OK is clicked).
+Private m_inOpen As Boolean
+Private m_inPrompt As String
+Private m_inTitle As String
+Private m_inDefault As String
+Private m_inMasked As Boolean
+Private m_inAnswer As Variant
 
 ' ---------------------------------------------------------------------------
 ' Tables
@@ -313,6 +322,72 @@ End Function
 
 Public Sub SetKitMsgAnswer(ByVal answer As Long)
     m_msgAnswer = answer
+End Sub
+
+' InputBox in the kit's look: opens the input dialog (dlgInput, built by
+' BuildInputDialog), centred over Access like dlgMessage, and waits. Returns
+' the text typed when OK is clicked (a String, "" if the box was left empty)
+' or Null on Cancel, Esc or any other close, so an empty answer and a cancel
+' can be told apart. masked:=True shows each typed character as * (the
+' Password input mask) for a PIN or password; the text returned is the real
+' one.
+' A question while one is already showing, or a dialog that can't open (not
+' built yet), uses InputBox itself, with Null for its Cancel. A masked
+' question never does: InputBox would show the secret, so it is logged and
+' returns Null instead.
+Public Function KitInputBox(ByVal prompt As String, Optional ByVal title As String = "", _
+        Optional ByVal defaultText As String = "", Optional ByVal masked As Boolean = False) As Variant
+    Dim s As String
+    If m_inOpen Then GoTo Plain
+    On Error GoTo Failed
+    m_inPrompt = prompt
+    m_inTitle = title
+    m_inDefault = defaultText
+    m_inMasked = masked
+    m_inAnswer = Null
+    m_inOpen = True
+    DoCmd.OpenForm "dlgInput", WindowMode:=acDialog
+    m_inOpen = False
+    KitInputBox = m_inAnswer
+    Exit Function
+Failed:
+    ' Only this question's own dialog failed to open; a question already
+    ' showing (Plain from the first line) keeps m_inOpen set until it closes.
+    m_inOpen = False
+    If masked Then
+        LogError "modKitUI.KitInputBox", "masked input dialog did not open: " & Err.Description
+        KitInputBox = Null
+        Exit Function
+    End If
+Plain:
+    If masked Then
+        LogError "modKitUI.KitInputBox", "masked question while another is open"
+        KitInputBox = Null
+        Exit Function
+    End If
+    s = InputBox(prompt, IIf(Len(title) > 0, title, APP_NAME), defaultText)
+    If StrPtr(s) = 0 Then KitInputBox = Null Else KitInputBox = s   ' StrPtr 0: Cancel
+End Function
+
+' What the open input dialog asks, and its answer (dlgInput calls these).
+Public Function KitInputPrompt() As String
+    KitInputPrompt = m_inPrompt
+End Function
+
+Public Function KitInputTitle() As String
+    KitInputTitle = m_inTitle
+End Function
+
+Public Function KitInputDefault() As String
+    KitInputDefault = m_inDefault
+End Function
+
+Public Function KitInputMasked() As Boolean
+    KitInputMasked = m_inMasked
+End Function
+
+Public Sub SetKitInputAnswer(ByVal answer As Variant)
+    m_inAnswer = answer
 End Sub
 
 ' ---------------------------------------------------------------------------

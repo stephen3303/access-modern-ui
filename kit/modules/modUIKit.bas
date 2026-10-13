@@ -381,6 +381,35 @@ Public Sub BuildMessageDialog()
     SaveForm "dlgMessage"
 End Sub
 
+' The input dialog KitInputBox opens (dlgInput, code in forms\dlgInput.vba):
+' dlgMessage's look without the icon. The prompt in 10pt text wraps across a
+' 380px column (room for 6 lines, scrolling for more), a 30px input sits 12px
+' under it, and OK (primary, Enter) and Cancel (outline, Esc) 88px buttons sit
+' 20px below along the bottom right, in dlgMessage's sizes and order.
+' dlgInput fills in the prompt, the starting text and the mask for each
+' question, and shrinks the dialog to the prompt's lines. Build it with the
+' app's other dialogs.
+Public Sub BuildInputDialog()
+    Dim c As Control, promptH As Long, inY As Long, btnY As Long
+    promptH = 6 * CLng(10 * 20 * 1.36)              ' 6 lines of 10pt text
+    inY = px(22) + promptH + px(12)
+    btnY = inY + px(30) + px(20)
+    NewDialog "Input", px(420), btnY + px(30) + px(16)
+    F.CloseButton = False                           ' Esc or a button closes it, like InputBox
+    Ev F, "OnLoad"
+    ' Read-only text box rather than a label, so a longer prompt can scroll.
+    Set c = RO("txtPrompt", "", px(20), px(22), px(380), promptH, 10, False, CLR_FG)
+    c.TopMargin = 0: c.LeftMargin = 0: c.RightMargin = 0: c.BottomMargin = 0
+    c.ScrollBars = 2                                ' shows only while it has the focus
+    c.BackColor = CLR_DIALOG                        ' painted while it has the focus
+    Txt "txtValue", "", px(20), inY, px(380), px(30), 10
+    Set c = Btn("btnOK", "OK", px(420) - px(20) - 2 * px(88) - px(8), btnY, px(88), px(30))
+    c.Default = True
+    Set c = Btn("btnCancel", "Cancel", px(420) - px(20) - px(88), btnY, px(88), px(30), "outline")
+    c.Cancel = True
+    SaveForm "dlgInput"
+End Sub
+
 ' Background box for a continuous-form row: paints (with conditional colors)
 ' but can never take focus. Disabled + locked keeps the normal appearance.
 Public Function RowBack(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long) As Control
