@@ -119,7 +119,7 @@ them, and the shell (`frmMain`) last.
 | modBuildUI, modBuildPages, modBuildPages2 | `Build_<form>` procedures, one per form, grouped by area |
 | modUI | Run-time UI helpers: `NavTo`, badges/pills painting, `ShowTip`, the app's hooks (`BadgeColors`, `StatusVariant`) |
 | modUIKit (kit) | Build-time control builders (section 6) |
-| modKitUI (kit) | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `KitMsgBox`, `SetCount`, `StyleChip` |
+| modKitUI (kit) | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `KitMsgBox`, `CheckRequired`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
 | modKitUtil (kit) | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `CenterOnApp`, `SetVisible`, `SetEnabled` |
 | modDarkMode (kit), modPalette (gen), modTheme (gen) | Palette engine (section 7) |
@@ -146,6 +146,9 @@ README.md lists them:
 rule is checked again in the module function the button calls. A validation failure the
 user can fix is not an error: the function returns `False` with a message in a `ByRef
 errMsg`, and the form shows it in an inline red label (`lblMsg`, `CLR_ERROR`).
+Empty required fields are checked first, on the form's Save, with the kit's
+`CheckRequired`: it outlines every empty one in `CLR_DESTRUCTIVE`, lists them all in one
+message and puts the focus on the first, so the user fixes them in one pass.
 
 **Session state** lives in `TempVars`. Nothing about the session is written to tables, and
 saved queries can read `[TempVars]![X]`. Expose it through accessor functions such as
