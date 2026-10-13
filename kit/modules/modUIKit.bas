@@ -337,10 +337,13 @@ End Function
 ' tall like the box, that shows or hides the text (ToggleSecret). The pair
 ' takes w; the box gets w less 34px. Masking is display only: the field
 ' still stores what was typed, so hash passwords before saving them
-' (HashPassword). Returns the text box.
+' (HashPassword). Single-record forms only: a continuous form shares one
+' InputMask across its rows, so one eye would show every row's value.
+' Returns the text box.
 Public Function SecretBox(ByVal nm As String, ByVal src As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, _
         ByVal h As Long, Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control
     Dim c As Control, b As Control
+    If F.DefaultView <> 0 Then Err.Raise 5, , "SecretBox " & nm & " needs a single-record form: one eye would show every row"
     Set c = Txt(nm, src, x, y, w - px(34), h, 10, sec, parentCtl)
     c.InputMask = SECRET_MASK
     Set b = Btn("eye_" & nm, ChrW(EYE_SHOW), x + w - px(30), y, px(30), h, "outline", sec, parentCtl)

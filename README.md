@@ -117,7 +117,7 @@ Control heights and font sizes never scale. `TabStrip` and `LayoutFilterRow` alr
 | `BuildDatePicker` | Builds `dlgDatePick`, the month calendar `DateBox` buttons open. Call it once with the app's dialogs. |
 | `BuildMessageDialog` | Builds `dlgMessage`, the dialog `KitMsgBox` opens. Call it once with the app's dialogs. |
 | `DateBox nm, src, x, y, h` | Date entry: a 120px text box (dd mmm yyyy, left-aligned) and a calendar button `cal_<nm>` 4px to its right that opens the date picker. The pair is `DATEFIELD_W` (154px) wide. |
-| `SecretBox nm, src, x, y, w, h` | Password or other sensitive entry: a text box that shows asterisks (input mask `Password`) and an eye button `eye_<nm>` 4px to its right, 30px wide, that shows or hides the text. The pair is `w` wide. Masking is display only, so hash passwords (`HashPassword`) before saving. |
+| `SecretBox nm, src, x, y, w, h` | Password or other sensitive entry: a text box that shows asterisks (input mask `Password`) and an eye button `eye_<nm>` 4px to its right, 30px wide, that shows or hides the text. The pair is `w` wide. Masking is display only, so hash passwords (`HashPassword`) before saving. Single-record forms only. |
 | `RO nm, src, x, y, w, h` | Read-only text: no border, not a tab stop |
 | `Cbo` / `Lst` / `Chk` | Combo box, list box, check box with its label |
 | `Btn nm, cap, x, y, w, h [, kind]` | Button. `kind` is `primary`, `outline`, `ghost`, `destructive` or `nav`. |

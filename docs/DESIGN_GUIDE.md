@@ -343,7 +343,8 @@ End Sub
     struck through (ED1A) to hide it again (`ToggleSecret`). The form calls
     `HideSecrets Me` in `Form_Current`, so a value shown on one record is hidden on the
     next. Use it for every sensitive field. Masking only hides the text on screen:
-    passwords are still hashed (`HashPassword`) before they are saved.
+    passwords are still hashed (`HashPassword`) before they are saved. Single-record forms
+    only: a continuous form shares one mask across its rows, so `SecretBox` refuses one.
   - `RO`: read-only text, borderless, transparent, no tab stop. Show read-only dates
     left-aligned (`TextAlign = 1`) so they line up with text values.
   - `Cbo`, `Lst`, `Chk`
