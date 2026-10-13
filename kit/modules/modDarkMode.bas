@@ -125,9 +125,10 @@ End Function
 ' Color a pop-up form's title bar and border with the current palette: the
 ' caption matches the dialog background (CLR_DIALOG), with CLR_FG text and a
 ' CLR_BORDER edge. Forms inside the Access window (frmMain, pages, subforms)
-' have no title bar of their own and are skipped. Before Windows 11 the calls
-' fail with an HRESULT, which is ignored, so the title bar stays as Windows
-' draws it. Any other problem is logged, never shown.
+' have no title bar of their own and are skipped. Before Windows 11 the color
+' calls fail with an HRESULT, which is ignored; Windows 10 (20H1 and later)
+' still honors the dark-mode flag, so dark palettes get its plain dark title
+' bar. Any other problem is logged, never shown.
 Public Sub ThemeTitleBar(frm As Object)
     Dim h As LongPtr
     On Error GoTo Fail
