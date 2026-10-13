@@ -46,6 +46,7 @@ Public Function TestKit(ByVal root As String) As String
     c.Name = "plainTxt"                    ' takes the focus with no ring hooks of its own
     Txt "reqA", "", 0, px(660), px(80), px(30)
     Txt "reqB", "", px(100), px(660), px(80), px(30)
+    Toggle "tglTest", "", px(220), px(663), onChange:="ToggleChanged"
     SaveForm "frmTest", "testHost"
     DoCmd.OpenForm "frmTest"
     Set host = Forms("frmTest"): Set grid = host.sfRows.Form
@@ -188,6 +189,27 @@ Public Function TestKit(ByVal root As String) As String
     Check TagWidth(Array("Short", "Longest category")) = PillTextWidth("Longest category"), "Widest label differs"
     Check FileExists(CStr(ColumnPillPng(CLR_PRIMARY, 240, 26, PillTextWidth("Longest category")))), "Pill image missing"
     Check FileExists(RoundedCardPng(600, 200, CLR_SURFACE, CLR_BORDER)), "Rounded card missing"
+    Check Not Nz(host.tglTest_val, False), "Unbound switch did not start off"
+    ToggleSwitch host, "tglTest"
+    Check host.tglTest_val, "Switch click did not turn it on"
+    Check InStr(Nz(host.tglTest_bg.Properties("ControlSource").Value, ""), "TogglePng(") > 0, "Switch track is not bound"
+    ToggleSwitch host, "tglTest"
+    Check Not host.tglTest_val, "Second switch click did not turn it off"
+    Check host.toggleChanges = 2, "Switch onChange did not run once per change"
+    host.tglTest_val.Locked = True
+    ToggleSwitch host, "tglTest"
+    Check Not host.tglTest_val, "Locked switch changed"
+    Check host.toggleChanges = 2, "Locked switch ran onChange"
+    host.tglTest_val.Locked = False
+    Check FileExists(CStr(TogglePng(True, CLR_PRIMARY, CLR_MUTED_FG, CLR_SURFACE, 44, 24))), "Switch image missing"
+    Check FileExists(CStr(RingPng(CLR_PRIMARY, 52, 32))), "Focus ring image missing"
+    Check Not host.tglTest_ring.Visible, "Focus ring shows without focus"
+    host.tglTest.SetFocus
+    Check host.tglTest_ring.Visible, "Focused switch shows no ring"
+    host.txtFocusSink.SetFocus
+    Check Not host.tglTest_ring.Visible, "Focus ring stayed after focus left"
+    host.ringA.SetFocus: host.tglTest.SetFocus
+    Check host.ringA.BorderColor = CLR_INPUT_BORDER, "Input kept its focus ring while the switch had the focus"
     host.ringA.SetFocus
     Check host.ringA.BorderColor = CLR_PRIMARY, "Focused input lacks its focus ring"
     host.ringB.SetFocus
@@ -234,6 +256,16 @@ Public Function TestKit(ByVal root As String) As String
     Check Not host.btn2.Visible And Not host.btn3.Visible, "Message dialog shows unused buttons"
     Check host.btn1.Left + host.btn1.Width = host.btn3.Left + host.btn3.Width, "Message OK button is not right-aligned"
     DoCmd.Close acForm, "dlgMessage", acSaveNo
+    Check CompareVersions("1.10.0", "1.9.2") = 1, "Version parts compared as text"
+    Check CompareVersions("v1.2", "1.2.0") = 0, "Missing version part not read as 0"
+    Check CompareVersions("1.0.0", "1.0.1-beta") = -1, "Version suffix not ignored"
+    Check ReleasedVersion("") = "", "Blank release folder read a version"
+    text = CurrentProject.Path & "\version-test"          ' the run's own folder (native-smoke.ps1)
+    EnsureFolder text
+    WriteTextFile text & "\" & KIT_VERSION_FILE, vbCrLf & " 1.4.0 " & vbCrLf & "notes"
+    Check ReleasedVersion(text & "\") = "1.4.0", "Release folder version misread"
+    Kill text & "\" & KIT_VERSION_FILE: RmDir text
+    Check ReleasedVersion(text) = "", "Missing version file read a version"
     Check FederalHoliday(#10/12/2026#) = "Columbus Day", "Columbus Day 2026 missing"
     Check FederalHoliday(#5/25/2026#) = "Memorial Day", "Memorial Day 2026 missing"
     Check FederalHoliday(#11/26/2026#) = "Thanksgiving Day", "Thanksgiving 2026 missing"

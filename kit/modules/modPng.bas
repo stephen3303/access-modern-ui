@@ -2,11 +2,11 @@ Option Compare Database
 Option Explicit
 
 ' Access UI kit - rounded images. Access controls only draw square corners,
-' so pills, badges, card corners and progress bars are image controls showing
-' anti-aliased PNGs drawn here. Each image is written once per color and size
-' to %LOCALAPPDATA%\<APP_NAME>\pills and reused. The image controls get them
-' through ControlSource expressions such as =PillPng(<color>,w,h), so
-' ThemeForm can repaint the colors written in them.
+' so pills, badges, card corners, progress bars and toggle switches are image
+' controls showing anti-aliased PNGs drawn here. Each image is written once
+' per color and size to %LOCALAPPDATA%\<APP_NAME>\pills and reused. The
+' image controls get them through ControlSource expressions such as
+' =PillPng(<color>,w,h), so ThemeForm can repaint the colors written in them.
 
 Private Const SCALE_UP As Long = 2          ' draw at 2x for crisp edges when zoomed
 Private m_crc(255) As Long
@@ -55,6 +55,49 @@ Public Function ProgressPng(ByVal percent As Variant, ByVal fill As Long, ByVal 
     Exit Function
 Fail:
     ProgressPng = Null
+End Function
+
+' On/off switch track for a control of wPx x hPx (modUIKit.Toggle): a capsule
+' in onClr with a round knob at the right when isOn is true, in offClr with
+' the knob at the left when it is false or Null. The knob is knobClr, 2px in
+' from the track's edge.
+Public Function TogglePng(ByVal isOn As Variant, ByVal onClr As Long, ByVal offClr As Long, ByVal knobClr As Long, _
+                          ByVal wPx As Long, ByVal hPx As Long) As Variant
+    Dim key As String, path As String, draw As Boolean, v As Boolean
+    TogglePng = Null
+    If wPx < 2 Or hPx < 2 Then Exit Function
+    On Error GoTo Fail
+    If Not IsNull(isOn) Then v = CBool(isOn)
+    key = "t_" & IIf(v, "1", "0") & "_" & Hex6(IIf(v, onClr, offClr)) & "_" & Hex6(knobClr) & "_" & wPx & "x" & hPx
+    path = ImagePath(key, draw)
+    If draw Then
+        WriteSwitch path, IIf(v, onClr, offClr), knobClr, v, wPx * SCALE_UP, hPx * SCALE_UP
+        Remember key, path
+    End If
+    TogglePng = path
+    Exit Function
+Fail:
+    TogglePng = Null
+End Function
+
+' Focus ring for a capsule control: the outline of a wPx x hPx capsule, 2px
+' wide, in clr, transparent inside (modUIKit.Toggle draws it 4px larger than
+' the track on every side, which leaves a 2px gap).
+Public Function RingPng(ByVal clr As Long, ByVal wPx As Long, ByVal hPx As Long) As Variant
+    Dim key As String, path As String, draw As Boolean
+    RingPng = Null
+    If wPx < 6 Or hPx < 6 Then Exit Function
+    On Error GoTo Fail
+    key = "r_" & Hex6(clr) & "_" & wPx & "x" & hPx
+    path = ImagePath(key, draw)
+    If draw Then
+        WriteRing path, clr, wPx * SCALE_UP, hPx * SCALE_UP, 2 * SCALE_UP
+        Remember key, path
+    End If
+    RingPng = path
+    Exit Function
+Fail:
+    RingPng = Null
 End Function
 
 ' One rounded corner of a card (modUIKit.Card): a square image of side rPx
@@ -189,6 +232,67 @@ Private Sub WriteCorner(ByVal path As String, ByVal fill As Long, ByVal border A
         Next
     Next
     WritePng path, rr, rr, raw
+End Sub
+
+' Share (0-1) of the pixel centered at (ptX, ptY) that lies inside a capsule
+' filling a w x h canvas less inset on every side.
+Private Function CapsuleCover(ByVal ptX As Double, ByVal ptY As Double, ByVal w As Double, ByVal h As Double, _
+                              ByVal inset As Double) As Double
+    Dim r As Double, cx As Double, d As Double, a As Double
+    r = (h - 2 * inset) / 2
+    If r <= 0 Or w - 2 * inset <= 0 Then Exit Function
+    If r > (w - 2 * inset) / 2 Then r = (w - 2 * inset) / 2
+    ' nearest point on the capsule's center segment
+    cx = ptX
+    If cx < inset + r Then cx = inset + r
+    If cx > w - inset - r Then cx = w - inset - r
+    d = Sqr((ptX - cx) ^ 2 + (ptY - h / 2) ^ 2)
+    a = r - d + 0.5
+    If a < 0 Then a = 0
+    If a > 1 Then a = 1
+    CapsuleCover = a
+End Function
+
+' Switch track of w x h pixels in color track with a knob in color knob
+' (see TogglePng). The knob's diameter is the track's height less a 2px
+' margin (2 * SCALE_UP drawn pixels) top and bottom.
+Private Sub WriteSwitch(ByVal path As String, ByVal track As Long, ByVal knob As Long, ByVal isOn As Boolean, _
+                        ByVal w As Long, ByVal h As Long)
+    Dim raw() As Byte, x As Long, y As Long, i As Long, kr As Double, kx As Double
+    Dim d As Double, k As Double
+    kr = h / 2 - 2 * SCALE_UP
+    kx = IIf(isOn, w - h / 2, h / 2)
+    ReDim raw(0 To h * (w * 4 + 1) - 1)
+    i = 0
+    For y = 0 To h - 1
+        raw(i) = 0: i = i + 1                         ' filter: none
+        For x = 0 To w - 1
+            d = Sqr((x + 0.5 - kx) ^ 2 + (y + 0.5 - h / 2) ^ 2)
+            k = kr - d + 0.5                          ' share of the pixel on the knob
+            If k < 0 Then k = 0
+            If k > 1 Then k = 1
+            PutPixel raw, i, Blend(track, knob, k), CapsuleCover(x + 0.5, y + 0.5, w, h, 0)
+            i = i + 4
+        Next
+    Next
+    WritePng path, w, h, raw
+End Sub
+
+' Capsule outline of w x h pixels, bw pixels wide, in color clr (see RingPng).
+Private Sub WriteRing(ByVal path As String, ByVal clr As Long, ByVal w As Long, ByVal h As Long, ByVal bw As Long)
+    Dim raw() As Byte, x As Long, y As Long, i As Long, a As Double
+    ReDim raw(0 To h * (w * 4 + 1) - 1)
+    i = 0
+    For y = 0 To h - 1
+        raw(i) = 0: i = i + 1
+        For x = 0 To w - 1
+            a = CapsuleCover(x + 0.5, y + 0.5, w, h, 0) - CapsuleCover(x + 0.5, y + 0.5, w, h, bw)
+            If a < 0 Then a = 0
+            PutPixel raw, i, clr, a
+            i = i + 4
+        Next
+    Next
+    WritePng path, w, h, raw
 End Sub
 
 ' Color between c0 (t = 0) and c1 (t = 1).
