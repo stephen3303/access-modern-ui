@@ -17,6 +17,7 @@ Private Sub Form_Load()
     If Not IsDate(v) Then v = Date
     m_month = DateSerial(Year(v), Month(v), 1)
     ShowMonth
+    CenterOnApp Me                  ' over Access, on its monitor (modKitUtil)
     Exit Sub
 Err_Handler:
     HandleError "dlgDatePick.Form_Load"
