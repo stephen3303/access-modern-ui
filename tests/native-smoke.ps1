@@ -5,6 +5,7 @@ if(!$OutputDirectory){$OutputDirectory=Join-Path $env:TEMP ('access-modern-ui-'+
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 $database=Join-Path $OutputDirectory 'kit-test.accdb'
 if(Test-Path $database){throw 'Use an empty output directory; test database already exists.'}
+. (Join-Path $repo 'tools/VbaLineNumbers.ps1')   # test the numbered build copy, as the apps run it
 $access=New-Object -ComObject Access.Application
 try {
  $access.Visible=$false
@@ -17,6 +18,7 @@ try {
   if($UseGdiMeasurement -and $module.BaseName -eq 'modTestHooks'){
    $text=[regex]::Replace($text,'(?s)Public Function MeasureText\(.*?End Function\r\n','')
   }
+  $text=Add-VbaLineNumbers $text
   [IO.File]::WriteAllText($temporary,$text,[Text.Encoding]::ASCII)
   $access.LoadFromText(5,$module.BaseName,$temporary)
  }
@@ -32,6 +34,7 @@ try {
  Copy-Item (Join-Path $repo 'kit/forms/subGrid.vba') $formDir
  Copy-Item (Join-Path $repo 'kit/forms/dlgMessage.vba') $formDir
  Copy-Item (Join-Path $PSScriptRoot 'testHost.vba') $formDir
+ Add-VbaLineNumbersToFolder $formDir
  $arg=[string]$OutputDirectory
  $result=$access.Run('TestKit',[ref]$arg)
  $result|Set-Content (Join-Path $OutputDirectory 'result.txt')

@@ -181,6 +181,7 @@ Public Sub NewDialog(ByVal caption As String, ByVal w As Long, ByVal h As Long)
         .CloseButton = True
         .Section(acDetail).BackColor = CLR_DIALOG
         .Section(acDetail).AlternateBackColor = CLR_DIALOG
+        .OnClose = "=BackdropOnClose()"    ' clears a dim a VBA reset left (modBackdrop)
     End With
 End Sub
 
@@ -668,7 +669,8 @@ End Function
 ' options: "r" right-aligned, "c" centered, "b" bold, "m" muted, "p" a
 ' rounded status pill colored by the app's StatusVariant(value), "w" wraps
 ' onto rowLines lines (rather than cutting text off mid-word; text longer
-' than that stops at the end of the last line). The last
+' than that stops at the end of the last line), "s" marks the text matching
+' the page's search box (GridHighlight) in the highlight colors. The last
 ' column takes the rest of the width (and stretches with the form); with
 ' rowLines > 1 it always wraps. back is the color of what the
 ' table sits on. zebra fills every other row with CLR_ROW2. rowPx sets the
@@ -699,6 +701,8 @@ Public Sub BuildGrid(ByVal finalName As String, ByVal cols As Variant, ByVal w A
     ' the selected row's condition still fills it.
     If zebra Then c.BackStyle = 0
     Set c = RO("txtSel", "", 0, 0, px(4), px(4)): c.Visible = False
+    ' The search term GridHighlight sets, which the "s" columns mark.
+    Set c = RO("txtFind", "", 0, 0, px(4), px(4)): c.Visible = False
     x = px(8)
     For i = 0 To UBound(cols)
         p = Split(cols(i), "|")
@@ -723,6 +727,7 @@ Public Sub BuildGrid(ByVal finalName As String, ByVal cols As Variant, ByVal w A
             If wrap Then c.TopMargin = 0
             If InStr(opts, "r") > 0 Then c.TextAlign = 3
             If InStr(opts, "c") > 0 Then c.TextAlign = 2
+            If InStr(opts, "s") > 0 Then SearchCol c, p(0), i
         End If
         c.Tag = p(1) & "|" & x & "|" & cw
         c.OnClick = "=RowClick()"
@@ -753,6 +758,18 @@ Private Sub PillCol(c As Control, ByVal field As String)
         CF c, "StatusVariant(" & ref & ")=""" & v & """", col(0), col(1)
     Next
     RoundCF c, first
+End Sub
+
+' A grid column that marks the search term (option "s"): a rich text cell
+' showing GridMark([txtSrc<i>], [txtFind]), where hidden txtSrc<i> is bound to
+' the column's field. The field goes through a control because a bare field
+' reference in an expression can bind to a form property instead ([name] is
+' the form's Name). modGridOut prints and exports txtSrc<i>'s source.
+Private Sub SearchCol(c As Control, ByVal field As String, ByVal i As Long)
+    Dim src As Control
+    Set src = RO("txtSrc" & i, field, 0, 0, px(4), px(4)): src.Visible = False
+    c.ControlSource = "=GridMark([txtSrc" & i & "],[txtFind])"
+    c.TextFormat = 1                        ' acTextFormatHTMLRichText
 End Sub
 
 ' Column captions for a BuildGrid table whose subform sits at (x, y + px(22)).
@@ -809,6 +826,7 @@ Public Sub GridHeaders(ByVal prefix As String, ByVal cols As Variant, ByVal x As
                 If cw < px(200) Then cw = px(200)
             End If
         End If
+        If cw < px(8) Then cw = px(8)           ' a 0px column, or a w narrower than the columns
         Set c = Lbl(prefix & i, UCase$(p(1)), cx, cy, cw, px(16), 8, True, CLR_MUTED_FG, acDetail, parentCtl)
         If i = UBound(cols) And fill Then Anchor c, 2, 0
         If InStr(opts, "r") > 0 Then c.TextAlign = 3

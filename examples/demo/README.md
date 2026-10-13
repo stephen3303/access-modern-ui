@@ -19,6 +19,9 @@ cd examples\demo
 .\build.ps1 -UiOnly    # rebuild code and forms, keep the data
 ```
 
+The code loaded into KitDemo.accdb has line numbers so the error log names the failing
+line (`-NoLineNumbers` leaves them out). Edit the files here, not the built copy.
+
 Then open `examples\demo\KitDemo.accdb`. The build stops and prints any Visual Basic or
 Access dialog it meets (a compile error, an error message) instead of hanging.
 
@@ -51,6 +54,9 @@ watching for Visual Basic error dialogs as well as the error log:
   the palette's primary color when on and its muted text color when off; a ring shows while
   it has the focus, inside the panel. The table gained a column, so build without
   `-UiOnly` once.
+- Dialogs: Appearance in the sidebar and the buttons on Cards and progress dim the whole
+  Access window behind their dialog; the dim goes when the dialog closes, and the dialog
+  itself is not dimmed.
 
 ## Files
 

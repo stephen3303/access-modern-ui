@@ -112,15 +112,15 @@ Private Function CardCols() As Variant
 End Function
 
 Private Function OptionCols() As Variant
-    OptionCols = Array("name|Item|300|b", "owner|Owner|170|", "category|Category|140|m", "status|Status|120|p", "due|Due|110|r|due_date")
+    OptionCols = Array("name|Item|300|bs", "owner|Owner|170|s", "category|Category|140|m", "status|Status|120|p", "due|Due|110|r|due_date")
 End Function
 
 Private Function PlainCols() As Variant
-    PlainCols = Array("name|Item|340|b", "owner|Owner|180|", "status|Status|140|", "due|Due|120|r|due_date")
+    PlainCols = Array("name|Item|340|bs", "owner|Owner|180|s", "status|Status|140|", "due|Due|120|r|due_date")
 End Function
 
 Private Function ListCols() As Variant
-    ListCols = Array("name|Item|230|b", "owner|Owner|140|", "status|Status|110|p", "due|Due|80||due_date")
+    ListCols = Array("name|Item|230|bs", "owner|Owner|140|s", "status|Status|110|p", "due|Due|80||due_date")
 End Function
 
 ' Width of the list card on pgList.
