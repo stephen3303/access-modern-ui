@@ -105,18 +105,22 @@ End Function
 ' Show a table's vertical scroll bar only when its rows don't all fit:
 ' Access draws the bar on a continuous form whatever its content. A BuildGrid
 ' table calls this from its OnCurrent, which fires whenever its record source
-' is set or requeried. A failure is logged, not shown: it only leaves the bar.
+' is set or requeried (and once before the host sets it: no record source,
+' no rows). A failure is logged, not shown: it only leaves the bar.
 Public Function GridScroll(g As Form)
     Dim n As Long, sb As Integer
     On Error GoTo Fail
-    With g.RecordsetClone
-        If .RecordCount > 0 Then .MoveLast
-        n = .RecordCount
-    End With
+    If Len(g.RecordSource) > 0 Then
+        With g.RecordsetClone
+            If .RecordCount > 0 Then .MoveLast
+            n = .RecordCount
+        End With
+    End If
     sb = IIf(n * g.Section(acDetail).Height > g.InsideHeight, 2, 0)
     If g.ScrollBars <> sb Then g.ScrollBars = sb
     Exit Function
 Fail:
+    If Err.Number = 7951 Then Exit Function     ' no recordset yet: nothing to scroll
     LogError "modKitUI.GridScroll", g.Name
 End Function
 
