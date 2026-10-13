@@ -213,6 +213,8 @@ End Function
 ' shrank) and can place it on another monitor. When Access is minimized the
 ' dialog centres on the monitor Access was on. Positioning never stops a
 ' dialog opening: a failure is logged and the dialog stays where Access put it.
+' With monitors at different scaling, Windows may resize a dialog it moves to
+' the other monitor, so it can then sit a few pixels off centre.
 Public Sub CenterOnApp(frm As Form)
     Dim app As RECT, dlg As RECT, mi As MONITORINFO, hApp As LongPtr, x As Long, y As Long
     On Error GoTo Fail
@@ -235,7 +237,8 @@ End Sub
 
 ' Where a window size wide starts when centred on lo..hi, pulled back inside
 ' the work area workLo..workHi. A window wider than the work area starts at
-' workLo, so its title bar and close button stay reachable.
+' workLo, so its title bar and close button stay reachable. Public so the
+' kit tests can check the arithmetic.
 Public Function CenteredStart(ByVal lo As Long, ByVal hi As Long, ByVal size As Long, _
         ByVal workLo As Long, ByVal workHi As Long) As Long
     Dim p As Long
