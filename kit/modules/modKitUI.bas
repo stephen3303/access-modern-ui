@@ -123,7 +123,8 @@ Public Function GridScroll(g As Form)
             Loop
         End With
     End If
-    sb = IIf(n * rowH > g.InsideHeight, 2, 0)
+    ' Only the vertical bar (2) changes; a horizontal one (1, set by ResizeGrid) stays.
+    sb = (g.ScrollBars And 1) Or IIf(n * rowH > g.InsideHeight, 2, 0)
     If g.ScrollBars <> sb Then g.ScrollBars = sb
     Exit Function
 Fail:
