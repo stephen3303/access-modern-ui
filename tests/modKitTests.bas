@@ -169,5 +169,35 @@ Public Function TestKit(ByVal root As String) As String
     Check Not host.btn2.Visible And Not host.btn3.Visible, "Message dialog shows unused buttons"
     Check host.btn1.Left + host.btn1.Width = host.btn3.Left + host.btn3.Width, "Message OK button is not right-aligned"
     DoCmd.Close acForm, "dlgMessage", acSaveNo
+    ' Column chooser on a fit table: order, hiding, captions, bad layouts.
+    Dim order() As Long, shown() As Boolean, sf As Control
+    Check ParseLayout("2,0,1h", 3, order, shown), "Valid column layout rejected"
+    Check order(0) = 2 And Not shown(2), "Column layout parsed wrongly"
+    Check Not ParseLayout("0,0,1", 3, order, shown), "Repeated column accepted"
+    Check Not ParseLayout("0,1", 3, order, shown), "Short column layout accepted"
+    Check Not ParseLayout("0h,1h,2h", 3, order, shown), "Layout with no shown column accepted"
+    cols = Array("category|Category|160|", "description|Description|200|", "id|Id|80|r")
+    BuildGrid "subTestFit", cols, px(600), fit:=True
+    NewForm "", 0, px(700), px(300)
+    GridHeaders "fit", cols, px(24), px(20)
+    SubF "sfFit", "Form.subTestFit", px(24), px(42), px(600), px(180)
+    SaveForm "frmTestFit", "testHost"
+    DoCmd.OpenForm "frmTestFit"
+    Set host = Forms("frmTestFit"): Set sf = host.sfFit
+    sf.Form.RecordSource = "SELECT * FROM test_rows ORDER BY id"
+    SetGridColumns sf, "fit", "2,0,1h"
+    Set grid = sf.Form
+    Check grid.txtCol2.Left < grid.txtCol0.Left, "Moved column did not move"
+    Check Not grid.txtCol1.Visible And Not host.fit1.Visible, "Hidden column or caption still shows"
+    Check Abs(host.fit2.Left - (sf.Left + grid.txtCol2.Left)) <= 15, "Caption did not follow its column"
+    Check grid.txtCol0.Width > px(160), "Shown columns did not widen into the hidden one's space"
+    On Error Resume Next
+    SetGridColumns sf, "fit", "0,1"
+    Check Err.Number = 5, "Bad column layout was applied"
+    On Error GoTo 0
+    SetGridColumns sf, "fit", DefaultLayout(3)
+    Check grid.txtCol0.Left < grid.txtCol1.Left And grid.txtCol1.Left < grid.txtCol2.Left, "Default layout lost design order"
+    Check grid.txtCol1.Visible And host.fit1.Visible, "Default layout left a column hidden"
+    DoCmd.Close acForm, "frmTestFit", acSaveNo
     TestKit = checks & " kit checks passed"
 End Function

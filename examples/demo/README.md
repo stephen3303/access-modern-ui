@@ -6,7 +6,7 @@ test changes to it. It has one local table of fictional items and three pages:
 | Page | Shows |
 |---|---|
 | Cards and progress | `Card` (rounded and square), `Progress` at 0, 37 and 100 percent, a table inside a rounded card |
-| Tables | `BuildGrid` with every option (header band, zebra rows, status pills, 38px rows, proportional fit through `GridFit`) next to a default table; `TabStrip` and chips with counts; search and a category filter to the right of the chips |
+| Tables | `BuildGrid` with every option (header band, zebra rows, status pills, 38px rows, proportional fit through `GridFit`) next to a default table; the column chooser (Columns, top right) for the first table; `TabStrip` and chips with counts; search and a category filter to the right of the chips |
 | List and detail | The list/detail pattern (`SelectFirstRow`, `ShowDetail`, `ClearDetail`), `PrintGrid` and `ExportGrid` |
 
 Appearance in the sidebar switches palettes.
@@ -31,7 +31,10 @@ watching for Visual Basic error dialogs as well as the error log:
 - Progress: 0 shows only the track, 37 is a third full, 100 is full.
 - Tables: the band, zebra rows, pills and 38px rows show; the selected row is highlighted;
   widening the window widens every column of the first table and moves its captions; the
-  chip and tab counts follow the search and category.
+  chip and tab counts follow the search and category. Columns opens the column chooser:
+  hiding a column widens the rest and hides its caption, Move up/down reorders columns and
+  captions together, Reset puts the design back, Cancel changes nothing, and the last shown
+  column can't be hidden. The choice is still there after closing and reopening the demo.
 - List and detail: the first row opens on load and after each filter; a click shows that
   row; editing and saving updates the list; a search with no match shows both empty
   states; Print previews and Export writes exactly the rows shown, with the captions.

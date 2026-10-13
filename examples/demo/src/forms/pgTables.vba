@@ -3,7 +3,8 @@ Option Explicit
 
 ' Tables (see Build_pgTables). The status chips, search box and category
 ' filter apply to whichever table the tab strip shows; the chips and tabs
-' show how many items each would list.
+' show how many items each would list. Columns (on the first tab) opens the
+' column chooser for its table; the choice is put back when the page opens.
 
 Private Const ITEMS_SQL As String = "SELECT id, name, owner, category, status, Format(due_date,'dd mmm yyyy') AS due " & _
     "FROM demo_item ORDER BY due_date"
@@ -30,6 +31,15 @@ Private Sub Form_Resize()
     Exit Sub
 Err_Handler:
     HandleError "pgTables.Form_Resize"
+End Sub
+
+' Hide, restore or reorder the first table's columns (modGridCols).
+Private Sub btnColumns_Click()
+    On Error GoTo Err_Handler
+    ChooseGridColumns Me.sfOptions, "hdrOpt"
+    Exit Sub
+Err_Handler:
+    HandleError "pgTables.btnColumns_Click"
 End Sub
 
 ' Tab strip click.
@@ -86,6 +96,9 @@ Private Sub ShowTab(ByVal key As String)
     Next
     SetVisible Me.sfOptions, isOpt
     SetVisible Me.sfPlain, Not isOpt
+    SetVisible Me.btnColumns, isOpt
+    ' After the captions: hides the ones the user hid, and puts back their layout.
+    If isOpt Then RestoreGridColumns Me.sfOptions, "hdrOpt"
     Me.ul_options.Visible = isOpt
     Me.ul_plain.Visible = Not isOpt
     Me.tab_options.ForeColor = IIf(isOpt, Th(CLR_FG), Th(CLR_MUTED_FG))
