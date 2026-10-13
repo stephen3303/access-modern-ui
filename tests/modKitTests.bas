@@ -34,6 +34,8 @@ Public Function TestKit(ByVal root As String) As String
     Set c = Lbl("pillPaint", "Open", 0, px(620), px(80), px(20)): PillLabel c
     Set c = Txt("pillBound", "=""Open""", px(100), px(620), px(80), px(20))
     CF c, "True", CLR_PRIMARY, CLR_WHITE: RoundCF c
+    Txt "reqA", "", 0, px(660), px(80), px(30)
+    Txt "reqB", "", px(100), px(660), px(80), px(30)
     SaveForm "frmTest", "testHost"
     DoCmd.OpenForm "frmTest"
     Set host = Forms("frmTest"): Set grid = host.sfRows.Form
@@ -161,6 +163,15 @@ Public Function TestKit(ByVal root As String) As String
     ResizeGrid grid, px(200), cols
     Check grid.ScrollBars = 3, "Narrow grid clips minimum columns instead of scrolling"
     Check grid.txtCol1.Width >= px(292), "Narrow grid discarded Description width"
+    host.reqA = "   "
+    host.reqB = Null
+    text = RequiredMissing(host, "reqA=First;reqB=Second", fitted)
+    Check text = ChrW(&H2022) & " First" & vbCrLf & ChrW(&H2022) & " Second", "Required list differs"
+    Check fitted = "reqA", "First missing required field differs"
+    Check host.reqA.BorderColor = Th(CLR_DESTRUCTIVE), "Missing required field not outlined"
+    host.reqA = "x"
+    Check RequiredMissing(host, "reqA=First", fitted) = "" And fitted = "", "Filled required field reported"
+    Check host.reqA.BorderColor = Th(CLR_INPUT_BORDER), "Filled required field kept its outline"
     DoCmd.Close acForm, "frmTest", acSaveNo
     ' Trust check: matching Trusted Locations, a codeless dlgTrust, and the AutoExec
     ' macro that opens it with the code off.
