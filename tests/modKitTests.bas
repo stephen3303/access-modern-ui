@@ -177,6 +177,7 @@ Public Function TestKit(ByVal root As String) As String
     ' macro that opens it with the code off.
     Check PathCovers("C:\Apps\", False, "c:\apps") And Not PathCovers("C:\Apps", False, "C:\Apps\Sub"), "Trusted Location matching differs"
     Check PathCovers("C:\", True, "C:\Apps\Sub") And Not PathCovers("C:\Apps", True, "C:\AppsOld"), "Trusted Location subfolder matching differs"
+    Check RecordPath("%USERPROFILE%/My%20Apps/App.accdb") = LCase$(Environ$("USERPROFILE") & "\my apps\app.accdb"), "Trusted document name not decoded"
     BuildTrustCheck "frmTest"
     DoCmd.OpenForm "dlgTrust", acDesign
     Check Not Forms("dlgTrust").HasModule And Len(Forms("dlgTrust").OnOpen) = 0, "dlgTrust needs code to open"

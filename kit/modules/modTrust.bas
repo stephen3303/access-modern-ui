@@ -249,14 +249,48 @@ Private Function TrustedRecord(ByVal root As String, ByVal file As String) As Bo
     RegCloseKey hKey
 End Function
 
-' A Trusted Records value name as a normalized Windows path.
-Private Function RecordPath(ByVal s As String) As String
+' A TrustRecords value name as a normalized Windows path. Access writes them
+' URL-style: %USERPROFILE%/Projects/Navy%20Access/app.accdb. Environment
+' variables are expanded first, so a name like %DATA% is never read as an
+' escape; then %XX escapes are decoded. Public so the kit's smoke test can
+' check it.
+Public Function RecordPath(ByVal s As String) As String
     If LCase$(Left$(s, 8)) = "file:///" Then
         s = Mid$(s, 9)
     ElseIf LCase$(Left$(s, 7)) = "file://" Then
         s = "\\" & Mid$(s, 8)
     End If
-    RecordPath = NormPath(Replace(s, "/", "\"))
+    RecordPath = NormPath(UrlDecode(ExpandEnv(Replace(s, "/", "\"))))
+End Function
+
+' %XX escapes decoded where XX is hex for an ASCII character (a space is
+' %20). Other escapes (UTF-8 bytes of non-ASCII names) stay as they are, so
+' such a file never matches and the trust page shows: the safe side.
+Private Function UrlDecode(ByVal s As String) As String
+    Dim i As Long, out As String, hx As String
+    i = 1
+    Do While i <= Len(s)
+        hx = Mid$(s, i + 1, 2)
+        If Mid$(s, i, 1) = "%" And Len(hx) = 2 And hx Like "[0-7][0-9A-Fa-f]" Then
+            out = out & Chr$(CLng("&H" & hx))
+            i = i + 3
+        Else
+            out = out & Mid$(s, i, 1)
+            i = i + 1
+        End If
+    Loop
+    UrlDecode = out
+End Function
+
+' Environment variables in p expanded (%USERPROFILE% and so on).
+Private Function ExpandEnv(ByVal p As String) As String
+    Dim buf As String, n As Long
+    If InStr(p, "%") > 0 Then
+        buf = String$(1024, vbNullChar)
+        n = ExpandEnvironmentStringsW(StrPtr(p), StrPtr(buf), 1024)
+        If n > 0 And n <= 1024 Then p = Left$(buf, n - 1)
+    End If
+    ExpandEnv = p
 End Function
 
 ' Open the trust page (dlgTrust) in the current palette. It has no Open hook,
@@ -336,13 +370,7 @@ End Function
 
 ' Lower case, environment variables expanded, no trailing backslash.
 Private Function NormPath(ByVal p As String) As String
-    Dim buf As String, n As Long
-    If InStr(p, "%") > 0 Then
-        buf = String$(1024, vbNullChar)
-        n = ExpandEnvironmentStringsW(StrPtr(p), StrPtr(buf), 1024)
-        If n > 0 And n <= 1024 Then p = Left$(buf, n - 1)
-    End If
-    p = LCase$(Trim$(p))
+    p = LCase$(Trim$(ExpandEnv(p)))
     Do While Len(p) > 3 And Right$(p, 1) = "\"
         p = Left$(p, Len(p) - 1)
     Loop
