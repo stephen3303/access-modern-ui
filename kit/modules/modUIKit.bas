@@ -469,6 +469,51 @@ Public Function Chk(ByVal nm As String, ByVal src As String, ByVal x As Long, By
     Set Chk = c
 End Function
 
+' On/off switch for a yes/no value: a rounded track with a round knob, on the
+' right and in CLR_PRIMARY when on, on the left in CLR_INPUT_BORDER when off
+' (TogglePng). src is the yes/no field it shows and changes, or "" for an
+' unbound switch that starts off. w x h is the track, 44 x 24px by default.
+' Access has no switch control, so it is four controls:
+'   <nm>_val   a hidden check box bound to src: the value (read Me!<nm>_val)
+'   <nm>_ring  a CLR_PRIMARY focus ring with a 2px gap outside the track,
+'              shown while the switch has the focus
+'   <nm>_bg    the track image, bound to <nm>_val, so ThemeForm repaints it
+'   <nm>       a transparent button over the track that takes the clicks, the
+'              Tab stop and Space (ToggleSwitch, ToggleFocus in modKitUI)
+' Hide or disable it through SetVisible / SetEnabled on <nm>: the track (_bg)
+' goes with it. onChange names a Public Sub in the form's code-behind, called
+' with no arguments after each change, since a value set in code fires no
+' AfterUpdate. Use it on single forms: in a continuous form the focus ring
+' would show on every row. Returns the button.
+Public Function Toggle(ByVal nm As String, ByVal src As String, ByVal x As Long, ByVal y As Long, _
+        Optional ByVal w As Long = 660, Optional ByVal h As Long = 360, Optional ByVal onChange As String = "", _
+        Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control
+    Dim c As Control, handler As String
+    Set c = Mk(acCheckBox, nm & "_val", x, y, px(13), px(13), sec, parentCtl)
+    If Len(src) > 0 Then c.ControlSource = src Else c.DefaultValue = "False"
+    c.Visible = False
+    c.TabStop = False
+    ' Created back to front: ring, track, then the button on top of both.
+    Set c = Mk(acImage, nm & "_ring", x - px(4), y - px(4), w + px(8), h + px(8), sec, parentCtl)
+    ImageProps c
+    c.Properties("ControlSource") = "=RingPng(" & CLR_PRIMARY & "," & (w + px(8)) \ 15 & "," & (h + px(8)) \ 15 & ")"
+    c.Visible = False
+    Set c = Mk(acImage, nm & "_bg", x, y, w, h, sec, parentCtl)
+    ImageProps c
+    c.Properties("ControlSource") = "=TogglePng([" & nm & "_val]," & CLR_PRIMARY & "," & CLR_INPUT_BORDER & "," & _
+        CLR_WHITE & "," & w \ 15 & "," & h \ 15 & ")"
+    Set c = Mk(acCommandButton, nm, x, y, w, h, sec, parentCtl)
+    c.Transparent = True
+    c.Tag = onChange
+    handler = "=ToggleSwitch([Form],""" & nm & """)"
+    c.OnClick = handler
+    ' The second click of a double click raises DblClick, not Click.
+    c.OnDblClick = handler
+    c.OnGotFocus = "=ToggleFocus([Form],""" & nm & """,True)"
+    c.OnLostFocus = "=ToggleFocus([Form],""" & nm & """,False)"
+    Set Toggle = c
+End Function
+
 ' kind: primary | outline | ghost | destructive | nav
 Public Function Btn(ByVal nm As String, ByVal cap As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
         Optional ByVal kind As String = "primary", Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control

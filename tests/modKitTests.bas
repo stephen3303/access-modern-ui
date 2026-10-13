@@ -34,6 +34,7 @@ Public Function TestKit(ByVal root As String) As String
     Set c = Lbl("pillPaint", "Open", 0, px(620), px(80), px(20)): PillLabel c
     Set c = Txt("pillBound", "=""Open""", px(100), px(620), px(80), px(20))
     CF c, "True", CLR_PRIMARY, CLR_WHITE: RoundCF c
+    Toggle "tglTest", "", px(300), px(620)
     SaveForm "frmTest", "testHost"
     DoCmd.OpenForm "frmTest"
     Set host = Forms("frmTest"): Set grid = host.sfRows.Form
@@ -151,6 +152,23 @@ Public Function TestKit(ByVal root As String) As String
     Check TagWidth(Array("Short", "Longest category")) = PillTextWidth("Longest category"), "Widest label differs"
     Check FileExists(CStr(ColumnPillPng(CLR_PRIMARY, 240, 26, PillTextWidth("Longest category")))), "Pill image missing"
     Check FileExists(RoundedCardPng(600, 200, CLR_SURFACE, CLR_BORDER)), "Rounded card missing"
+    Check Not Nz(host.tglTest_val, False), "Unbound switch did not start off"
+    ToggleSwitch host, "tglTest"
+    Check host.tglTest_val, "Switch click did not turn it on"
+    Check InStr(Nz(host.tglTest_bg.Properties("ControlSource").Value, ""), "TogglePng(") > 0, "Switch track is not bound"
+    ToggleSwitch host, "tglTest"
+    Check Not host.tglTest_val, "Second switch click did not turn it off"
+    host.tglTest_val.Locked = True
+    ToggleSwitch host, "tglTest"
+    Check Not host.tglTest_val, "Locked switch changed"
+    host.tglTest_val.Locked = False
+    Check FileExists(CStr(TogglePng(True, CLR_PRIMARY, CLR_INPUT_BORDER, CLR_WHITE, 44, 24))), "Switch image missing"
+    Check FileExists(CStr(RingPng(CLR_PRIMARY, 52, 32))), "Focus ring image missing"
+    Check Not host.tglTest_ring.Visible, "Focus ring shows without focus"
+    host.tglTest.SetFocus
+    Check host.tglTest_ring.Visible, "Focused switch shows no ring"
+    host.txtFocusSink.SetFocus
+    Check Not host.tglTest_ring.Visible, "Focus ring stayed after focus left"
     grid.txtCol0.SetFocus: grid.RowClick
     Check Screen.ActiveControl.Name = "txtFocusSink", "Row click left text focused"
     Check host.callbackGrid = "sfRows", "Grid callback used wrong parent"

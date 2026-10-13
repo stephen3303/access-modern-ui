@@ -4,8 +4,9 @@ Option Explicit
 ' Access UI kit - run-time helpers for pages built with modUIKit: tables that
 ' scale their columns (GridFit), list/detail pages (SelectFirstRow,
 ' ShowDetail, ClearDetail), tabs and filter chips with counts (SetCount,
-' StyleChip), and messages in the kit's look (KitMsgBox). Colors set here go
-' through Th() so they follow the palette.
+' StyleChip), toggle switches (ToggleSwitch, ToggleFocus) and messages in the
+' kit's look (KitMsgBox). Colors set here go through Th() so they follow the
+' palette.
 
 ' Width the table's vertical scroll bar takes (twips).
 Private Const SCROLL_W As Long = 300
@@ -257,6 +258,44 @@ Public Sub SetDateTarget(ByVal v As Variant)
     If m_dateTarget Is Nothing Then Exit Sub
     m_dateTarget.Value = v
 End Sub
+
+' ---------------------------------------------------------------------------
+' Toggle switches
+' ---------------------------------------------------------------------------
+
+' Click, or Space, on a Toggle switch nm (modUIKit.Toggle): flips its value
+' (<nm>_val, and so its field), redraws the track and calls the form's
+' onChange sub if the switch has one. Does nothing while the value is locked
+' or disabled, or the form is read-only (AllowEdits off, unless on a record
+' being added), like PickDate.
+Public Function ToggleSwitch(frm As Form, ByVal nm As String)
+    Dim v As Control, onChange As String
+    On Error GoTo Fail
+    Set v = frm.Controls(nm & "_val")
+    If Not v.Enabled Or v.Locked Then Exit Function
+    ' Nested, so an unbound settings form never reads NewRecord.
+    If Not frm.AllowEdits Then
+        If Not (frm.NewRecord And frm.AllowAdditions) Then Exit Function
+    End If
+    v.Value = Not CBool(Nz(v.Value, False))
+    frm.Controls(nm & "_bg").Requery            ' an unbound image recalculates
+    onChange = Nz(frm.Controls(nm).Tag, "")
+    If Len(onChange) > 0 Then CallByName frm, onChange, VbMethod
+    Exit Function
+Fail:
+    HandleError "modKitUI.ToggleSwitch", nm
+End Function
+
+' Focus moving onto (hasFocus True) or off a Toggle switch nm: shows or hides
+' its focus ring, since a transparent button draws no focus of its own. A
+' failure is logged, not shown, so moving the focus never stops on a message.
+Public Function ToggleFocus(frm As Form, ByVal nm As String, ByVal hasFocus As Boolean)
+    On Error GoTo Fail
+    SetVisible frm.Controls(nm & "_ring"), hasFocus
+    Exit Function
+Fail:
+    LogError "modKitUI.ToggleFocus", nm
+End Function
 
 ' ---------------------------------------------------------------------------
 ' Messages
