@@ -19,6 +19,7 @@ Public Function TestKit(ByVal root As String) As String
     BuildGrid "subTest", cols, px(600)
     NewForm "", 0, px(200), px(60)
     Txt "ringC", "", 0, 0, px(100), px(30)
+    Btn "ringSave", "Save", px(110), 0, px(80), px(30)
     SaveForm "subRing"
     NewForm "", 0, px(700), px(700)
     GridHeaders "head", cols, px(24), px(60)
@@ -40,6 +41,8 @@ Public Function TestKit(ByVal root As String) As String
     Txt "ringA", "", px(200), px(620), px(80), px(30)
     Cbo "ringB", "", "One;Two", px(290), px(620), px(80), px(30)
     SubF "sfRing", "Form.subRing", px(400), px(620), px(200), px(60)
+    Set c = CreateControl(F.Name, acTextBox, acDetail, "", "", px(610), px(620), px(60), px(30))
+    c.Name = "plainTxt"                    ' takes the focus with no ring hooks of its own
     SaveForm "frmTest", "testHost"
     DoCmd.OpenForm "frmTest"
     Set host = Forms("frmTest"): Set grid = host.sfRows.Form
@@ -166,10 +169,12 @@ Public Function TestKit(ByVal root As String) As String
     Check host.ringA.BorderColor = CLR_DESTRUCTIVE, "Focus ring lost the input's own border color"
     host.sfRing.SetFocus: host.sfRing.Form.ringC.SetFocus
     Check host.sfRing.Form.ringC.BorderColor = CLR_PRIMARY, "Subform input lacks its focus ring"
-    host.ringA.SetFocus
+    host.plainTxt.SetFocus
     Check host.sfRing.Form.ringC.BorderColor = CLR_INPUT_BORDER, "Subform input kept its ring when the focus left the subform"
     host.sfRing.SetFocus
     Check host.sfRing.Form.ringC.BorderColor = CLR_PRIMARY, "Subform input lost its ring when the focus came back"
+    host.plainTxt.SetFocus: host.sfRing.SetFocus: host.sfRing.Form.ringSave.SetFocus
+    Check host.sfRing.Form.ringC.BorderColor = CLR_INPUT_BORDER, "Subform input kept its ring while its Save button had the focus"
     host.ringB.Locked = True: host.ringA.SetFocus: host.ringB.SetFocus
     Check host.ringB.BorderColor = CLR_INPUT_BORDER, "Locked input shows a focus ring"
     grid.txtCol0.SetFocus: grid.RowClick

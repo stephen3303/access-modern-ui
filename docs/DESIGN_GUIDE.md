@@ -569,12 +569,14 @@ Write app-specific helpers next to the builds that use them. Examples:
   would have to be shown and hidden on every focus change (flicker). Locked fields,
   read-only forms and continuous-form rows get no ring (one control's border is every
   row's). Only one field is ringed at a time, and `SubF` sets the subform control's
-  `OnEnter`/`OnExit` to `FocusRingEnter`/`FocusRingExit`: Access fires no LostFocus for
+  `OnEnter`/`OnExit` to `FocusRingEnter`/`FocusRingClear`: Access fires no LostFocus for
   a field inside a subform when the focus moves out to the main form, and no GotFocus
-  when it comes back to the same field. Setting these events later
+  when it comes back to the same field. `Btn`, `Chk`, `Lst` and the focus sink clear
+  the ring on GotFocus (`FocusRingClear`), because the subform's Enter re-rings its
+  last field before a click on its Save button lands. Setting these events later
   (`Ev c, "OnGotFocus"`) replaces the ring, so such a handler calls
   `FocusRing Me, "<name>", True` (`False` on LostFocus), or `FocusRingEnter` /
-  `FocusRingExit` for a subform control, itself.
+  `FocusRingClear` for a subform control, itself.
 - Read-only row text with no click handler is set to `Enabled = False` +
   `Locked = True`. That keeps its normal look while it can never take focus.
 - **Disabled controls ignore theme colors.** Lock controls instead of disabling them when

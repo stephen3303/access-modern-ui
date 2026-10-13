@@ -279,8 +279,8 @@ End Sub
 ' on a continuous form's rows, where one control's border is every row's.
 ' One field is ringed at a time: each GotFocus first restores the last one,
 ' because Access fires no LostFocus for a field inside a subform when the
-' focus moves out to the main form (FocusRingExit covers clicks on controls
-' that aren't kit inputs). A failure is logged but not shown, like ThemeForm:
+' focus moves out to the main form (FocusRingClear covers the subform's Exit
+' and the kit's buttons, check boxes, list boxes and focus sink). A failure is logged but not shown, like ThemeForm:
 ' the field keeps working without the ring.
 Public Function FocusRing(frm As Form, ByVal nm As String, ByVal isOn As Boolean)
     Dim c As Control
@@ -291,7 +291,8 @@ Public Function FocusRing(frm As Form, ByVal nm As String, ByVal isOn As Boolean
         Exit Function
     End If
     ClearRing
-    If c.Locked Or Not frm.AllowEdits Then Exit Function
+    If c.Locked Then Exit Function
+    If Not (frm.AllowEdits Or (frm.NewRecord And frm.AllowAdditions)) Then Exit Function
     If frm.DefaultView <> 0 And c.Section = acDetail Then Exit Function
     m_ringWas = c.BorderColor
     c.BorderColor = Th(CLR_PRIMARY)
@@ -303,20 +304,24 @@ Fail:
     LogError "modKitUI.FocusRing", frm.Name & "." & nm
 End Function
 
-' A kit subform control's Exit (set by SubF): the focus is leaving the
-' subform, and the field inside it gets no LostFocus, so take its ring off.
-Public Function FocusRingExit()
+' Take the ring off the field showing it. Set by SubF as the subform
+' control's Exit (the field inside gets no LostFocus when the focus leaves the
+' subform), and by Btn, Chk, Lst and NewForm's focus sink as their GotFocus:
+' a subform's Enter re-rings its last field before the focus lands, so a click
+' on its Save button would otherwise leave that field ringed.
+Public Function FocusRingClear()
     On Error GoTo Fail
     ClearRing
     Exit Function
 Fail:
-    LogError "modKitUI.FocusRingExit"
+    LogError "modKitUI.FocusRingClear"
 End Function
 
 ' A kit subform control's Enter (set by SubF): when the focus comes back to
 ' the field that last had it inside subform control nm on frm, Access fires
-' no GotFocus for it, so ring it here. A different field's GotFocus, which
-' follows, moves the ring before Access repaints.
+' no GotFocus for it, so ring it here. When the click lands on another
+' control, that control's GotFocus (FocusRing or FocusRingClear) follows and
+' moves or clears the ring before Access repaints.
 Public Function FocusRingEnter(frm As Form, ByVal nm As String)
     Dim inner As Form, c As Control
     On Error Resume Next
@@ -332,6 +337,7 @@ Public Function FocusRingEnter(frm As Form, ByVal nm As String)
         If c.ControlType <> acSubform Then Exit Do
         Set inner = c.Form                   ' a subform inside the subform
     Loop
+    If c.ControlType <> acTextBox And c.ControlType <> acComboBox Then Exit Function
     If Left$(Nz(c.OnGotFocus, ""), 11) = "=FocusRing(" Then FocusRing inner, c.Name, True
     Exit Function
 Fail:

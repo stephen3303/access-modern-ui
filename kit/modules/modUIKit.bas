@@ -145,6 +145,7 @@ Public Sub NewForm(ByVal recSrc As String, ByVal view As Integer, ByVal w As Lon
     sink.BackStyle = 0
     sink.BorderStyle = 0
     sink.TabIndex = 0
+    sink.OnGotFocus = "=FocusRingClear()"      ' focus ring off (modKitUI)
 End Sub
 
 ' Read-only text in list rows that has no click action can't take focus, so
@@ -470,6 +471,7 @@ Public Function Lst(ByVal nm As String, ByVal rowSrc As String, ByVal x As Long,
     c.BorderColor = CLR_BORDER
     c.SpecialEffect = 0
     c.BackColor = CLR_INPUT_BG
+    c.OnGotFocus = "=FocusRingClear()"         ' focus ring off (modKitUI)
     Set Lst = c
 End Function
 
@@ -480,6 +482,7 @@ Public Function Chk(ByVal nm As String, ByVal src As String, ByVal x As Long, By
     Set c = Mk(acCheckBox, nm, x, y, 260, 260, sec, parentCtl)
     If Len(src) > 0 Then c.ControlSource = src Else c.DefaultValue = "False"
     c.SpecialEffect = 0
+    c.OnGotFocus = "=FocusRingClear()"         ' focus ring off (modKitUI)
     Set Chk = c
 End Function
 
@@ -517,6 +520,7 @@ Public Function Btn(ByVal nm As String, ByVal cap As String, ByVal x As Long, By
     c.Properties("Shape") = 1
     On Error GoTo 0
     c.OnClick = "[Event Procedure]"
+    c.OnGotFocus = "=FocusRingClear()"         ' focus ring off (modKitUI)
     Set Btn = c
 End Function
 
@@ -557,7 +561,7 @@ Public Function Rule(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal
 End Function
 
 ' Subform control showing the form srcObj. Its Enter and Exit keep the focus
-' ring right for the fields inside it (FocusRingEnter, FocusRingExit); a form
+' ring right for the fields inside it (FocusRingEnter, FocusRingClear); a form
 ' that handles them itself calls those from its handlers.
 Public Function SubF(ByVal nm As String, ByVal srcObj As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
         Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control
@@ -567,9 +571,9 @@ Public Function SubF(ByVal nm As String, ByVal srcObj As String, ByVal x As Long
     c.BorderStyle = 0
     c.SpecialEffect = 0
     If Not m_isReport Then
-        ' The focus ring of a field inside it (FocusRingEnter/FocusRingExit).
+        ' The focus ring of a field inside it (FocusRingEnter/FocusRingClear).
         c.OnEnter = "=FocusRingEnter([Form],""" & nm & """)"
-        c.OnExit = "=FocusRingExit()"
+        c.OnExit = "=FocusRingClear()"
     End If
     Set SubF = c
 End Function
