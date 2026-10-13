@@ -98,6 +98,7 @@ Private Sub BuildUserInterface()
     Build_pgList
     Build_dlgAppearance
     BuildMessageDialog             ' the kit's dlgMessage, for KitMsgBox
+    BuildToast                     ' the kit's dlgToast, for KitToast
     Build_frmMain
 End Sub
 
@@ -179,7 +180,9 @@ Private Sub Build_subItem()
 End Sub
 
 ' Cards and progress: rounded cards, the square fallback, progress capsules
-' at 0, 37 and 100 percent, and a table inside a rounded card.
+' at 0, 37 and 100 percent, and a table inside a rounded card. The rounded
+' card's Primary button shows a message (KitMsgBox) and Outline a toast
+' (KitToast), a different variant each click.
 Private Sub Build_pgCards()
     Dim c As Control, x As Long, y As Long, w As Long, h As Long, i As Long, pct As Variant
     NewForm "", 0, PAGE_W, PAGE_H

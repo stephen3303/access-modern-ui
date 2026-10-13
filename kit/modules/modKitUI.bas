@@ -4,8 +4,9 @@ Option Explicit
 ' Access UI kit - run-time helpers for pages built with modUIKit: tables that
 ' scale their columns (GridFit), list/detail pages (SelectFirstRow,
 ' ShowDetail, ClearDetail), tabs and filter chips with counts (SetCount,
-' StyleChip), and messages in the kit's look (KitMsgBox). Colors set here go
-' through Th() so they follow the palette.
+' StyleChip), and messages in the kit's look (KitMsgBox, and KitToast for
+' ones that fade on their own). Colors set here go through Th() so they
+' follow the palette.
 
 ' Width the table's vertical scroll bar takes (twips).
 Private Const SCROLL_W As Long = 300
@@ -314,6 +315,27 @@ End Function
 Public Sub SetKitMsgAnswer(ByVal answer As Long)
     m_msgAnswer = answer
 End Sub
+
+' A message that doesn't interrupt: the toast (dlgToast, built by BuildToast)
+' shows msg in the bottom-right corner of frmMain for ms milliseconds, then
+' fades and closes. It never takes the focus, so use it to confirm something
+' the user just did ("Saved"); anything they must read or answer belongs in
+' KitMsgBox. vrnt picks the icon and accent color: "success", "info" (the
+' default), "warning" or "destructive". A toast while one is showing
+' replaces it. The toast shows up to 3 lines, so keep the message short.
+' If the toast can't open (not built yet), the message goes to the status
+' bar and the failure is logged, never shown.
+Public Function KitToast(ByVal msg As String, Optional ByVal vrnt As String = "info", Optional ByVal ms As Long = 3000)
+    On Error GoTo Fail
+    If ms <= 0 Then ms = 3000
+    If Not IsFormOpen("dlgToast") Then DoCmd.OpenForm "dlgToast", WindowMode:=acHidden
+    Forms("dlgToast").ShowToast msg, vrnt, ms
+    Exit Function
+Fail:
+    LogError "modKitUI.KitToast", Left$(msg, 60)
+    On Error Resume Next
+    SysCmd acSysCmdSetStatus, Left$(msg, 255)
+End Function
 
 ' ---------------------------------------------------------------------------
 ' Tabs and filter chips

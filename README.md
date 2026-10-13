@@ -13,6 +13,7 @@ kit/modules/*.bas             the reusable modules, loaded before the app's own
 kit/forms/dlgAppearance.vba   code-behind for the palette picker
 kit/forms/dlgDatePick.vba     code-behind for the date picker (BuildDatePicker)
 kit/forms/dlgMessage.vba      code-behind for the message dialog (BuildMessageDialog, KitMsgBox)
+kit/forms/dlgToast.vba        code-behind for the toast (BuildToast, KitToast)
 kit/forms/subGrid.vba         code-behind for BuildGrid tables
 tools/make_themes.py          generates the build palette and the palette modules, checks contrast
 tools/AccessWatch.ps1         makes a build script report Visual Basic and Access dialogs instead of hanging
@@ -35,7 +36,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 | modUIKit | Build-time form and control builders (catalog below) |
 | modDarkMode | Palette engine: `ThemeForm` repaints each form on open, `Th()` gives runtime colors, and `SetPalette`/`ShowAppearance` switch palettes |
 | modPng | Anti-aliased PNGs for rounded shapes: `PillPng` (pills and badges), `CardPng` (card corners), `ProgressPng` (progress capsules), `ColumnPillPng` (uniform-width pills in a table column), `RoundedCardPng` (whole resizable card backgrounds), cached in `%LOCALAPPDATA%\<APP_NAME>\pills` |
-| modKitUI | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `KitMsgBox`, `SetCount`, `StyleChip` (catalog below) |
+| modKitUI | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `KitMsgBox`, `KitToast`, `SetCount`, `StyleChip` (catalog below) |
 | modGridOut | `PrintGrid` and `ExportGrid`: print or export a table as the user sees it |
 | modCsv | UTF-8 text files, RFC 4180 CSV read/write, query-to-CSV export |
 | modCrypto | SHA-256 through Windows CNG, salted password hashing |
@@ -49,7 +50,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
    - Set `FIXED` to the colors that must never change with the palette.
    - Run the script. It writes `src\themes\light\modTheme.bas` and `src\modules\modPalette.bas`, and prints a contrast check.
 3. In the app's own modules, provide the names the kit calls (listed below).
-4. For the palette picker, copy `examples\modules\modBuildAppearance.bas` to `src\modules` and `kit\forms\dlgAppearance.vba` to `src\forms`. For date fields, copy `kit\forms\dlgDatePick.vba` to `src\forms` too, and for messages copy `kit\forms\dlgMessage.vba`: `SaveForm` attaches code-behind from `src\forms` only, so without them `dlgDatePick` and `dlgMessage` build with no code.
+4. For the palette picker, copy `examples\modules\modBuildAppearance.bas` to `src\modules` and `kit\forms\dlgAppearance.vba` to `src\forms`. For date fields, copy `kit\forms\dlgDatePick.vba` to `src\forms` too, and for messages copy `kit\forms\dlgMessage.vba` and `kit\forms\dlgToast.vba`: `SaveForm` attaches code-behind from `src\forms` only, so without them `dlgDatePick`, `dlgMessage` and `dlgToast` build with no code.
 5. Write a `BuildAll` entry point that calls `UseBuildPalette`, sets `g_SrcRoot`, and builds the forms. The design guide (section 2) describes what it does.
 
 ### What the app must provide
@@ -66,6 +67,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 | `dlgAppearance` form | `ShowAppearance` | `Build_dlgAppearance` + dlgAppearance.vba |
 | `dlgDatePick` form | `PickDate` (`DateBox` buttons) | call the kit's `BuildDatePicker` with the app's dialogs + copy `kit\forms\dlgDatePick.vba` to src\forms |
 | `dlgMessage` form | `KitMsgBox` (the app's `Notify` and `HandleError`) | call the kit's `BuildMessageDialog` with the app's dialogs + copy `kit\forms\dlgMessage.vba` to src\forms |
+| `dlgToast` form | `KitToast` | call the kit's `BuildToast` with the app's dialogs + copy `kit\forms\dlgToast.vba` to src\forms |
 | `BandLabels()`, `BandBack(label)` | `BandCF` | modUI |
 | `BadgeColors(variant)` (returns `Array(back, fore)`) | `BadgeCF`, `BuildGrid` | modUI |
 | `StatusVariant(value)` (a Variant, may be Null; returns a badge variant or "") | `BuildGrid` pill columns (`p`) | modUI |
@@ -116,6 +118,7 @@ Control heights and font sizes never scale. `TabStrip` and `LayoutFilterRow` alr
 | `Txt nm, src, x, y, w, h` | Text box (a field name, or an expression starting with `=`) |
 | `BuildDatePicker` | Builds `dlgDatePick`, the month calendar `DateBox` buttons open. Call it once with the app's dialogs. |
 | `BuildMessageDialog` | Builds `dlgMessage`, the dialog `KitMsgBox` opens. Call it once with the app's dialogs. |
+| `BuildToast` | Builds `dlgToast`, the toast `KitToast` shows. Call it once with the app's dialogs. |
 | `DateBox nm, src, x, y, h` | Date entry: a 120px text box (dd mmm yyyy, left-aligned) and a calendar button `cal_<nm>` 4px to its right that opens the date picker. The pair is `DATEFIELD_W` (154px) wide. |
 | `RO nm, src, x, y, w, h` | Read-only text: no border, not a tab stop |
 | `Cbo` / `Lst` / `Chk` | Combo box, list box, check box with its label |
@@ -171,6 +174,7 @@ Control heights and font sizes never scale. `TabStrip` and `LayoutFilterRow` alr
 | `ClearDetail host, detailCtl [, emptyCtl]` | Empty the detail subform and show the empty state |
 | `PickDate frm, nm` | A `DateBox` calendar button's click: open the kit's date picker (`dlgDatePick`) for box `nm` and write the chosen date into it (not while the box is disabled or locked, or its form is read-only) |
 | `KitMsgBox msg [, style, title]` | `MsgBox` in the kit's look, centred over Access (a `MsgBox` is centred on the monitor, so on a large or second screen it opens outside Access). Takes OK, OK/Cancel, Yes/No and Yes/No/Cancel, the four icons and `vbDefaultButton2`/`3`, and returns what `MsgBox` would. Anything else, or a dialog that isn't built yet, falls back to `MsgBox`. Use it in the app's `Notify` and `HandleError`. |
+| `KitToast msg [, variant, ms]` | A message that doesn't interrupt: a toast in the bottom-right corner of `frmMain` that fades after `ms` milliseconds (default 3000) without taking the focus. `variant` is `success`, `info` (default), `warning` or `destructive` and sets the icon and accent bar. Up to 3 lines; a new toast replaces the one showing; a click closes it. Use it to confirm what the user just did ("Saved"); anything they must read or answer goes in `KitMsgBox`. If `dlgToast` isn't built, the message goes to the status bar. |
 | `SetCount ctl, n` | Show a count after a tab or chip caption, "Name (n)" |
 | `StyleChip lbl, isOn [, n]` | Filter chip on or off, with an optional count |
 | `SetVisible c, v` | Show or hide a control, moving the focus away when it or a control inside it has the focus (avoids error 2165) |

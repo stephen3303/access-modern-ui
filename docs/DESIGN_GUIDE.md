@@ -119,7 +119,7 @@ them, and the shell (`frmMain`) last.
 | modBuildUI, modBuildPages, modBuildPages2 | `Build_<form>` procedures, one per form, grouped by area |
 | modUI | Run-time UI helpers: `NavTo`, badges/pills painting, `ShowTip`, the app's hooks (`BadgeColors`, `StatusVariant`) |
 | modUIKit (kit) | Build-time control builders (section 6) |
-| modKitUI (kit) | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `KitMsgBox`, `SetCount`, `StyleChip` |
+| modKitUI (kit) | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `KitMsgBox`, `KitToast`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
 | modKitUtil (kit) | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `SetVisible`, `SetEnabled` |
 | modDarkMode (kit), modPalette (gen), modTheme (gen) | Palette engine (section 7) |
@@ -157,6 +157,13 @@ prints to the debug window, raises on warnings and answers Yes to questions, and
 Otherwise both show their message with the kit's `KitMsgBox`, never `MsgBox`: Windows
 centres a `MsgBox` on the monitor, so on a large or second screen it opens outside
 Access and Access waits behind it.
+
+**Toasts for confirmations.** When the user only needs to know an action worked
+("Saved", "Exported 24 rows"), show `KitToast msg, variant` instead of a message box:
+a small toast in the bottom-right corner of `frmMain` that fades after a few seconds
+and never takes the focus, so the user keeps typing. Variants are `success`, `info`,
+`warning` and `destructive`. Anything the user must read, decide or fix stays a
+`KitMsgBox` or an inline `lblMsg`; a toast disappears before some users read it.
 
 ---
 
@@ -542,6 +549,12 @@ Write app-specific helpers next to the builds that use them. Examples:
   and Null shows an empty track. It is bound, so it follows the record in a continuous
   form. Give it a fixed width: the image keeps its shape, so don't anchor it to stretch.
 - **Empty states**: a centered muted 10pt label shown in place of an empty list.
+- **Toasts** (`KitToast`, `dlgToast`): a 360px borderless pop-up on `CLR_SURFACE` with
+  a 1px `CLR_INPUT_BORDER` edge, a 4px accent bar on the left and a Segoe MDL2 icon in
+  the variant's color (success `CLR_GREEN_600`, info `CLR_PRIMARY`, warning
+  `CLR_WARN_TEXT`, destructive `CLR_ERROR`), then the message in 10pt `CLR_FG`, up to
+  3 lines. It sits 16px in from `frmMain`'s bottom-right corner, holds for 3 seconds,
+  fades over about a third of a second and closes; a click closes it at once.
 - **Search box placeholder**: `Format = "@;""Search by ..."""`.
 - **Hierarchical trees and wrapped rows**:
   - A continuous form gives every row the same height, so build rows tall enough for
@@ -779,6 +792,7 @@ The Appearance dialog grows by itself, because it is built from `PALETTE_COUNT`.
 6. For each page, write a `Build_pg<Name>` using `PageHeader`, cards, grids and buttons,
    and a `src/forms/pg<Name>.vba` where every handler uses the standard error handler.
 7. Copy the dialogs: `dlgAppearance`, `BuildMessageDialog` (for `Notify` and `HandleError`),
+   `BuildToast` (for `KitToast`),
    `BuildDatePicker` (for date fields), and a non-modal `dlgHelp` with `help.txt` and the F1
    `AutoKeys` macro.
 8. Write `README.md` and `DEVELOPING.md` using the structure in section 4, linking to the

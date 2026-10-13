@@ -24,9 +24,14 @@ Err_Handler:
     HandleError "pgCards.btnRoundA_Click"
 End Sub
 
+' Each click shows the next toast variant, so all four can be checked.
 Private Sub btnRoundB_Click()
+    Static n As Long
+    Dim vrnt As String
     On Error GoTo Err_Handler
-    Notify "Outline button clicked.", vbInformation
+    vrnt = Array("success", "info", "warning", "destructive")(n Mod 4)
+    n = n + 1
+    KitToast "Outline button clicked: a " & vrnt & " toast.", vrnt
     Exit Sub
 Err_Handler:
     HandleError "pgCards.btnRoundB_Click"

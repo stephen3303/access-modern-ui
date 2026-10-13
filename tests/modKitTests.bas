@@ -17,6 +17,7 @@ Public Function TestKit(ByVal root As String) As String
     Next
     cols = Array("category|Category|160|c", "description|Description|300|t")
     BuildGrid "subTest", cols, px(600)
+    BuildToast
     NewForm "", 0, px(700), px(700)
     GridHeaders "head", cols, px(24), px(60)
     SubF "sfRows", "Form.subTest", px(24), px(82), px(600), px(180)
@@ -161,6 +162,11 @@ Public Function TestKit(ByVal root As String) As String
     ResizeGrid grid, px(200), cols
     Check grid.ScrollBars = 3, "Narrow grid clips minimum columns instead of scrolling"
     Check grid.txtCol1.Width >= px(292), "Narrow grid discarded Description width"
+    KitToast "Saved", "success"
+    Check IsFormOpen("dlgToast"), "Toast did not open"
+    Check Forms("dlgToast").lblMsg.Caption = "Saved", "Toast lost its message"
+    Check Screen.ActiveForm.Name = "frmTest", "Toast took the focus"
+    DoCmd.Close acForm, "dlgToast", acSaveNo
     DoCmd.Close acForm, "frmTest", acSaveNo
     BuildMessageDialog
     DoCmd.OpenForm "dlgMessage"
