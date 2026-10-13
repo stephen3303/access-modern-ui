@@ -457,6 +457,10 @@ Write app-specific helpers next to the builds that use them. Examples:
 - Dialog buttons sit bottom-right in the order **Cancel (outline)** then **primary or
   destructive** action. Cancel sets `.Cancel = True` and the primary action sets
   `.Default = True`. The inline error label sits bottom-left.
+- The exception is the kit's stand-ins for Windows dialogs: the message box, the input
+  box and the date picker (`dlgMessage`, `dlgInput`, `dlgDatePick`). They use 30px
+  buttons, and the message and input boxes keep the Windows order (OK, then Cancel), so
+  they read like the dialogs they replace.
 - Header actions sit top-right, anchored right: the primary action rightmost, then
   outline, then destructive.
 

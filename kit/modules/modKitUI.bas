@@ -333,8 +333,8 @@ End Sub
 ' one.
 ' A question while one is already showing, or a dialog that can't open (not
 ' built yet), uses InputBox itself, with Null for its Cancel. A masked
-' question never does: InputBox would show the secret, so it is logged and
-' returns Null instead.
+' question never does: InputBox would show the secret, so it returns Null
+' instead (logged when the dialog failed to open).
 Public Function KitInputBox(ByVal prompt As String, Optional ByVal title As String = "", _
         Optional ByVal defaultText As String = "", Optional ByVal masked As Boolean = False) As Variant
     Dim s As String
@@ -360,8 +360,7 @@ Failed:
         Exit Function
     End If
 Plain:
-    If masked Then
-        LogError "modKitUI.KitInputBox", "masked question while another is open"
+    If masked Then          ' asked while another question is open: no error to log
         KitInputBox = Null
         Exit Function
     End If
