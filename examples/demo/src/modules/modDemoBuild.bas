@@ -158,6 +158,7 @@ Private Sub Build_subItem()
     NewForm "demo_item", 0, px(328), px(362)
     F.Section(acDetail).BackColor = CLR_SURFACE
     F.Section(acDetail).AlternateBackColor = CLR_SURFACE
+    Ev F, "BeforeUpdate"
     hw = px(156): x2 = px(172)
     FieldLbl "lblName", "ITEM", 0, 0, px(328)
     Txt "txtName", "name", 0, px(18), px(328), px(30)

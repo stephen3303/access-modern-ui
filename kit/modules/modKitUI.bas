@@ -238,43 +238,74 @@ End Function
 ' saved first, and the empty-state control emptyCtl is hidden. The panel's
 ' form is only swapped when formName changes. Swapping a subform while one of
 ' its own events is running is unsafe, so call this from the list (GridClick)
-' or the page, never from inside the detail form.
-Public Sub ShowDetail(host As Form, ByVal detailCtl As String, ByVal formName As String, ByVal where As String, _
-                      Optional ByVal emptyCtl As String = "lblDetailEmpty")
+' or the page, never from inside the detail form. Returns False, and changes
+' nothing, when the panel's form refuses to save its changed record (its
+' BeforeUpdate cancels, for example CheckRequired found an empty field): the
+' panel keeps the record so the user can finish it.
+Public Function ShowDetail(host As Form, ByVal detailCtl As String, ByVal formName As String, ByVal where As String, _
+                      Optional ByVal emptyCtl As String = "lblDetailEmpty") As Boolean
     Dim sf As Control
     On Error GoTo Fail
     Set sf = host.Controls(detailCtl)
-    SaveDetail sf
+    If Not SaveDetailCtl(sf) Then Exit Function
     If sf.SourceObject <> formName And sf.SourceObject <> "Form." & formName Then sf.SourceObject = formName
     sf.Form.Filter = where
     sf.Form.FilterOn = True
     SetVisible sf, True
     If HasCtl(host, emptyCtl) Then SetVisible host.Controls(emptyCtl), False
-    Exit Sub
+    ShowDetail = True
+    Exit Function
 Fail:
     RaiseAgain "modKitUI.ShowDetail", formName & " where " & where
-End Sub
+End Function
 
 ' Empty the detail panel (saving a changed record first) and show the
-' empty-state control instead.
-Public Sub ClearDetail(host As Form, ByVal detailCtl As String, Optional ByVal emptyCtl As String = "lblDetailEmpty")
+' empty-state control instead. Returns False, and changes nothing, when the
+' panel's form refuses to save (as ShowDetail).
+Public Function ClearDetail(host As Form, ByVal detailCtl As String, Optional ByVal emptyCtl As String = "lblDetailEmpty") As Boolean
     Dim sf As Control
     On Error GoTo Fail
     Set sf = host.Controls(detailCtl)
-    SaveDetail sf
+    If Not SaveDetailCtl(sf) Then Exit Function
     SetVisible sf, False
     sf.SourceObject = ""
     If HasCtl(host, emptyCtl) Then SetVisible host.Controls(emptyCtl), True
-    Exit Sub
+    ClearDetail = True
+    Exit Function
 Fail:
     RaiseAgain "modKitUI.ClearDetail", detailCtl
-End Sub
+End Function
 
-' Save the record shown in a detail panel if it changed.
-Private Sub SaveDetail(sf As Control)
-    If Len(sf.SourceObject) = 0 Then Exit Sub
-    If sf.Form.Dirty Then sf.Form.Dirty = False
-End Sub
+' Save the changed record in the detail panel (subform control detailCtl on
+' host). Returns False when the panel's form refuses (as ShowDetail). Call
+' it before a page change that doesn't go through ShowDetail, such as
+' applying a filter chip, and stop when it returns False.
+Public Function SaveDetail(host As Form, ByVal detailCtl As String) As Boolean
+    On Error GoTo Fail
+    SaveDetail = SaveDetailCtl(host.Controls(detailCtl))
+    Exit Function
+Fail:
+    RaiseAgain "modKitUI.SaveDetail", detailCtl
+End Function
+
+' Save the record shown in a detail panel if it changed. False when the
+' form's BeforeUpdate cancelled the save: Access raises 2101 for a cancelled
+' Dirty = False (2115 when a control's own BeforeUpdate cancelled).
+Private Function SaveDetailCtl(sf As Control) As Boolean
+    Dim errNo As Long, errDesc As String
+    SaveDetailCtl = True
+    If Len(sf.SourceObject) = 0 Then Exit Function
+    If Not sf.Form.Dirty Then Exit Function
+    On Error Resume Next
+    sf.Form.Dirty = False
+    errNo = Err.Number: errDesc = Err.Description
+    On Error GoTo 0
+    If errNo = 2101 Or errNo = 2115 Then
+        SaveDetailCtl = False
+    ElseIf errNo <> 0 Then
+        Err.Raise errNo, , errDesc
+    End If
+End Function
 
 ' ---------------------------------------------------------------------------
 ' Date fields

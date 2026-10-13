@@ -19,11 +19,15 @@ Err_Handler:
     HandleError "pgList.Form_Load"
 End Sub
 
-' Row click in the list (subGrid): show that item.
+' Row click in the list (subGrid): show that item. When the open item can't
+' be saved (a required field is empty) it stays, and so does its row.
 Public Sub GridClick(ByVal grid As String, ByVal dbl As Boolean)
     On Error GoTo Err_Handler
     If IsNull(Me.sfList.Form.txtSel) Then Exit Sub
-    ShowDetail Me, "sfDetail", "subItem", "id=" & Me.sfList.Form.txtSel
+    If Not ShowDetail(Me, "sfDetail", "subItem", "id=" & Me.sfList.Form.txtSel) Then
+        Me.sfList.Form.txtSel = Me.sfDetail.Form!id
+        Me.sfList.Form.Recalc
+    End If
     Exit Sub
 Err_Handler:
     HandleError "pgList.GridClick"
@@ -39,6 +43,7 @@ End Sub
 ' Status chip click: 0 is All.
 Public Function Chip(ByVal i As Long)
     On Error GoTo Err_Handler
+    If Not SaveDetail(Me, "sfDetail") Then Exit Function    ' open item can't be saved yet
     m_chip = i
     RefreshPage
     Exit Function

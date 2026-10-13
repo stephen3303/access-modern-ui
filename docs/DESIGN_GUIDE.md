@@ -635,6 +635,11 @@ A page that lists records and shows the selected one beside the list:
   when it changes, filters it, and hides the empty state. Call it from the list or the
   page, never from inside the detail form: swapping a subform while one of its own events
   runs is unsafe (the same reason navigation is deferred, section 6.5).
+- The detail form checks its required fields in `Form_BeforeUpdate` (`Cancel = Not
+  CheckRequired(Me, ...)`) as well as on Save, so no save path skips them. A refused
+  save keeps the record in the panel: `ShowDetail` and `ClearDetail` return False and
+  change nothing, `GridClick` then puts the list's selection back on the panel's record,
+  and a filter chip calls `SaveDetail Me, "sfDetail"` first and stops when it is False.
 - Whenever the list changes (load, a chip, the search box), call `SelectFirstRow
   Me.sfList`. It selects the first row and calls `GridClick` as a click would; when the
   list is empty it returns Null, and the page calls `ClearDetail Me, "sfDetail"` to show

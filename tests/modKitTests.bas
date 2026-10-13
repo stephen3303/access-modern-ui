@@ -226,6 +226,7 @@ Public Function TestKit(ByVal root As String) As String
     host.reqA = "x"
     Check RequiredMissing(host, "reqA=First", fitted) = "" And fitted = "", "Filled required field reported"
     Check host.reqA.BorderColor = Th(CLR_INPUT_BORDER), "Filled required field kept its outline"
+    Check SaveDetail(host, "sfRows"), "Unchanged detail panel reported a refused save"
     DoCmd.Close acForm, "frmTest", acSaveNo
     BuildMessageDialog
     DoCmd.OpenForm "dlgMessage"
