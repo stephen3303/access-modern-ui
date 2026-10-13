@@ -361,20 +361,19 @@ End Function
 ' form's BeforeUpdate cancelled the save. Which error Access raises for a
 ' cancelled Dirty = False depends on what the BeforeUpdate did: 2101, 2115
 ' (a control's own BeforeUpdate) or 2455 (it opened a message, as
-' CheckRequired does). So any error that leaves the record still changed
-' counts as refused; anything else is raised again.
+' CheckRequired does). Any other error, such as the database engine's own
+' validation, is raised again so the user still sees it.
 Private Function SaveDetailCtl(sf As Control) As Boolean
-    Dim errNo As Long, errDesc As String, errSrc As String, stillDirty As Boolean
+    Dim errNo As Long, errDesc As String, errSrc As String
     SaveDetailCtl = True
     If Len(sf.SourceObject) = 0 Then Exit Function
     If Not sf.Form.Dirty Then Exit Function
     On Error Resume Next
     sf.Form.Dirty = False
     errNo = Err.Number: errDesc = Err.Description: errSrc = Err.Source
-    If errNo <> 0 Then stillDirty = sf.Form.Dirty
     On Error GoTo 0
     If errNo = 0 Then Exit Function
-    If stillDirty Or errNo = 2101 Or errNo = 2115 Or errNo = 2455 Then
+    If errNo = 2101 Or errNo = 2115 Or errNo = 2455 Then
         SaveDetailCtl = False
     Else
         Err.Raise errNo, errSrc, errDesc
