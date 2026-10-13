@@ -174,11 +174,13 @@ Private Sub Build_subItem()
     FieldLbl "lblDue", "DUE", 0, px(190), hw
     Set c = Txt("txtDue", "due_date", 0, px(208), hw, px(30))
     c.Format = "dd mmm yyyy"
-    FieldLbl "lblFlag", "FLAGGED FOR REVIEW", x2, px(190), hw
-    Toggle "tglFlag", "flagged", x2, px(211), onChange:="FlagChanged"   ' 24px track centered on the 30px row
     FieldLbl "lblNotes", "NOTES", 0, px(246), px(328)
     Set c = Txt("txtNotes", "notes", 0, px(264), px(328), px(60))
     c.EnterKeyBehavior = True
+    ' Compact 36 x 20px switch centered on the 28px Save row, 4px in so its focus
+    ' ring stays inside the form; its label toggles it too.
+    Toggle "tglFlag", "flagged", px(4), px(338), px(36), px(20), "FlagChanged"
+    Link "lblFlag", "Flagged for review", px(48), px(334), px(176), px(28), "=ToggleSwitch([Form],""tglFlag"")", 9, CLR_FG
     Btn "btnSave", "Save", px(232), px(334), px(96), px(28)
     SaveForm "subItem"
 End Sub
