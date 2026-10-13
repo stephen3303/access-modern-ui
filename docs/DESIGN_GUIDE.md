@@ -42,7 +42,7 @@ access/
   build.ps1                  drives Access via COM; loads modules, calls BuildAll
   kit/
     modules/*.bas            reusable: modUIKit, modKitUI, modDarkMode, modPng, modGridOut,
-                             modCsv, modCrypto, modKitUtil (copied unchanged from the kit)
+                             modCsv, modCrypto, modKitUtil, modBackdrop (copied unchanged from the kit)
     forms/*.vba              kit code-behind: subGrid, dlgAppearance, dlgDatePick
   src/
     modules/*.bas            the app's own standard modules (incl. generated modPalette)
@@ -122,6 +122,7 @@ them, and the shell (`frmMain`) last.
 | modKitUI (kit) | Run-time page helpers: `GridFit`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `KitMsgBox`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
 | modKitUtil (kit) | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `SetVisible`, `SetEnabled` |
+| modBackdrop (kit) | `DimApp`, `UndimApp`: the dimmed backdrop behind modal dialogs |
 | modDarkMode (kit), modPalette (gen), modTheme (gen) | Palette engine (section 7) |
 | modPng (kit) | Draws anti-aliased PNGs for rounded pills, card corners and progress capsules |
 | modWrap | GDI text measurement (`MeasureText`) and word wrap for fixed-height rows |
@@ -485,6 +486,12 @@ Write app-specific helpers next to the builds that use them. Examples:
 - **Dialogs**:
   - `RunDialog(name, openArgs)` opens the form with `acDialog` and returns True when the
     dialog set `TempVars("DialogResult") = "ok"`.
+  - While a dialog is open the app behind it is dimmed, like a web modal: a see-through
+    layer of `CLR_SIDEBAR` (45%) over the Access window. `RunDialog` and `KitMsgBox` do
+    this themselves and remove the dim when the dialog closes, or fails to open.
+    `RunDialog name, openArgs, False` opens one undimmed. A modal form opened any other way
+    calls `DimApp` before it and `UndimApp` after, on the error path too. The date picker
+    is a small drop-down, so it isn't dimmed.
   - Other results come back in named TempVars.
   - Dialog input comes through `OpenArgs`.
 - **List subforms** (continuous forms of cards or rows) call back to their host with

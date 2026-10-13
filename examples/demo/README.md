@@ -35,6 +35,9 @@ watching for Visual Basic error dialogs as well as the error log:
 - List and detail: the first row opens on load and after each filter; a click shows that
   row; editing and saving updates the list; a search with no match shows both empty
   states; Print previews and Export writes exactly the rows shown, with the captions.
+- Dialogs: Appearance in the sidebar and the buttons on Cards and progress dim the whole
+  Access window behind their dialog; the dim goes when the dialog closes, and the dialog
+  itself is not dimmed.
 
 ## Files
 

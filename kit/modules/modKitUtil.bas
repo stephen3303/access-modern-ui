@@ -171,9 +171,24 @@ Private Function TryFocus(o As Control) As Boolean
 Nope:
 End Function
 
-' Open a modal dialog and report whether it was confirmed.
-Public Function RunDialog(ByVal formName As String, Optional ByVal openArgs As String = "") As Boolean
+' Open a modal dialog and report whether it was confirmed. The app behind it
+' is dimmed while it is open (DimApp, modBackdrop) unless dimBehind is False.
+' The dim is removed when the dialog closes, and also when it fails to open,
+' before the error goes back to the caller.
+Public Function RunDialog(ByVal formName As String, Optional ByVal openArgs As String = "", _
+                          Optional ByVal dimBehind As Boolean = True) As Boolean
+    Dim dimmed As Boolean, num As Long, desc As String, src As String
+    On Error GoTo Fail
     TempVars("DialogResult") = ""
+    If dimBehind Then DimApp: dimmed = True
     DoCmd.OpenForm formName, , , , , acDialog, openArgs
+    If dimmed Then UndimApp: dimmed = False
     RunDialog = (Nz(TempVars("DialogResult"), "") = "ok")
+    Exit Function
+Fail:
+    ' UndimApp resets Err, so keep the error to pass it on.
+    num = Err.Number: desc = Err.Description: src = Err.Source
+    If dimmed Then UndimApp
+    Err.Number = num: Err.Description = desc: Err.Source = src
+    RaiseAgain "modKitUtil.RunDialog", formName
 End Function

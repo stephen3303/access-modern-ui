@@ -169,5 +169,17 @@ Public Function TestKit(ByVal root As String) As String
     Check Not host.btn2.Visible And Not host.btn3.Visible, "Message dialog shows unused buttons"
     Check host.btn1.Left + host.btn1.Width = host.btn3.Left + host.btn3.Width, "Message OK button is not right-aligned"
     DoCmd.Close acForm, "dlgMessage", acSaveNo
+    ' Backdrop: nested dims share one layer, and a dialog that fails to open
+    ' leaves the app undimmed.
+    DimApp: DimApp: UndimApp
+    Check AppDimmed(), "Inner dialog removed the outer dialog's dim"
+    UndimApp
+    Check Not AppDimmed(), "Dim left on after its last dialog"
+    On Error Resume Next
+    RunDialog "dlgNoSuchForm"
+    badName = Err.Number
+    On Error GoTo 0
+    Check badName <> 0, "RunDialog hid a missing dialog"
+    Check Not AppDimmed(), "Dim left on after a dialog failed to open"
     TestKit = checks & " kit checks passed"
 End Function

@@ -40,6 +40,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 | modCsv | UTF-8 text files, RFC 4180 CSV read/write, query-to-CSV export |
 | modCrypto | SHA-256 through Windows CNG, salted password hashing |
 | modKitUtil | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `SetVisible`, `SetEnabled` |
+| modBackdrop | `DimApp`/`UndimApp`: dims the app behind a modal dialog, like a web modal (`RunDialog` and `KitMsgBox` use it) |
 
 ## Starting a new app with the kit
 
@@ -159,7 +160,7 @@ Control heights and font sizes never scale. `TabStrip` and `LayoutFilterRow` alr
 | `VCenter` | Vertically center single-line text |
 | `Ev c, "OnClick", ...` | Point event properties at the form module's handlers |
 
-**Run time** (modKitUI, modGridOut, modKitUtil)
+**Run time** (modKitUI, modGridOut, modKitUtil, modBackdrop)
 
 | Helper | What it does |
 |---|---|
@@ -171,6 +172,8 @@ Control heights and font sizes never scale. `TabStrip` and `LayoutFilterRow` alr
 | `ClearDetail host, detailCtl [, emptyCtl]` | Empty the detail subform and show the empty state |
 | `PickDate frm, nm` | A `DateBox` calendar button's click: open the kit's date picker (`dlgDatePick`) for box `nm` and write the chosen date into it (not while the box is disabled or locked, or its form is read-only) |
 | `KitMsgBox msg [, style, title]` | `MsgBox` in the kit's look, centred over Access (a `MsgBox` is centred on the monitor, so on a large or second screen it opens outside Access). Takes OK, OK/Cancel, Yes/No and Yes/No/Cancel, the four icons and `vbDefaultButton2`/`3`, and returns what `MsgBox` would. Anything else, or a dialog that isn't built yet, falls back to `MsgBox`. Use it in the app's `Notify` and `HandleError`. |
+| `RunDialog(name [, openArgs, dimBehind])` | Open a modal dialog and return True when it set `TempVars("DialogResult") = "ok"`. The app behind it is dimmed while it is open (pass `dimBehind:=False` to skip), and the dim comes off when it closes or fails to open. |
+| `DimApp` / `UndimApp` | Dim the Access window with a see-through layer of `CLR_SIDEBAR`, and remove it. Pair every `DimApp` with one `UndimApp`, on the error path too; nested dialogs share one layer. Only needed for a modal form opened without `RunDialog` or `KitMsgBox`. |
 | `SetCount ctl, n` | Show a count after a tab or chip caption, "Name (n)" |
 | `StyleChip lbl, isOn [, n]` | Filter chip on or off, with an optional count |
 | `SetVisible c, v` | Show or hide a control, moving the focus away when it or a control inside it has the focus (avoids error 2165) |
