@@ -169,5 +169,15 @@ Public Function TestKit(ByVal root As String) As String
     Check Not host.btn2.Visible And Not host.btn3.Visible, "Message dialog shows unused buttons"
     Check host.btn1.Left + host.btn1.Width = host.btn3.Left + host.btn3.Width, "Message OK button is not right-aligned"
     DoCmd.Close acForm, "dlgMessage", acSaveNo
+    Check CompareVersions("1.10.0", "1.9.2") = 1, "Version parts compared as text"
+    Check CompareVersions("v1.2", "1.2.0") = 0, "Missing version part not read as 0"
+    Check CompareVersions("1.0.0", "1.0.1-beta") = -1, "Version suffix not ignored"
+    Check ReleasedVersion("") = "", "Blank release folder read a version"
+    text = Environ$("TEMP") & "\kit-version-test"
+    EnsureFolder text
+    WriteTextFile text & "\" & KIT_VERSION_FILE, vbCrLf & " 1.4.0 " & vbCrLf & "notes"
+    Check ReleasedVersion(text & "\") = "1.4.0", "Release folder version misread"
+    Kill text & "\" & KIT_VERSION_FILE: RmDir text
+    Check ReleasedVersion(text) = "", "Missing version file read a version"
     TestKit = checks & " kit checks passed"
 End Function
