@@ -151,7 +151,7 @@ Public Sub MarkDueDates()
     Set db = CurrentDb
     Set rs = db.OpenRecordset("SELECT name, due_date FROM demo_item WHERE due_date IS NOT NULL", dbOpenSnapshot)
     Do Until rs.EOF
-        MarkDate rs!due_date, "Due: " & rs!name
+        MarkDate rs!due_date, "Due: " & Nz(rs!name, "(no name)")
         rs.MoveNext
     Loop
     rs.Close

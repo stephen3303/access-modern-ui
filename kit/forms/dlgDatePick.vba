@@ -53,10 +53,11 @@ Private Sub ShowMonth()
         c.ForeColor = Th(clr)
         c.FontWeight = IIf(d = Date, 700, 400)
         c.FontUnderline = (Len(hol) + Len(app) > 0)
+        ' A tooltip takes at most 255 characters.
         If Len(hol) > 0 And Len(app) > 0 Then
-            c.ControlTipText = hol & "; " & app
+            c.ControlTipText = Left$(hol & "; " & app, 255)
         Else
-            c.ControlTipText = hol & app
+            c.ControlTipText = Left$(hol & app, 255)
         End If
         If hasSel And d = sel Then
             c.BackStyle = 1
