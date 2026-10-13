@@ -106,17 +106,24 @@ End Function
 ' Access draws the bar on a continuous form whatever its content. A BuildGrid
 ' table calls this from its OnCurrent, which fires whenever its record source
 ' is set or requeried (and once before the host sets it: no record source,
-' no rows). A failure is logged, not shown: it only leaves the bar.
+' no rows). Rows are counted only until one more than fits, so a large linked
+' table isn't read to the end on every row change. A failure is logged, not
+' shown: it only leaves the bar.
 Public Function GridScroll(g As Form)
-    Dim n As Long, sb As Integer
+    Dim n As Long, sb As Integer, rowH As Long, fits As Long
     On Error GoTo Fail
-    If Len(g.RecordSource) > 0 Then
+    rowH = g.Section(acDetail).Height
+    If Len(g.RecordSource) > 0 And rowH > 0 Then
+        fits = g.InsideHeight \ rowH
         With g.RecordsetClone
-            If .RecordCount > 0 Then .MoveLast
-            n = .RecordCount
+            If Not (.BOF And .EOF) Then .MoveFirst   ' a new clone's position isn't defined
+            Do While Not .EOF And n <= fits
+                n = n + 1
+                .MoveNext
+            Loop
         End With
     End If
-    sb = IIf(n * g.Section(acDetail).Height > g.InsideHeight, 2, 0)
+    sb = IIf(n * rowH > g.InsideHeight, 2, 0)
     If g.ScrollBars <> sb Then g.ScrollBars = sb
     Exit Function
 Fail:
