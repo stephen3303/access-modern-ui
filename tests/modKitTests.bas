@@ -30,6 +30,9 @@ Public Function TestKit(ByVal root As String) As String
         Lbl "stepDate" & i, "", 0, px(580), 420, 300
         If i < 2 Then Box "stepConnector" & i, 0, px(540), 1000, 15, CLR_BORDER
     Next
+    Set c = Lbl("pillPaint", "Open", 0, px(620), px(80), px(20)): PillLabel c
+    Set c = Txt("pillBound", "=""Open""", px(100), px(620), px(80), px(20))
+    CF c, "True", CLR_PRIMARY, CLR_WHITE: RoundCF c
     SaveForm "frmTest", "testHost"
     DoCmd.OpenForm "frmTest"
     Set host = Forms("frmTest"): Set grid = host.sfRows.Form
@@ -67,6 +70,15 @@ Public Function TestKit(ByVal root As String) As String
     Check host.stepMarker0.Width = 420 And host.stepMarker0.Height = 420, "Timeline circle expanded"
     Check host.stepNumber0.Width = 420, "Timeline number expanded"
     Check host.stepConnector0.Width = px(650) \ 3 - 480, "Timeline connector did not adjust"
+    host.pillPaint_bg.Visible = True
+    SetVisible host.pillPaint, False
+    Check Not host.pillPaint_bg.Visible, "Hidden painted pill left its image"
+    SetVisible host.pillPaint, True
+    Check host.pillPaint.Visible And Not host.pillPaint_bg.Visible, "Painted pill image shown without a paint"
+    SetVisible host.pillBound, False
+    Check Not host.pillBound.Visible And Not host.pillBound_bg.Visible, "Hidden bound pill left its image"
+    SetVisible host.pillBound, True
+    Check host.pillBound.Visible And host.pillBound_bg.Visible, "Shown bound pill lost its image"
     grid.RecordSource = "SELECT * FROM test_rows ORDER BY id"
     height = host.sfRows.Height
     LayoutTableFooter host, "sfRows", "pager", "id"
