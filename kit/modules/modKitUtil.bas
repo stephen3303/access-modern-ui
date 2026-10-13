@@ -80,14 +80,16 @@ End Sub
 ' the color, or none); a painted image stays as the app's paint left it,
 ' since only a fresh paint knows its color.
 Private Sub PillImageVisible(c As Control, ByVal v As Boolean)
-    Dim im As Control
+    Dim im As Control, src As String
     On Error Resume Next
     Set im = OwnerForm(c).Controls(c.Name & "_bg")
+    ' Read through Properties: im.ControlSource raises 438 on an image control.
+    src = Nz(im.Properties("ControlSource").Value, "")
     On Error GoTo 0
     If im Is Nothing Then Exit Sub
     If Not v Then
         im.Visible = False
-    ElseIf Len(im.ControlSource) > 0 Then
+    ElseIf Len(src) > 0 Then
         im.Visible = True
     End If
 End Sub
