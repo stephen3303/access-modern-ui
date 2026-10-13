@@ -48,6 +48,7 @@ Public Function TestKit(ByVal root As String) As String
     Check GridMark("a<b & c", "") = "a&lt;b &amp; c", "Unsearched cell not escaped"
     Check GridMark("a   b", "") = "a &nbsp; b", "Cell spaces collapsed"
     Check GridMark(" a", "") = "&nbsp;a", "Leading space collapsed"
+    Check GridMark("Pump overhaul", "pump") Like "*</font> overhaul", "Space after a match changed"
     text = GridMark("Pump pump", "PUMP")
     Check UBound(Split(text, "</font>")) = 2 And InStr(text, ">Pump</font> <") > 0, "Search matches not marked"
     measured = MeasureText(ChrW(&H2026), 9, 400)

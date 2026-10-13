@@ -200,36 +200,37 @@ Public Function GridMark(ByVal v As Variant, ByVal term As Variant) As Variant
     If IsNull(v) Then GridMark = Null: Exit Function
     s = CStr(v)
     t = Nz(term, "")
+    i = 1
     If Len(t) > 0 Then
         mark = "<font color=""" & HtmlColor(Th(CLR_WARNING_FG)) & """ style=""BACKGROUND-COLOR:" & _
             HtmlColor(Th(CLR_WARNING_BG)) & """>"
-        i = 1
         Do
             j = InStr(i, s, t, vbTextCompare)
             If j = 0 Then Exit Do
-            out = out & HtmlText(Mid$(s, i, j - i)) & mark & HtmlText(Mid$(s, j, Len(t))) & "</font>"
+            out = out & HtmlText(Mid$(s, i, j - i), i = 1) & mark & HtmlText(Mid$(s, j, Len(t)), j = 1) & "</font>"
             i = j + Len(t)
         Loop
         s = Mid$(s, i)
     End If
-    GridMark = out & HtmlText(s)
+    GridMark = out & HtmlText(s, i = 1)
     Exit Function
 Fail:
     Resume Unmarked                         ' leave the handler, so a second error is trapped too
 Unmarked:
     On Error Resume Next
-    GridMark = HtmlText(CStr(v))
+    GridMark = HtmlText(CStr(v), True)
 End Function
 
 ' Text for a rich text box: the characters HTML reserves escaped, line breaks
 ' as <br>, and runs of spaces and tabs kept (HTML would collapse them).
-Private Function HtmlText(ByVal s As String) As String
+' cellStart = True when s begins the cell, where a single space is kept too.
+Private Function HtmlText(ByVal s As String, Optional ByVal cellStart As Boolean = False) As String
     s = Replace(s, "&", "&amp;")
     s = Replace(s, "<", "&lt;")
     s = Replace(s, ">", "&gt;")
     s = Replace(s, vbTab, "    ")
     s = Replace(s, "  ", " &nbsp;")
-    If Left$(s, 1) = " " Then s = "&nbsp;" & Mid$(s, 2)
+    If cellStart And Left$(s, 1) = " " Then s = "&nbsp;" & Mid$(s, 2)
     s = Replace(s, vbCrLf, "<br>")
     HtmlText = Replace(s, vbLf, "<br>")
 End Function
