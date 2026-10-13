@@ -337,7 +337,8 @@ End Sub
     Clear and Cancel. US federal holidays (`FederalHoliday`, on their observed day)
     are underlined in `CLR_DANGER_TEXT` and app dates (`MarkDate`, such as deadlines)
     in `CLR_WARN_TEXT`, which wins when a day is both; the tooltip names every mark.
-    Days outside the month stay `CLR_MUTED_FG` with the underline and tooltip. Access's own picker is off: it shows only on focus, and
+    Days outside the month stay `CLR_MUTED_FG` with the underline and tooltip.
+    Access's own picker is off: it shows only on focus, and
     `acCmdShowDatePicker` is refused once it is off. The pair is 154px
     (`DATEFIELD_W`), so it fits a half-width field column.
   - `RO`: read-only text, borderless, transparent, no tab stop. Show read-only dates

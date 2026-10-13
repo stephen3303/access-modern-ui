@@ -292,11 +292,13 @@ End Function
 ' The US federal holiday on day d (5 U.S.C. 6103), or "" when there is none.
 ' Fixed-date holidays are given on the day they are observed: a Saturday
 ' holiday on the Friday before, a Sunday one on the Monday after, with
-' " (observed)" added. So New Year's Day can fall on 31 December.
+' " (observed)" added. So New Year's Day can fall on 31 December. These are
+' the rules since 1971 (Monday holidays); earlier dates return "".
 Public Function FederalHoliday(ByVal d As Date) As String
     Dim y As Integer, nm As String
     d = Int(d)
     y = Year(d)
+    If y < 1971 Then Exit Function
     nm = ObservedHoliday(d, DateSerial(y + 1, 1, 1), "New Year's Day")
     If Len(nm) = 0 Then nm = ObservedHoliday(d, DateSerial(y, 1, 1), "New Year's Day")
     If Len(nm) = 0 And y >= 2021 Then nm = ObservedHoliday(d, DateSerial(y, 6, 19), "Juneteenth National Independence Day")

@@ -53,12 +53,8 @@ Private Sub ShowMonth()
         c.ForeColor = Th(clr)
         c.FontWeight = IIf(d = Date, 700, 400)
         c.FontUnderline = (Len(hol) + Len(app) > 0)
-        ' A tooltip takes at most 255 characters.
-        If Len(hol) > 0 And Len(app) > 0 Then
-            c.ControlTipText = Left$(hol & "; " & app, 255)
-        Else
-            c.ControlTipText = Left$(hol & app, 255)
-        End If
+        If Len(hol) > 0 And Len(app) > 0 Then hol = hol & "; "
+        c.ControlTipText = TipText(hol & app)
         If hasSel And d = sel Then
             c.BackStyle = 1
             c.BackColor = Th(CLR_PRIMARY_SOFT)
@@ -67,6 +63,13 @@ Private Sub ShowMonth()
         End If
     Next
 End Sub
+
+' Tooltip text s, cut to the 255 characters a tooltip takes, with an ellipsis
+' when cut (many marks on one day).
+Private Function TipText(ByVal s As String) As String
+    If Len(s) > 255 Then s = Left$(s, 254) & ChrW(&H2026)
+    TipText = s
+End Function
 
 ' Previous (-1) or next (1) month.
 Public Function MoveMonth(ByVal n As Long)
