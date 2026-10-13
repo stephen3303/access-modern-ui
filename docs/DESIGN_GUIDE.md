@@ -404,8 +404,10 @@ End Sub
       field; give a fifth part, `"due|Due|80||due_date"`, when the cell shows formatted
       text (a date through `Format`) and the record source also returns the real
       field. A computed column (`"=..."`) sorts only with a fifth part.
-    - The sort is the table's `OrderBy`, so `PrintGrid` and `ExportGrid` follow it. Sort
-      a table in code through `GridSort` so its arrow stays right.
+    - The sort is the table's `OrderBy`, so `PrintGrid` and `ExportGrid` follow it. Rows
+      with the same value keep id order. Sort a table in code through `GridSort` so its
+      arrow stays right. A paginated table (`GridFooter`) goes back to page 1 in the new
+      order (`RestartTablePages`).
   - `PrintGrid gridForm, title, [subtitle]` and `ExportGrid gridForm, path` (modGridOut)
     print or export a table as the user sees it: its visible columns with their
     captions, and the rows its filter and sort show. `PrintGrid` builds a report
