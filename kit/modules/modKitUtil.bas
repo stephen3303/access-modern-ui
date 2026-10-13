@@ -6,6 +6,34 @@ Option Explicit
 Private Const ERR_DISABLE_FOCUSED As Long = 2164   ' can't disable the focused control
 Private Const ERR_HIDE_FOCUSED As Long = 2165      ' can't hide the focused control
 
+' Window placement for CenterOnApp (user32). Rectangles are screen pixels.
+Private Const MONITOR_DEFAULTTONEAREST As Long = 2
+Private Const SWP_NOSIZE As Long = &H1
+Private Const SWP_NOZORDER As Long = &H4
+Private Const SWP_NOACTIVATE As Long = &H10
+
+Private Type RECT
+    Left As Long
+    Top As Long
+    Right As Long
+    Bottom As Long
+End Type
+
+Private Type MONITORINFO
+    cbSize As Long
+    rcMonitor As RECT
+    rcWork As RECT      ' the monitor less the taskbar
+    dwFlags As Long
+End Type
+
+Private Declare PtrSafe Function GetWindowRect Lib "user32" (ByVal hWnd As LongPtr, lpRect As RECT) As Long
+Private Declare PtrSafe Function IsIconic Lib "user32" (ByVal hWnd As LongPtr) As Long
+Private Declare PtrSafe Function MonitorFromWindow Lib "user32" (ByVal hWnd As LongPtr, ByVal dwFlags As Long) As LongPtr
+Private Declare PtrSafe Function GetMonitorInfo Lib "user32" Alias "GetMonitorInfoW" ( _
+    ByVal hMonitor As LongPtr, lpmi As MONITORINFO) As Long
+Private Declare PtrSafe Function SetWindowPos Lib "user32" (ByVal hWnd As LongPtr, ByVal hWndInsertAfter As LongPtr, _
+    ByVal x As Long, ByVal y As Long, ByVal cx As Long, ByVal cy As Long, ByVal wFlags As Long) As Long
+
 ' True when a file exists.
 Public Function FileExists(ByVal path As String) As Boolean
     On Error Resume Next
@@ -191,4 +219,46 @@ Fail:
     If dimmed Then UndimApp
     Err.Number = num: Err.Description = desc: Err.Source = src
     RaiseAgain "modKitUtil.RunDialog", formName
+End Function
+
+' Centre a pop-up form over the Access window, on the Access window's monitor,
+' and keep it inside that monitor's work area. Call it at the end of every
+' dialog's Form_Load, after the dialog has its final size. AutoCenter alone
+' centres a pop-up only roughly (dlgMessage sat about 75px high after it
+' shrank) and can place it on another monitor. When Access is minimized the
+' dialog centres on the monitor Access was on. Positioning never stops a
+' dialog opening: a failure is logged and the dialog stays where Access put it.
+' With monitors at different scaling, Windows may resize a dialog it moves to
+' the other monitor, so it can then sit a few pixels off centre.
+Public Sub CenterOnApp(frm As Form)
+    Dim app As RECT, dlg As RECT, mi As MONITORINFO, hApp As LongPtr, x As Long, y As Long
+    On Error GoTo Fail
+    hApp = Application.hWndAccessApp
+    If GetWindowRect(frm.hWnd, dlg) = 0 Then Exit Sub
+    mi.cbSize = LenB(mi)
+    If GetMonitorInfo(MonitorFromWindow(hApp, MONITOR_DEFAULTTONEAREST), mi) = 0 Then Exit Sub
+    If IsIconic(hApp) <> 0 Then
+        app = mi.rcWork
+    ElseIf GetWindowRect(hApp, app) = 0 Then
+        Exit Sub
+    End If
+    x = CenteredStart(app.Left, app.Right, dlg.Right - dlg.Left, mi.rcWork.Left, mi.rcWork.Right)
+    y = CenteredStart(app.Top, app.Bottom, dlg.Bottom - dlg.Top, mi.rcWork.Top, mi.rcWork.Bottom)
+    SetWindowPos frm.hWnd, 0, x, y, 0, 0, SWP_NOSIZE Or SWP_NOZORDER Or SWP_NOACTIVATE
+    Exit Sub
+Fail:
+    LogError "modKitUtil.CenterOnApp", frm.Name
+End Sub
+
+' Where a window size wide starts when centred on lo..hi, pulled back inside
+' the work area workLo..workHi. A window wider than the work area starts at
+' workLo, so its title bar and close button stay reachable. Public so the
+' kit tests can check the arithmetic.
+Public Function CenteredStart(ByVal lo As Long, ByVal hi As Long, ByVal size As Long, _
+        ByVal workLo As Long, ByVal workHi As Long) As Long
+    Dim p As Long
+    p = lo + (hi - lo - size) \ 2
+    If p + size > workHi Then p = workHi - size
+    If p < workLo Then p = workLo
+    CenteredStart = p
 End Function

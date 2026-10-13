@@ -4,15 +4,21 @@ Option Explicit
 ' Access UI kit - run-time helpers for pages built with modUIKit: tables that
 ' scale their columns (GridFit), list/detail pages (SelectFirstRow,
 ' ShowDetail, ClearDetail), tabs and filter chips with counts (SetCount,
-' StyleChip), and messages in the kit's look (KitMsgBox). Colors set here go
-' through Th() so they follow the palette.
+' StyleChip), focus rings on inputs (FocusRing), and messages in the kit's
+' look (KitMsgBox). Colors set here go through Th() so they follow the palette.
 
 ' Width the table's vertical scroll bar takes (twips).
 Private Const SCROLL_W As Long = 300
 ' Widest a form can be: 22 inches (twips).
 Private Const MAX_FORM_W As Long = 31680
+' Arrows a sorted GridHeaders caption shows (GridSort): up ascending, down
+' descending (Unicode code points, for ChrW).
+Private Const SORT_UP As Long = &H25B2
+Private Const SORT_DOWN As Long = &H25BC
 ' The DateBox the date picker (dlgDatePick) is open for (PickDate).
 Private m_dateTarget As Control
+' Dates the app marks on the date picker (MarkDate): label by "d" & date serial.
+Private m_marks As Collection
 ' The message the message dialog (dlgMessage) is showing (KitMsgBox), and the
 ' button chosen in it.
 Private m_msgOpen As Boolean
@@ -20,6 +26,12 @@ Private m_msgText As String
 Private m_msgStyle As Long
 Private m_msgTitle As String
 Private m_msgAnswer As Long
+' The field showing the focus ring (FocusRing): the control, its form's
+' window and its name, and the border color the ring covers.
+Private m_ringCtl As Control
+Private m_ringHwnd As Long
+Private m_ringName As String
+Private m_ringWas As Long
 
 ' ---------------------------------------------------------------------------
 ' Tables
@@ -156,6 +168,50 @@ Public Sub GridScrollAll(frm As Form)
     Next
 End Sub
 
+' Caption click on a sortable GridHeaders table (its sortSf): sort the table
+' in subform control sfName on host by caption prefix & col's sort field,
+' ascending, or descending when that caption already shows the ascending
+' arrow. The sorted caption shows the SORT_UP or SORT_DOWN arrow (on its
+' left when the caption is right-aligned, so the text stays over the
+' numbers) and the others lose theirs. The arrow is the sort state: a host
+' that sorts the table in code should do it through GridSort.
+' The sort is the form's OrderBy, which PrintGrid and ExportGrid follow. A
+' paginated table (GridFooter) goes back to its first page in the new order.
+' Ties keep id order. The selected row stays selected (txtSel keeps its id).
+' A failure is shown (HandleError), as for any click; code that sorts a
+' table and must know it failed should check the table's OrderBy after.
+Public Function GridSort(host As Form, ByVal sfName As String, ByVal prefix As String, ByVal col As Long)
+    Dim g As Form, cap As Control, t() As String, key As String, desc As Boolean, i As Long
+    On Error GoTo Fail
+    Set cap = host.Controls(prefix & col)
+    t = Split(cap.Tag & "|||", "|")
+    key = Trim$(t(3))
+    If Len(key) = 0 Then Exit Function
+    If Left$(key, 1) <> "[" Then key = "[" & key & "]"
+    desc = InStr(cap.Caption, ChrW(SORT_UP)) > 0
+    Set g = host.Controls(sfName).Form
+    g.OrderBy = key & IIf(desc, " DESC", "") & IIf(key = "[id]", "", ", [id]")
+    g.OrderByOn = True
+    RestartTablePages host, sfName      ' a paginated table shows the old order's page
+    Do While HasCtl(host, prefix & i)
+        SortArrow host.Controls(prefix & i), IIf(i = col, IIf(desc, ChrW(SORT_DOWN), ChrW(SORT_UP)), "")
+        i = i + 1
+    Loop
+    Exit Function
+Fail:
+    HandleError "modKitUI.GridSort", prefix & col
+End Function
+
+' Put arrow (or none, "") on a GridHeaders caption in place of the one it has.
+Private Sub SortArrow(cap As Control, ByVal arrow As String)
+    Dim s As String
+    s = Trim$(Replace(Replace(cap.Caption, ChrW(SORT_UP), ""), ChrW(SORT_DOWN), ""))
+    If Len(arrow) > 0 Then
+        If cap.TextAlign = 3 Then s = arrow & " " & s Else s = s & " " & arrow
+    End If
+    If cap.Caption <> s Then cap.Caption = s
+End Sub
+
 ' Select the first row of a BuildGrid table and tell the host, as a click
 ' would (its GridClick grid, False). Returns the row's id, or Null when the
 ' table is empty (then nothing is called). Call it after the list loads or
@@ -258,6 +314,180 @@ Public Sub SetDateTarget(ByVal v As Variant)
     m_dateTarget.Value = v
 End Sub
 
+' Mark day d on the date picker with label lbl (a deadline, a drill, a pay
+' day). A second label on the same day is added after "; ". Marks last until
+' ClearMarkedDates or the app closes, so set them before the picker opens, for
+' example at startup from the app's own deadlines table.
+Public Sub MarkDate(ByVal d As Date, ByVal lbl As String)
+    Dim k As String, cur As String
+    If m_marks Is Nothing Then Set m_marks = New Collection
+    k = "d" & CLng(Int(d))
+    cur = MarkedDate(d)
+    If Len(cur) > 0 Then
+        m_marks.Remove k
+        lbl = cur & "; " & lbl
+    End If
+    m_marks.Add lbl, k
+End Sub
+
+' Remove every MarkDate mark.
+Public Sub ClearMarkedDates()
+    Set m_marks = Nothing
+End Sub
+
+' The app's label for day d (MarkDate), or "" when it has none.
+Public Function MarkedDate(ByVal d As Date) As String
+    If m_marks Is Nothing Then Exit Function
+    On Error Resume Next
+    MarkedDate = m_marks("d" & CLng(Int(d)))
+    Err.Clear
+End Function
+
+' The US federal holiday on day d (5 U.S.C. 6103), or "" when there is none.
+' Fixed-date holidays are given on the day they are observed: a Saturday
+' holiday on the Friday before, a Sunday one on the Monday after, with
+' " (observed)" added. So New Year's Day can fall on 31 December. These are
+' the rules since 1978 (Veterans Day back on 11 November); earlier dates
+' return "".
+Public Function FederalHoliday(ByVal d As Date) As String
+    Dim y As Integer, nm As String
+    d = Int(d)
+    y = Year(d)
+    If y < 1978 Then Exit Function
+    nm = ObservedHoliday(d, DateSerial(y + 1, 1, 1), "New Year's Day")
+    If Len(nm) = 0 Then nm = ObservedHoliday(d, DateSerial(y, 1, 1), "New Year's Day")
+    If Len(nm) = 0 And y >= 2021 Then nm = ObservedHoliday(d, DateSerial(y, 6, 19), "Juneteenth National Independence Day")
+    If Len(nm) = 0 Then nm = ObservedHoliday(d, DateSerial(y, 7, 4), "Independence Day")
+    If Len(nm) = 0 Then nm = ObservedHoliday(d, DateSerial(y, 11, 11), "Veterans Day")
+    If Len(nm) = 0 Then nm = ObservedHoliday(d, DateSerial(y, 12, 25), "Christmas Day")
+    If Len(nm) > 0 Then FederalHoliday = nm: Exit Function
+    ' The Monday and Thursday holidays never move.
+    If d = NthWeekday(y, 1, vbMonday, 3) And y >= 1986 Then
+        nm = "Birthday of Martin Luther King, Jr."
+    ElseIf d = NthWeekday(y, 2, vbMonday, 3) Then
+        nm = "Washington's Birthday"
+    ElseIf d = NthWeekday(y, 6, vbMonday, 1) - 7 Then
+        nm = "Memorial Day"                     ' the last Monday in May
+    ElseIf d = NthWeekday(y, 9, vbMonday, 1) Then
+        nm = "Labor Day"
+    ElseIf d = NthWeekday(y, 10, vbMonday, 2) Then
+        nm = "Columbus Day"
+    ElseIf d = NthWeekday(y, 11, vbThursday, 4) Then
+        nm = "Thanksgiving Day"
+    End If
+    FederalHoliday = nm
+End Function
+
+' nm when d is the day holiday hol is observed on, else "".
+Private Function ObservedHoliday(ByVal d As Date, ByVal hol As Date, ByVal nm As String) As String
+    Dim obs As Date
+    obs = hol
+    Select Case Weekday(hol, vbSunday)
+        Case vbSaturday: obs = hol - 1
+        Case vbSunday: obs = hol + 1
+    End Select
+    If d = obs Then ObservedHoliday = nm & IIf(obs <> hol, " (observed)", "")
+End Function
+
+' The n-th weekday wd (vbMonday ...) of month m in year y.
+Private Function NthWeekday(ByVal y As Integer, ByVal m As Integer, ByVal wd As VbDayOfWeek, ByVal n As Integer) As Date
+    Dim first As Date
+    first = DateSerial(y, m, 1)
+    NthWeekday = first + ((wd - Weekday(first, vbSunday) + 7) Mod 7) + (n - 1) * 7
+End Function
+
+' ---------------------------------------------------------------------------
+' Focus ring
+' ---------------------------------------------------------------------------
+
+' A kit input's GotFocus (isOn True) and LostFocus (False), set by Txt and
+' Cbo: paint control nm's border CLR_PRIMARY while it has the focus, then give
+' back the color it had. That color is whatever was there on GotFocus, not
+' always CLR_INPUT_BORDER, so a caller's own border or a red outline from
+' CheckRequired survives tabbing through the field. If something else
+' repaints the border while the field has the focus, it is left alone.
+' Only the border color changes (no width, size or margin), so the text never
+' moves. No ring on a locked field or a read-only form (nothing to type), or
+' on a continuous form's rows, where one control's border is every row's.
+' One field is ringed at a time: each GotFocus first restores the last one,
+' because Access fires no LostFocus for a field inside a subform when the
+' focus moves out to the main form (FocusRingClear covers the subform's Exit
+' and the kit's buttons, check boxes, list boxes and focus sink). A failure is logged but not shown, like ThemeForm:
+' the field keeps working without the ring.
+Public Function FocusRing(frm As Form, ByVal nm As String, ByVal isOn As Boolean)
+    Dim c As Control
+    On Error GoTo Fail
+    Set c = frm.Controls(nm)
+    If Not isOn Then
+        If m_ringHwnd = frm.Hwnd And m_ringName = nm Then ClearRing
+        Exit Function
+    End If
+    ClearRing
+    If c.Locked Then Exit Function
+    If Not (frm.AllowEdits Or (frm.NewRecord And frm.AllowAdditions)) Then Exit Function
+    If frm.DefaultView <> 0 And c.Section = acDetail Then Exit Function
+    m_ringWas = c.BorderColor
+    c.BorderColor = Th(CLR_PRIMARY)
+    Set m_ringCtl = c
+    m_ringHwnd = frm.Hwnd
+    m_ringName = nm
+    Exit Function
+Fail:
+    LogError "modKitUI.FocusRing", frm.Name & "." & nm
+End Function
+
+' Take the ring off the field showing it. Set by SubF as the subform
+' control's Exit (the field inside gets no LostFocus when the focus leaves the
+' subform), and by Btn, Chk, Lst and NewForm's focus sink as their GotFocus:
+' a subform's Enter re-rings its last field before the focus lands, so a click
+' on its Save button would otherwise leave that field ringed.
+Public Function FocusRingClear()
+    On Error GoTo Fail
+    ClearRing
+    Exit Function
+Fail:
+    LogError "modKitUI.FocusRingClear"
+End Function
+
+' A kit subform control's Enter (set by SubF): when the focus comes back to
+' the field that last had it inside subform control nm on frm, Access fires
+' no GotFocus for it, so ring it here. When the click lands on another
+' control, that control's GotFocus (FocusRing or FocusRingClear) follows and
+' moves or clears the ring before Access repaints.
+Public Function FocusRingEnter(frm As Form, ByVal nm As String)
+    Dim inner As Form, c As Control
+    On Error Resume Next
+    Set inner = frm.Controls(nm).Form      ' error 2467 while it shows no form
+    On Error GoTo Fail
+    If inner Is Nothing Then Exit Function
+    Do
+        Set c = Nothing
+        On Error Resume Next
+        Set c = inner.ActiveControl          ' error 2474 when none has the focus yet
+        On Error GoTo Fail
+        If c Is Nothing Then Exit Function
+        If c.ControlType <> acSubform Then Exit Do
+        Set inner = c.Form                   ' a subform inside the subform
+    Loop
+    If c.ControlType <> acTextBox And c.ControlType <> acComboBox Then Exit Function
+    If Left$(Nz(c.OnGotFocus, ""), 11) = "=FocusRing(" Then FocusRing inner, c.Name, True
+    Exit Function
+Fail:
+    LogError "modKitUI.FocusRingEnter", frm.Name & "." & nm
+End Function
+
+' Give the ringed field its own border back, if it still shows the ring. Its
+' form may have closed since, which makes the saved reference unusable.
+Private Sub ClearRing()
+    If m_ringCtl Is Nothing Then Exit Sub
+    On Error Resume Next
+    If m_ringCtl.BorderColor = Th(CLR_PRIMARY) Then m_ringCtl.BorderColor = m_ringWas
+    On Error GoTo 0
+    Set m_ringCtl = Nothing
+    m_ringHwnd = 0
+    m_ringName = ""
+End Sub
+
 ' ---------------------------------------------------------------------------
 ' Messages
 ' ---------------------------------------------------------------------------
@@ -319,6 +549,67 @@ End Function
 Public Sub SetKitMsgAnswer(ByVal answer As Long)
     m_msgAnswer = answer
 End Sub
+
+' ---------------------------------------------------------------------------
+' Required fields
+' ---------------------------------------------------------------------------
+
+' Save check for a form's required inputs: every empty one (Null, or only
+' spaces) is outlined in CLR_DESTRUCTIVE, all of them are listed in one
+' KitMsgBox, and the focus goes to the first. fields lists the inputs in tab
+' order as "control=Caption" pairs separated by ";", for example
+' "txtName=Item;txtOwner=Owner". Returns True when all are filled. Call it at
+' the top of the Save button's handler and stop when it returns False:
+'     If Not CheckRequired(Me, "txtName=Item;txtOwner=Owner") Then Exit Sub
+Public Function CheckRequired(frm As Form, ByVal fields As String) As Boolean
+    Dim missing As String, first As String
+    On Error GoTo Fail
+    missing = RequiredMissing(frm, fields, first)
+    If Len(missing) = 0 Then
+        CheckRequired = True
+        Exit Function
+    End If
+    KitMsgBox "Please fill in:" & vbCrLf & missing, vbExclamation, "Required fields"
+    ' Moving the focus is a courtesy: a control that can't take it (error
+    ' 2110) or a form that isn't active any more is left as it is.
+    On Error Resume Next
+    frm.Controls(first).SetFocus
+    Exit Function
+Fail:
+    HandleError "modKitUI.CheckRequired", frm.Name & ": " & fields
+End Function
+
+' CheckRequired without the message: outline the empty required inputs and
+' return their captions, one per line after a bullet (an empty string when
+' all are filled), and the first one's control name in first. A filled input
+' gets its normal border back, so a field fixed since the last Save stops
+' being red. Hidden or disabled inputs are skipped: the user can't fill them.
+' Raises on a control name the form doesn't have.
+Public Function RequiredMissing(frm As Form, ByVal fields As String, Optional ByRef first As String) As String
+    Dim p As Variant, nm As String, cap As String, c As Control, out As String, blank As Boolean
+    first = ""
+    For Each p In Split(fields, ";")
+        If Len(Trim$(p)) > 0 Then
+            nm = Trim$(p): cap = nm
+            If InStr(nm, "=") > 0 Then
+                cap = Trim$(Mid$(nm, InStr(nm, "=") + 1))
+                nm = Trim$(Left$(nm, InStr(nm, "=") - 1))
+            End If
+            Set c = frm.Controls(nm)
+            blank = False
+            If c.Visible And c.Enabled Then blank = (Len(Trim$(Nz(c.Value, ""))) = 0)
+            If blank Then
+                c.BorderColor = Th(CLR_DESTRUCTIVE)
+                If Len(first) = 0 Then first = nm
+                out = out & IIf(Len(out) > 0, vbCrLf, "") & ChrW(&H2022) & " " & cap
+            Else
+                ' The border the kit's builders give the input (Txt, DateBox, Cbo; Lst).
+                c.BorderColor = Th(IIf(c.ControlType = acListBox, CLR_BORDER, CLR_INPUT_BORDER))
+            End If
+        End If
+    Next
+    RequiredMissing = out
+End Function
 
 ' ---------------------------------------------------------------------------
 ' Tabs and filter chips

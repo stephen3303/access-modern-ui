@@ -98,24 +98,26 @@ Private Sub BuildUserInterface()
     Build_pgList
     Build_dlgAppearance
     BuildMessageDialog             ' the kit's dlgMessage, for KitMsgBox
+    BuildDatePicker                ' the kit's dlgDatePick, for DateBox
     Build_frmMain
 End Sub
 
-' Styled tables (BuildGrid): "field|caption|width px|options".
+' Styled tables (BuildGrid): "field|caption|width px|options[|sort field]".
+' Due shows formatted text, so its captions sort by due_date (GridHeaders).
 Private Function CardCols() As Variant
     CardCols = Array("name|Item|320|b", "owner|Owner|170|", "category|Category|140|m", "status|Status|120|p", "due|Due|100|")
 End Function
 
 Private Function OptionCols() As Variant
-    OptionCols = Array("name|Item|300|b", "owner|Owner|170|", "category|Category|140|m", "status|Status|120|p", "due|Due|110|r")
+    OptionCols = Array("name|Item|300|b", "owner|Owner|170|", "category|Category|140|m", "status|Status|120|p", "due|Due|110|r|due_date")
 End Function
 
 Private Function PlainCols() As Variant
-    PlainCols = Array("name|Item|340|b", "owner|Owner|180|", "status|Status|140|", "due|Due|120|r")
+    PlainCols = Array("name|Item|340|b", "owner|Owner|180|", "status|Status|140|", "due|Due|120|r|due_date")
 End Function
 
 Private Function ListCols() As Variant
-    ListCols = Array("name|Item|230|b", "owner|Owner|140|", "status|Status|110|p", "due|Due|80|")
+    ListCols = Array("name|Item|230|b", "owner|Owner|140|", "status|Status|110|p", "due|Due|80||due_date")
 End Function
 
 ' Width of the list card on pgList.
@@ -155,6 +157,7 @@ End Sub
 Private Sub Build_subItem()
     Dim c As Control, x2 As Long, hw As Long
     NewForm "demo_item", 0, px(328), px(362)
+    Ev F, "AfterUpdate"
     F.Section(acDetail).BackColor = CLR_SURFACE
     F.Section(acDetail).AlternateBackColor = CLR_SURFACE
     hw = px(156): x2 = px(172)
@@ -169,8 +172,7 @@ Private Sub Build_subItem()
     Ev c, "AfterUpdate"
     Progress "imgPct", "[percent_done]", 0, px(170), px(328), px(10)
     FieldLbl "lblDue", "DUE", 0, px(190), hw
-    Set c = Txt("txtDue", "due_date", 0, px(208), hw, px(30))
-    c.Format = "dd mmm yyyy"
+    DateBox "txtDue", "due_date", 0, px(208), px(30)
     FieldLbl "lblNotes", "NOTES", 0, px(246), px(328)
     Set c = Txt("txtNotes", "notes", 0, px(264), px(328), px(60))
     c.EnterKeyBehavior = True
@@ -232,9 +234,9 @@ Private Sub Build_pgTables()
     Set c = Cbo("cboCategory", "", "(All categories);Engineering;Weapons;Supply;Navigation;Medical", x + px(240), y, px(170), px(28))
     Ev c, "AfterUpdate"
     y = px(170)
-    GridHeaders "hdrOpt", OptionCols(), CX, y, "", True, CW()
+    GridHeaders "hdrOpt", OptionCols(), CX, y, "", True, CW(), "sfOptions"
     Set c = SubF("sfOptions", "subGridOptions", CX, y + px(22), CW(), PAGE_H - y - px(38)): Anchor c, 2, 2
-    GridHeaders "hdrPlain", PlainCols(), CX, y
+    GridHeaders "hdrPlain", PlainCols(), CX, y, sortSf:="sfPlain"
     Set c = SubF("sfPlain", "subGridPlain", CX, y + px(22), CW(), PAGE_H - y - px(38)): Anchor c, 2, 2
     c.Visible = False
     Set c = Lbl("lblEmpty", "No items match.", CX, y + px(60), CW(), px(20), 10, False, CLR_MUTED_FG)
@@ -249,7 +251,7 @@ Private Sub Build_pgList()
     lw = ListW()
     NewForm "", 0, PAGE_W, PAGE_H
     Ev F, "OnLoad"
-    PageHeader "List and detail", "Click a row to show it on the right. Print and Export use the rows the list shows.", CX
+    PageHeader "List and detail", "Click a row to show it on the right, or a column caption to sort. Print and Export use the rows the list shows.", CX
     Set c = Btn("btnPrint", "Print", PAGE_W - CX - px(96), px(24), px(96), px(32), "outline"): Anchor c, 1, 0
     Set c = Btn("btnXlsx", "Export Excel", PAGE_W - CX - px(222), px(24), px(118), px(32), "outline"): Anchor c, 1, 0
     Set c = Btn("btnCsv", "Export CSV", PAGE_W - CX - px(338), px(24), px(108), px(32), "outline"): Anchor c, 1, 0
@@ -258,7 +260,7 @@ Private Sub Build_pgList()
     SearchBox x + px(10), y, px(220)
     y = px(124): h = PAGE_H - y - px(16)
     Card "List", "Items", CX, y, lw, h, , 2, 2
-    GridHeaders "hdrList", ListCols(), CX + px(16), y + px(40)
+    GridHeaders "hdrList", ListCols(), CX + px(16), y + px(40), sortSf:="sfList"
     Set c = SubF("sfList", "subGridList", CX + px(16), y + px(62), lw - px(32), h - px(78)): Anchor c, 2, 2
     Set c = Lbl("lblEmpty", "No items match.", CX + px(16), y + px(100), lw - px(32), px(20), 10, False, CLR_MUTED_FG)
     c.TextAlign = 2: c.Visible = False: Anchor c, 2, 0
