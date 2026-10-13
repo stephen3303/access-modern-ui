@@ -556,7 +556,9 @@ Public Function Rule(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal
     Set Rule = c
 End Function
 
-' Subform control showing the form srcObj.
+' Subform control showing the form srcObj. Its Enter and Exit keep the focus
+' ring right for the fields inside it (FocusRingEnter, FocusRingExit); a form
+' that handles them itself calls those from its handlers.
 Public Function SubF(ByVal nm As String, ByVal srcObj As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
         Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control
     Dim c As Control
@@ -564,6 +566,11 @@ Public Function SubF(ByVal nm As String, ByVal srcObj As String, ByVal x As Long
     c.SourceObject = srcObj
     c.BorderStyle = 0
     c.SpecialEffect = 0
+    If Not m_isReport Then
+        ' The focus ring of a field inside it (FocusRingEnter/FocusRingExit).
+        c.OnEnter = "=FocusRingEnter([Form],""" & nm & """)"
+        c.OnExit = "=FocusRingExit()"
+    End If
     Set SubF = c
 End Function
 
