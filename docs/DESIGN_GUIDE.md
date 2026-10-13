@@ -353,7 +353,8 @@ End Sub
       value as a rounded badge whose variant comes from the app's
       `StatusVariant(value)` (it gets a Variant, which may be Null, and returns a
       `BadgeColors` variant or "" for no pill). Map statuses there, never as colors.
-    - The last column takes the remaining width and stretches with the window.
+    - The last column takes the remaining width and stretches with the window. A pill
+      in the last column stops 8px further in, so it clears the table's scrollbar.
     - Rows are separated by a 1px line, and the selected row is highlighted in
       `CLR_PRIMARY_SOFT`.
     - Optional arguments, all off by default so existing tables don't change:
@@ -479,9 +480,12 @@ Write app-specific helpers next to the builds that use them. Examples:
   title at (x + 14px, y + 10px) and a dark-only 3px accent bar beside it. Its corners
   are rounded (12px): each corner is a small image control showing `CardPng(fill,
   border, back, r, corner)`, laid over the box's square corner. `back` is the color the
-  card sits on (default `CLR_BG`), which fills outside the arc. Anchor the card with
-  `hAnchor`/`vAnchor`; the corners follow, so a card that stretches with the window
-  keeps round corners.
+  card sits on (default `CLR_BG`), which fills outside the arc. The box itself has no
+  border: Access paints a rectangle's right and bottom border a pixel past the corner
+  images, which shows as a thin square line. The four straight edges are 1px
+  `CLR_BORDER` boxes (`box<nm>_t`, `_b`, `_l`, `_r`) that stop at the corner images.
+  Anchor the card with `hAnchor`/`vAnchor`; the corners and edges follow, so a card
+  that stretches with the window keeps round corners.
   - Keep content at least 12px in from the card's edge so nothing covers a corner. An
     image under a subform flickers when the subform repaints, so a card whose corner a
     subform must cover uses `square:=True`.

@@ -427,7 +427,9 @@ Public Sub BuildGrid(ByVal finalName As String, ByVal cols As Variant, ByVal w A
         last = (i = UBound(cols))
         cw = IIf(last And Not fit, w - x - px(8), px(Val(p(2))))
         If InStr(opts, "p") > 0 Then
-            Set c = RO("txtCol" & i, p(0), x, (h - px(20)) \ 2, cw - px(8), px(20), 8, True, CLR_FG)
+            ' A pill fills its cell, so in the last column it stops 8px further
+            ' in, clear of the table's scrollbar.
+            Set c = RO("txtCol" & i, p(0), x, (h - px(20)) \ 2, cw - px(8) - IIf(last And Not fit, px(8), 0), px(20), 8, True, CLR_FG)
             c.TextAlign = 2
         Else
             ty = IIf(last And rowLines > 1, px(6), (h - px(18)) \ 2)
@@ -692,19 +694,35 @@ End Sub
 ' Card: a CLR_SURFACE panel with a 1px CLR_BORDER border and rounded corners,
 ' with a 10pt title and a dark-only accent bar beside it (title "" draws
 ' neither). Access only draws square corners, so each corner is a small image
-' (box<nm>_c1 to _c4) showing CardPng over the square box; ThemeForm repaints
-' it with the palette. back is the color the card sits on. hAnchor / vAnchor
-' anchor the card (see Anchor) and the corners follow. square = True leaves
-' the corners square, for a card where a subform or another control that
-' repaints often would cover a corner (images under them flicker).
-' Controls: box<nm>, box<nm>_c1..4, bar<nm>, lbl<nm>Hdr.
+' (box<nm>_c1 to _c4) showing CardPng; ThemeForm repaints it with the
+' palette. The fill (box<nm>) has no border of its own: Access paints a
+' rectangle's right and bottom border a pixel past its corner images, which
+' showed as a thin square line along those edges. Instead the four straight
+' edges are 1px boxes (box<nm>_t, _b, _l, _r) that stop at the corner images.
+' back is the color the card sits on. hAnchor / vAnchor anchor the card (see
+' Anchor) and the corners and edges follow. square = True leaves the corners
+' square (and keeps the box's own border), for a card where a subform or
+' another control that repaints often would cover a corner (images under
+' them flicker).
+' Controls: box<nm>, box<nm>_c1..4, box<nm>_t/_b/_l/_r, bar<nm>, lbl<nm>Hdr.
 Public Sub Card(ByVal nm As String, ByVal title As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
         Optional ByVal parentCtl As String = "", Optional ByVal hAnchor As Integer = 0, Optional ByVal vAnchor As Integer = 0, _
         Optional ByVal back As Long = CLR_BG, Optional ByVal square As Boolean = False)
     Dim c As Control, k As Long, r As Long, farX As Boolean, farY As Boolean
-    Set c = Box("box" & nm, x, y, w, h, CLR_SURFACE, CLR_BORDER, acDetail, parentCtl): Anchor c, hAnchor, vAnchor
-    If Not square Then
+    If square Then
+        Set c = Box("box" & nm, x, y, w, h, CLR_SURFACE, CLR_BORDER, acDetail, parentCtl): Anchor c, hAnchor, vAnchor
+    Else
         r = px(CARD_RADIUS)
+        ' The fill stops a pixel short on the right and bottom, inside the edges.
+        Set c = Box("box" & nm, x, y, w - px(1), h - px(1), CLR_SURFACE, -1, acDetail, parentCtl): Anchor c, hAnchor, vAnchor
+        Set c = Box("box" & nm & "_t", x + r, y, w - 2 * r, px(1), CLR_BORDER, -1, acDetail, parentCtl)
+        Anchor c, hAnchor, EdgeAnchor(vAnchor, False)
+        Set c = Box("box" & nm & "_b", x + r, y + h - px(1), w - 2 * r, px(1), CLR_BORDER, -1, acDetail, parentCtl)
+        Anchor c, hAnchor, EdgeAnchor(vAnchor, True)
+        Set c = Box("box" & nm & "_l", x, y + r, px(1), h - 2 * r, CLR_BORDER, -1, acDetail, parentCtl)
+        Anchor c, EdgeAnchor(hAnchor, False), vAnchor
+        Set c = Box("box" & nm & "_r", x + w - px(1), y + r, px(1), h - 2 * r, CLR_BORDER, -1, acDetail, parentCtl)
+        Anchor c, EdgeAnchor(hAnchor, True), vAnchor
         For k = 1 To 4
             farX = (k = 2 Or k = 3)
             farY = (k >= 3)
