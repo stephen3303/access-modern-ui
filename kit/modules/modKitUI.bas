@@ -4,8 +4,8 @@ Option Explicit
 ' Access UI kit - run-time helpers for pages built with modUIKit: tables that
 ' scale their columns (GridFit), list/detail pages (SelectFirstRow,
 ' ShowDetail, ClearDetail), tabs and filter chips with counts (SetCount,
-' StyleChip), and messages in the kit's look (KitMsgBox). Colors set here go
-' through Th() so they follow the palette.
+' StyleChip), focus rings on inputs (FocusRing), and messages in the kit's
+' look (KitMsgBox). Colors set here go through Th() so they follow the palette.
 
 ' Width the table's vertical scroll bar takes (twips).
 Private Const SCROLL_W As Long = 300
@@ -20,6 +20,12 @@ Private m_msgText As String
 Private m_msgStyle As Long
 Private m_msgTitle As String
 Private m_msgAnswer As Long
+' The field showing the focus ring (FocusRing): the control, its form's
+' window and its name, and the border color the ring covers.
+Private m_ringCtl As Control
+Private m_ringHwnd As Long
+Private m_ringName As String
+Private m_ringWas As Long
 
 ' ---------------------------------------------------------------------------
 ' Tables
@@ -256,6 +262,98 @@ End Function
 Public Sub SetDateTarget(ByVal v As Variant)
     If m_dateTarget Is Nothing Then Exit Sub
     m_dateTarget.Value = v
+End Sub
+
+' ---------------------------------------------------------------------------
+' Focus ring
+' ---------------------------------------------------------------------------
+
+' A kit input's GotFocus (isOn True) and LostFocus (False), set by Txt and
+' Cbo: paint control nm's border CLR_PRIMARY while it has the focus, then give
+' back the color it had. That color is whatever was there on GotFocus, not
+' always CLR_INPUT_BORDER, so a caller's own border or a red outline from
+' CheckRequired survives tabbing through the field. If something else
+' repaints the border while the field has the focus, it is left alone.
+' Only the border color changes (no width, size or margin), so the text never
+' moves. No ring on a locked field or a read-only form (nothing to type), or
+' on a continuous form's rows, where one control's border is every row's.
+' One field is ringed at a time: each GotFocus first restores the last one,
+' because Access fires no LostFocus for a field inside a subform when the
+' focus moves out to the main form (FocusRingClear covers the subform's Exit
+' and the kit's buttons, check boxes, list boxes and focus sink). A failure is logged but not shown, like ThemeForm:
+' the field keeps working without the ring.
+Public Function FocusRing(frm As Form, ByVal nm As String, ByVal isOn As Boolean)
+    Dim c As Control
+    On Error GoTo Fail
+    Set c = frm.Controls(nm)
+    If Not isOn Then
+        If m_ringHwnd = frm.Hwnd And m_ringName = nm Then ClearRing
+        Exit Function
+    End If
+    ClearRing
+    If c.Locked Then Exit Function
+    If Not (frm.AllowEdits Or (frm.NewRecord And frm.AllowAdditions)) Then Exit Function
+    If frm.DefaultView <> 0 And c.Section = acDetail Then Exit Function
+    m_ringWas = c.BorderColor
+    c.BorderColor = Th(CLR_PRIMARY)
+    Set m_ringCtl = c
+    m_ringHwnd = frm.Hwnd
+    m_ringName = nm
+    Exit Function
+Fail:
+    LogError "modKitUI.FocusRing", frm.Name & "." & nm
+End Function
+
+' Take the ring off the field showing it. Set by SubF as the subform
+' control's Exit (the field inside gets no LostFocus when the focus leaves the
+' subform), and by Btn, Chk, Lst and NewForm's focus sink as their GotFocus:
+' a subform's Enter re-rings its last field before the focus lands, so a click
+' on its Save button would otherwise leave that field ringed.
+Public Function FocusRingClear()
+    On Error GoTo Fail
+    ClearRing
+    Exit Function
+Fail:
+    LogError "modKitUI.FocusRingClear"
+End Function
+
+' A kit subform control's Enter (set by SubF): when the focus comes back to
+' the field that last had it inside subform control nm on frm, Access fires
+' no GotFocus for it, so ring it here. When the click lands on another
+' control, that control's GotFocus (FocusRing or FocusRingClear) follows and
+' moves or clears the ring before Access repaints.
+Public Function FocusRingEnter(frm As Form, ByVal nm As String)
+    Dim inner As Form, c As Control
+    On Error Resume Next
+    Set inner = frm.Controls(nm).Form      ' error 2467 while it shows no form
+    On Error GoTo Fail
+    If inner Is Nothing Then Exit Function
+    Do
+        Set c = Nothing
+        On Error Resume Next
+        Set c = inner.ActiveControl          ' error 2474 when none has the focus yet
+        On Error GoTo Fail
+        If c Is Nothing Then Exit Function
+        If c.ControlType <> acSubform Then Exit Do
+        Set inner = c.Form                   ' a subform inside the subform
+    Loop
+    If c.ControlType <> acTextBox And c.ControlType <> acComboBox Then Exit Function
+    If Left$(Nz(c.OnGotFocus, ""), 11) = "=FocusRing(" Then FocusRing inner, c.Name, True
+    Exit Function
+Fail:
+    LogError "modKitUI.FocusRingEnter", frm.Name & "." & nm
+End Function
+
+' Give the ringed field its own border back, if it still shows the ring. Its
+' form may have closed since, which makes the saved reference unusable.
+Private Sub ClearRing()
+    If m_ringCtl Is Nothing Then Exit Sub
+    On Error Resume Next
+    If m_ringCtl.BorderColor = Th(CLR_PRIMARY) Then m_ringCtl.BorderColor = m_ringWas
+    On Error GoTo 0
+    Set m_ringCtl = Nothing
+    m_ringHwnd = 0
+    m_ringName = ""
 End Sub
 
 ' ---------------------------------------------------------------------------

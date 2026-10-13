@@ -32,6 +32,9 @@ watching for Visual Basic error dialogs as well as the error log:
 - Tables: the band, zebra rows, pills and 38px rows show; the selected row is highlighted;
   widening the window widens every column of the first table and moves its captions; the
   chip and tab counts follow the search and category.
+- Focus ring: clicking or tabbing into the search box, the category filter or a detail
+  field turns its border the palette's primary color, and leaving it restores the border,
+  with no flicker and the text not moving.
 - Dialogs: Appearance and the card buttons' messages open centred over Access, on its
   monitor, with Access restored, maximized, or moved partly off the edge of a screen.
 - List and detail: the first row opens on load and after each filter; a click shows that

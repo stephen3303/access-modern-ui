@@ -333,6 +333,8 @@ End Sub
 - **Controls**
   - `Lbl`: transparent label.
   - `Txt`: input with `CLR_INPUT_BG`, a 1px `CLR_INPUT_BORDER` border and inner margins.
+    A field box (not an `=` expression) and a `Cbo` show the focus ring: the border turns
+    `CLR_PRIMARY` while the field has the focus (`FocusRing`, see §6.7).
   - `DateBox`: a date input, 120px wide, with its date left-aligned like text, and a
     30px outline calendar button 4px to its right that opens the kit's date picker
     (`PickDate`, `dlgDatePick`, built by `BuildDatePicker`): a month of day cells with
@@ -567,6 +569,21 @@ Write app-specific helpers next to the builds that use them. Examples:
   only through `SetVisible` and `SetEnabled` (error 2164 for a focused control being
   disabled). Both also cover a subform, tab control or option group that holds the
   focus, and fall back to the first free tab stop on a form with no sink.
+- **Focus ring**: `Txt` and `Cbo` set `OnGotFocus`/`OnLostFocus` to `=FocusRing(...)`,
+  which paints the border `CLR_PRIMARY` and then gives back the color it found (so a
+  required field's red outline survives tabbing through). Only `BorderColor` changes: a wider
+  border would eat into the text area and shift the text, and an extra ring control
+  would have to be shown and hidden on every focus change (flicker). Locked fields,
+  read-only forms and continuous-form rows get no ring (one control's border is every
+  row's). Only one field is ringed at a time, and `SubF` sets the subform control's
+  `OnEnter`/`OnExit` to `FocusRingEnter`/`FocusRingClear`: Access fires no LostFocus for
+  a field inside a subform when the focus moves out to the main form, and no GotFocus
+  when it comes back to the same field. `Btn`, `Chk`, `Lst` and the focus sink clear
+  the ring on GotFocus (`FocusRingClear`), because the subform's Enter re-rings its
+  last field before a click on its Save button lands. Setting these events later
+  (`Ev c, "OnGotFocus"`) replaces the ring, so such a handler calls
+  `FocusRing Me, "<name>", True` (`False` on LostFocus), or `FocusRingEnter` /
+  `FocusRingClear` for a subform control, itself.
 - Read-only row text with no click handler is set to `Enabled = False` +
   `Locked = True`. That keeps its normal look while it can never take focus.
 - **Disabled controls ignore theme colors.** Lock controls instead of disabling them when

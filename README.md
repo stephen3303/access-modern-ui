@@ -113,12 +113,12 @@ Control heights and font sizes never scale. `TabStrip` and `LayoutFilterRow` alr
 | Builder | What it does |
 |---|---|
 | `Lbl nm, cap, x, y, w, h [, size, bold, fore]` | Label with a transparent background |
-| `Txt nm, src, x, y, w, h` | Text box (a field name, or an expression starting with `=`) |
+| `Txt nm, src, x, y, w, h` | Text box (a field name, or an expression starting with `=`). A text box that isn't an `=` expression shows the focus ring. |
 | `BuildDatePicker` | Builds `dlgDatePick`, the month calendar `DateBox` buttons open. Call it once with the app's dialogs. |
 | `BuildMessageDialog` | Builds `dlgMessage`, the dialog `KitMsgBox` opens. Call it once with the app's dialogs. |
 | `DateBox nm, src, x, y, h` | Date entry: a 120px text box (dd mmm yyyy, left-aligned) and a calendar button `cal_<nm>` 4px to its right that opens the date picker. The pair is `DATEFIELD_W` (154px) wide. |
 | `RO nm, src, x, y, w, h` | Read-only text: no border, not a tab stop |
-| `Cbo` / `Lst` / `Chk` | Combo box, list box, check box with its label |
+| `Cbo` / `Lst` / `Chk` | Combo box (with the focus ring), list box, check box with its label |
 | `Btn nm, cap, x, y, w, h [, kind]` | Button. `kind` is `primary`, `outline`, `ghost`, `destructive` or `nav`. |
 | `Link nm, cap, x, y, w, h, onClick` | Clickable text (links and tab labels) |
 | `Box nm, x, y, w, h, back [, border]` | Rectangle. Pass -1 for no fill or no border. |
@@ -127,7 +127,7 @@ Control heights and font sizes never scale. `TabStrip` and `LayoutFilterRow` alr
 | `Progress nm, expr, x, y, w, h` | Rounded progress capsule filled to `expr` percent (a field or a number; Null is 0) |
 | `RowBack` | Row background for a continuous form that paints but never takes focus |
 | `Img` | Unbound image whose picture is set at run time |
-| `SubF nm, srcObj, x, y, w, h` | Subform control |
+| `SubF nm, srcObj, x, y, w, h` | Subform control. Its Enter and Exit keep the focus ring right for the fields inside it. |
 | `TabCtl nm, x, y, w, h, "name\|caption", ...` | Tab control |
 | `TabStrip x, y, w, handler, "key\|Caption", ...` | Tab strip of labels with underlines. `"key\|Caption\|n"` shows a count, "Caption (n)". |
 
@@ -170,6 +170,8 @@ Control heights and font sizes never scale. `TabStrip` and `LayoutFilterRow` alr
 | `ShowDetail host, detailCtl, formName, where [, emptyCtl]` | List/detail pages: show the matching record in the detail subform, saving a changed one first, and hide the empty state |
 | `ClearDetail host, detailCtl [, emptyCtl]` | Empty the detail subform and show the empty state |
 | `PickDate frm, nm` | A `DateBox` calendar button's click: open the kit's date picker (`dlgDatePick`) for box `nm` and write the chosen date into it (not while the box is disabled or locked, or its form is read-only) |
+| `FocusRing frm, nm, isOn` | The GotFocus (`True`) and LostFocus (`False`) that `Txt` and `Cbo` set: a `CLR_PRIMARY` border on the field being typed in, and the border it had before (a required field's red outline too) when it loses the focus. Only the border color changes, so nothing moves. Not on locked fields, read-only forms or continuous-form rows. One field is ringed at a time. A form that handles a kit input's GotFocus or LostFocus itself calls it from that handler. |
+| `FocusRingEnter frm, nm` / `FocusRingClear` | The Enter and Exit that `SubF` sets, so a field inside a subform loses its ring when the focus leaves the subform and gets it back on return (Access fires no LostFocus or GotFocus for it then). `FocusRingClear` is also the GotFocus of `Btn`, `Chk`, `Lst` and the focus sink. |
 | `KitMsgBox msg [, style, title]` | `MsgBox` in the kit's look, centred over Access (a `MsgBox` is centred on the monitor, so on a large or second screen it opens outside Access). Takes OK, OK/Cancel, Yes/No and Yes/No/Cancel, the four icons and `vbDefaultButton2`/`3`, and returns what `MsgBox` would. Anything else, or a dialog that isn't built yet, falls back to `MsgBox`. Use it in the app's `Notify` and `HandleError`. |
 | `CheckRequired frm, fields` | Save check: outline every empty required input in `CLR_DESTRUCTIVE`, list them in one `KitMsgBox` and focus the first. `fields` is `"txtName=Item;txtOwner=Owner"` in tab order. Returns True when all are filled; a filled input gets its normal border back. `RequiredMissing` does the same without the message and returns the list. |
 | `SetCount ctl, n` | Show a count after a tab or chip caption, "Name (n)" |
