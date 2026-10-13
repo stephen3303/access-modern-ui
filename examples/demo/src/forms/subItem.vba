@@ -31,6 +31,16 @@ Err_Handler:
     HandleError "subItem.txtPct_AfterUpdate"
 End Sub
 
+' The Flagged switch changed (Toggle's onChange): save the record at once,
+' like a settings switch.
+Public Sub FlagChanged()
+    On Error GoTo Err_Handler
+    If Me.Dirty Then Me.Dirty = False
+    Exit Sub
+Err_Handler:
+    HandleError "subItem.FlagChanged"
+End Sub
+
 Private Sub btnSave_Click()
     On Error GoTo Err_Handler
     If Not CheckRequired(Me, "txtName=Item;txtOwner=Owner") Then Exit Sub

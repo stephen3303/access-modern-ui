@@ -46,6 +46,7 @@ Public Function TestKit(ByVal root As String) As String
     c.Name = "plainTxt"                    ' takes the focus with no ring hooks of its own
     Txt "reqA", "", 0, px(660), px(80), px(30)
     Txt "reqB", "", px(100), px(660), px(80), px(30)
+    Toggle "tglTest", "", px(220), px(663), onChange:="ToggleChanged"
     SecretBox "secret", "", px(400), px(700), px(160), px(30)     ' clear of the ring, required and toggle fields
     SaveForm "frmTest", "testHost"
     DoCmd.OpenForm "frmTest"
@@ -200,6 +201,27 @@ Public Function TestKit(ByVal root As String) As String
     Check TagWidth(Array("Short", "Longest category")) = PillTextWidth("Longest category"), "Widest label differs"
     Check FileExists(CStr(ColumnPillPng(CLR_PRIMARY, 240, 26, PillTextWidth("Longest category")))), "Pill image missing"
     Check FileExists(RoundedCardPng(600, 200, CLR_SURFACE, CLR_BORDER)), "Rounded card missing"
+    Check Not Nz(host.tglTest_val, False), "Unbound switch did not start off"
+    ToggleSwitch host, "tglTest"
+    Check host.tglTest_val, "Switch click did not turn it on"
+    Check InStr(Nz(host.tglTest_bg.Properties("ControlSource").Value, ""), "TogglePng(") > 0, "Switch track is not bound"
+    ToggleSwitch host, "tglTest"
+    Check Not host.tglTest_val, "Second switch click did not turn it off"
+    Check host.toggleChanges = 2, "Switch onChange did not run once per change"
+    host.tglTest_val.Locked = True
+    ToggleSwitch host, "tglTest"
+    Check Not host.tglTest_val, "Locked switch changed"
+    Check host.toggleChanges = 2, "Locked switch ran onChange"
+    host.tglTest_val.Locked = False
+    Check FileExists(CStr(TogglePng(True, CLR_PRIMARY, CLR_MUTED_FG, CLR_SURFACE, 44, 24))), "Switch image missing"
+    Check FileExists(CStr(RingPng(CLR_PRIMARY, 52, 32))), "Focus ring image missing"
+    Check Not host.tglTest_ring.Visible, "Focus ring shows without focus"
+    host.tglTest.SetFocus
+    Check host.tglTest_ring.Visible, "Focused switch shows no ring"
+    host.txtFocusSink.SetFocus
+    Check Not host.tglTest_ring.Visible, "Focus ring stayed after focus left"
+    host.ringA.SetFocus: host.tglTest.SetFocus
+    Check host.ringA.BorderColor = CLR_INPUT_BORDER, "Input kept its focus ring while the switch had the focus"
     host.ringA.SetFocus
     Check host.ringA.BorderColor = CLR_PRIMARY, "Focused input lacks its focus ring"
     host.ringB.SetFocus
