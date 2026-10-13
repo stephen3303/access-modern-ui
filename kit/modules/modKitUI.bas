@@ -8,6 +8,8 @@ Option Explicit
 
 ' Width the table's vertical scroll bar takes (twips).
 Private Const SCROLL_W As Long = 300
+' Widest a form can be: 22 inches (twips).
+Private Const MAX_FORM_W As Long = 31680
 
 ' ---------------------------------------------------------------------------
 ' Tables
@@ -31,11 +33,21 @@ Public Sub GridFit(sf As Control, Optional ByVal prefix As String = "")
     If sf.HorizontalAnchor = 2 Then avail = avail + host.InsideWidth - host.Width
     ratio = (avail - SCROLL_W) / (design - SCROLL_W)
     If ratio < 1 Then ratio = 1
+    If design * ratio > MAX_FORM_W Then ratio = MAX_FORM_W / design
     newW = CLng(design * ratio)
-    ' The form must be at least as wide as its columns: widen it first,
-    ' narrow it last.
-    If newW > g.Width Then g.Width = newW
+    ' Access ignores g.Width = n on a form shown in a subform: the form only
+    ' grows when a control's right edge pushes it, and moving a column past
+    ' its edge raises error 5. So widen the row background first (it pushes
+    ' the form out), place the columns, then shrink the background.
+    ' Resizing the form can leave an earlier reference to it dead (error 5 on
+    ' any use), so it is read from sf again before each use.
+    If newW > g.Width Then
+        If HasCtl(g, "txtBg") Then g.Controls("txtBg").Width = newW
+        Set g = sf.Form
+        If HasCtl(g, "boxRowLine") Then g.Controls("boxRowLine").Width = newW
+    End If
     Do
+        Set g = sf.Form
         Set c = Nothing
         On Error Resume Next
         Set c = g.Controls("txtCol" & i)
@@ -44,6 +56,8 @@ Public Sub GridFit(sf As Control, Optional ByVal prefix As String = "")
         t = Split(c.Tag, "|")
         If UBound(t) >= 2 Then
             FitCtl c, CLng(Val(t(1)) * ratio), CLng(Val(t(2)) * ratio) - px(8)
+            Set g = sf.Form
+            Set c = g.Controls("txtCol" & i)
             If HasCtl(g, c.Name & "_bg") Then FitCtl g.Controls(c.Name & "_bg"), c.Left, c.Width
         End If
         If Len(prefix) > 0 Then
@@ -57,7 +71,17 @@ Public Sub GridFit(sf As Control, Optional ByVal prefix As String = "")
         End If
         i = i + 1
     Loop
-    If newW < g.Width Then g.Width = newW
+    Set g = sf.Form
+    If HasCtl(g, "txtBg") Then FitCtl g.Controls("txtBg"), 0, newW
+    Set g = sf.Form
+    If HasCtl(g, "boxRowLine") Then FitCtl g.Controls("boxRowLine"), 0, newW
+    Set g = sf.Form
+    ' Narrowing the form is cosmetic (no empty strip to scroll to), and
+    ' Access may ignore it.
+    If newW < g.Width Then
+        On Error Resume Next
+        g.Width = newW
+    End If
 End Sub
 
 ' Move and size a control horizontally.

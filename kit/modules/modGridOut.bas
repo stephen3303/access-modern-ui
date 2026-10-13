@@ -122,14 +122,21 @@ End Function
 ' a column per grid column, named by its caption (named) or col_<n>.
 Private Function GridSql(gridForm As Form, cols As Collection, ByVal named As Boolean) As String
     Dim src As String, sel As String, col As Variant, i As Long, pos As Long, ord As String, nm As String
+    Dim extra As Variant
     src = Trim$(gridForm.RecordSource)
     If Right$(src, 1) = ";" Then src = Trim$(Left$(src, Len(src) - 1))
     If UCase$(Left$(src, 7)) = "SELECT " Then
-        ' The sort moves to the outer query.
+        ' The sort moves to the outer query, which is the only place Access
+        ' keeps it. Sort terms the query doesn't return are added to its
+        ' select list as zz_sort<n>.
         pos = InStrRev(UCase$(src), " ORDER BY ")
         If pos > 0 Then
-            ord = OuterOrder(Mid$(src, pos + 10))
+            ord = OuterOrder(Mid$(src, pos + 10), gridForm, extra)
             src = Left$(src, pos - 1)
+            If Len(extra) > 0 Then
+                pos = InStr(UCase$(src), " FROM ")
+                If pos > 0 Then src = Left$(src, pos - 1) & extra & Mid$(src, pos) Else ord = ""
+            End If
         End If
         src = "(" & src & ") AS q"
     Else
@@ -147,26 +154,48 @@ Private Function GridSql(gridForm As Form, cols As Collection, ByVal named As Bo
     Next
     GridSql = "SELECT " & Mid$(sel, 3) & " FROM " & src
     If gridForm.FilterOn And Len(gridForm.Filter) > 0 Then GridSql = GridSql & " WHERE " & gridForm.Filter
-    If gridForm.OrderByOn And Len(gridForm.OrderBy) > 0 Then ord = OuterOrder(gridForm.OrderBy)
+    If gridForm.OrderByOn And Len(gridForm.OrderBy) > 0 Then ord = OuterOrder(gridForm.OrderBy, gridForm)
     If Len(ord) > 0 Then GridSql = GridSql & " ORDER BY " & ord
 End Function
 
 ' A sort clause for the outer query: "t.name DESC, [due]" -> "q.[name] DESC, q.[due]".
-' Terms with a function call are kept as they are.
-Private Function OuterOrder(ByVal clause As String) As String
-    Dim term As Variant, t As String, dirn As String, out As String
+' A term that isn't a field the grid's record source returns (a hidden field
+' such as "ORDER BY due_date" with only Format(due_date) AS due selected, or
+' an expression) is added to extra as ", <term> AS [zz_sort<n>]" for the
+' inner select list, and sorted by that alias. Without a ByRef extra (the
+' form's own OrderBy, which names returned fields), such a term is dropped.
+Private Function OuterOrder(ByVal clause As String, gridForm As Form, Optional ByRef extra As Variant) As String
+    Dim term As Variant, t As String, f As String, dirn As String, out As String, n As Long
+    If Not IsMissing(extra) Then extra = ""
     For Each term In Split(clause, ",")
         t = Trim$(term)
         dirn = ""
         If UCase$(Right$(t, 5)) = " DESC" Then dirn = " DESC": t = Trim$(Left$(t, Len(t) - 5))
         If UCase$(Right$(t, 4)) = " ASC" Then t = Trim$(Left$(t, Len(t) - 4))
+        f = ""
         If InStr(t, "(") = 0 Then
-            If InStrRev(t, ".") > 0 Then t = Mid$(t, InStrRev(t, ".") + 1)
-            t = "q.[" & Replace(Replace(t, "[", ""), "]", "") & "]"
+            f = t
+            If InStrRev(f, ".") > 0 Then f = Mid$(f, InStrRev(f, ".") + 1)
+            f = Replace(Replace(f, "[", ""), "]", "")
+            If Not HasField(gridForm, f) Then f = ""
         End If
-        out = out & ", " & t & dirn
+        If Len(f) > 0 Then
+            out = out & ", q.[" & f & "]" & dirn
+        ElseIf Not IsMissing(extra) Then
+            extra = extra & ", " & t & " AS [zz_sort" & n & "]"
+            out = out & ", q.[zz_sort" & n & "]" & dirn
+            n = n + 1
+        End If
     Next
     OuterOrder = Mid$(out, 3)
+End Function
+
+' True when the grid's record source returns a field named nm.
+Private Function HasField(gridForm As Form, ByVal nm As String) As Boolean
+    Dim fld As Object
+    For Each fld In gridForm.RecordsetClone.Fields
+        If StrComp(fld.Name, nm, vbTextCompare) = 0 Then HasField = True: Exit Function
+    Next
 End Function
 
 ' Delete the export query if it is there.
