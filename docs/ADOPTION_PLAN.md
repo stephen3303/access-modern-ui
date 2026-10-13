@@ -175,7 +175,7 @@ SABER copied an older kit (light/dark only). Do these after phase 1 so it picks 
 new features in one pass.
 
 ### S1. Refresh kit copies
-- [ ] Copy every file in `kit/modules`, `kit/forms` and `tools/make_themes.py` over
+- [x] Copy every file in `kit/modules`, `kit/forms` and `tools/make_themes.py` over
   SABER's copies. Move anything SABER-specific out first:
   - `Banner()` from `modUIKit` goes into an app module (`modBuildUI`). The kit removed
     the classification banner in 75fda1d. Ask Stephen whether SABER keeps it. **Default:
@@ -185,32 +185,44 @@ new features in one pass.
     from `modUI`, and replace `pgDetail`'s private `SetVis` with `SetVisible`. `StyleChip`'s new optional count argument keeps old calls working.
   - `StatusVariant` takes a Variant (pill columns pass Null for empty values).
   - Copy the new kit modules too: `modKitUI`, `modGridOut`.
-- [ ] Re-run `make_themes.py`, which now generates 7 palettes plus the contrast check.
+- [x] Re-run `make_themes.py`, which now generates 7 palettes plus the contrast check.
 - **Done when** the diffs against `kit/` show header lines only, and the build passes.
+- **As built** (SABER-Access #4). The kit copies are identical to `kit/`, headers included.
+  SABER gets all 8 palettes, Teal Navy too. Its `make_themes.py` differs from the kit's
+  only in its settings: the classification `FIXED` colors, and no `CLR_LINK`/`CLR_KPI6`.
+  Built and smoke-tested on Stephen's machine on 13 Oct 2026 (Navy, Midnight, Teal Navy):
+  no VBA dialogs, no error log rows.
 
 ### S2. Palette picker
-- [ ] Replace the sidebar dark-mode toggle (`ToggleDarkMode`) with Appearance →
+- [x] Replace the sidebar dark-mode toggle (`ToggleDarkMode`) with Appearance →
   `dlgAppearance` (`ShowAppearance`). Copy `kit/forms/dlgAppearance.vba` and
   `examples/modules/modBuildAppearance.bas`. Saved `light`/`dark` choices must still
-  load.
+  load. **As built:** already done in SABER-Access #2; #4 moves `Build_dlgAppearance` into
+  the kit's `modBuildAppearance`.
 
 ### S3. No color literals
-- [ ] `modUI.BandBack` uses `CLR_BAND_*`.
-- [ ] Classification colors become `FIXED` entries in `make_themes.py`
+- [x] `modUI.BandBack` uses `CLR_BAND_*`.
+- [x] Classification colors become `FIXED` entries in `make_themes.py`
   (`CLR_CLASS_SECRET`, and so on) and are used from `modGlobals.ClassificationColor`.
-- [ ] `modBuildPages2.bas:220` uses `CLR_BAND_NE`, and `:780` uses `CLR_WHITE` or
+- [x] `modBuildPages2.bas:220` uses `CLR_BAND_NE`, and `:780` uses `CLR_WHITE` or
   `CLR_SURFACE`.
-- [ ] Remove unused `CLR_LINK` and `CLR_KPI6`, or use them.
+- [x] Remove unused `CLR_LINK` and `CLR_KPI6`, or use them.
 - **Done when** `grep -rn "RGB(" access/src --include=*.bas --include=*.vba` only finds
   generated files.
 
 ### S4. Tables and cards to the new style
-- [ ] Rebuild SABER's grids and list subforms with the K3 options, and cards with K1. This
+- [x] Rebuild SABER's grids and list subforms with the K3 options, and cards with K1. This
   covers Stephen's SABER task "Adjust remaining tables in UI to match the style" and the
   Find Past Comments dialog changes in `Claude Task List.txt`.
-- [ ] Button heights become 32px standard or 28px compact (K7). Remove the 24/26/30 one-offs.
-- [ ] Sidebar subtitle and login name go from 7pt to 8pt. `lblCompletion` goes from 14pt
+- [x] Button heights become 32px standard or 28px compact (K7). Remove the 24/26/30 one-offs.
+- [x] Sidebar subtitle and login name go from 7pt to 8pt. `lblCompletion` goes from 14pt
   to 15pt (page title) or 13pt.
+- **As built** (SABER-Access #4). Every `BuildGrid` table has zebra rows and a header band.
+  Team Members became a `BuildGrid` table with Tier and Status pills, opened by row click.
+  Package status is a pill. Progress and Reports use rounded kit cards, and the completion
+  bars are `Progress` capsules. The Find Past Comments changes were already in SABER.
+  The editable Commands and Library lists stay inline editors, not tables. `lblCompletion`
+  is 15pt.
 
 ---
 
@@ -280,5 +292,5 @@ the SPM todo list asks.
 | Phase | Tasks | Done |
 |---|---|---|
 | 1 Kit harvest | K1–K7 | 7 (demo tested in Access 2026-10-12; card corners, hover and the zebra selected row checked by eye) |
-| 2 SABER | S1–S4 | 0 |
+| 2 SABER | S1–S4 | 4 (built and smoke-tested in Access 2026-10-13; visuals still to be checked by eye) |
 | 3 SPM | P1–P5 | 0 |
