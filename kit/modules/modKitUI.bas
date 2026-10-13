@@ -3,9 +3,10 @@ Option Explicit
 
 ' Access UI kit - run-time helpers for pages built with modUIKit: tables that
 ' scale their columns (GridFit), list/detail pages (SelectFirstRow,
-' ShowDetail, ClearDetail), tabs and filter chips with counts (SetCount,
-' StyleChip), and messages in the kit's look (KitMsgBox). Colors set here go
-' through Th() so they follow the palette.
+' ShowDetail, ClearDetail), search matches marked in tables (GridHighlight),
+' tabs and filter chips with counts (SetCount, StyleChip), and messages in
+' the kit's look (KitMsgBox). Colors set here go through Th() so they follow
+' the palette.
 
 ' Width the table's vertical scroll bar takes (twips).
 Private Const SCROLL_W As Long = 300
@@ -173,6 +174,62 @@ Public Function SelectFirstRow(sf As Control) As Variant
     g.Recalc
     SelectFirstRow = g.txtSel
     sf.Parent.GridClick sf.Name, False
+End Function
+
+' Mark term in the search columns (BuildGrid option "s") of the table shown
+' in subform control sf. Call it with the page's search box text whenever
+' that changes; "" clears the marks. Text matches ignoring case, as a LIKE
+' filter does.
+Public Sub GridHighlight(sf As Control, ByVal term As String)
+    Dim g As Form
+    Set g = sf.Form
+    If StrComp(Nz(g.txtFind, ""), term, vbBinaryCompare) = 0 Then Exit Sub
+    g.txtFind = IIf(Len(term) > 0, term, Null)
+    g.Recalc
+End Sub
+
+' A search column's cell: value as rich text, with each match of term shown
+' in the highlight colors (CLR_WARNING_FG on CLR_WARNING_BG, which keep their
+' contrast on the selected row and in every palette). Access calls it for
+' every row it paints, so it never raises: on a failure it shows the value
+' unmarked.
+Public Function GridMark(ByVal v As Variant, ByVal term As Variant) As Variant
+    Dim s As String, t As String, i As Long, j As Long, out As String, mark As String
+    On Error GoTo Fail
+    If IsNull(v) Then GridMark = Null: Exit Function
+    s = CStr(v)
+    t = Nz(term, "")
+    If Len(t) > 0 Then
+        mark = "<font color=""" & HtmlColor(Th(CLR_WARNING_FG)) & """ style=""BACKGROUND-COLOR:" & _
+            HtmlColor(Th(CLR_WARNING_BG)) & """>"
+        i = 1
+        Do
+            j = InStr(i, s, t, vbTextCompare)
+            If j = 0 Then Exit Do
+            out = out & HtmlText(Mid$(s, i, j - i)) & mark & HtmlText(Mid$(s, j, Len(t))) & "</font>"
+            i = j + Len(t)
+        Loop
+        s = Mid$(s, i)
+    End If
+    GridMark = out & HtmlText(s)
+    Exit Function
+Fail:
+    GridMark = v
+End Function
+
+' Text for a rich text box: the characters HTML reserves escaped, line breaks as <br>.
+Private Function HtmlText(ByVal s As String) As String
+    s = Replace(s, "&", "&amp;")
+    s = Replace(s, "<", "&lt;")
+    s = Replace(s, ">", "&gt;")
+    s = Replace(s, vbCrLf, "<br>")
+    HtmlText = Replace(s, vbLf, "<br>")
+End Function
+
+' A color as HTML "#rrggbb".
+Private Function HtmlColor(ByVal c As Long) As String
+    HtmlColor = "#" & Right$("0" & Hex$(c And &HFF&), 2) & Right$("0" & Hex$((c \ &H100&) And &HFF&), 2) & _
+        Right$("0" & Hex$((c \ &H10000) And &HFF&), 2)
 End Function
 
 ' ---------------------------------------------------------------------------

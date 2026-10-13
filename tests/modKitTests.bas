@@ -15,7 +15,7 @@ Public Function TestKit(ByVal root As String) As String
     For i = 1 To 23
         CurrentDb.Execute "INSERT INTO test_rows VALUES (" & i & ",'Long category','Description " & i & "')"
     Next
-    cols = Array("category|Category|160|c", "description|Description|300|t")
+    cols = Array("category|Category|160|c", "description|Description|300|ts")
     BuildGrid "subTest", cols, px(600)
     NewForm "", 0, px(700), px(700)
     GridHeaders "head", cols, px(24), px(60)
@@ -42,6 +42,10 @@ Public Function TestKit(ByVal root As String) As String
     measured = MeasureText("Exact fit", 9, 400)
     Check FitSingleLineText("Exact fit", measured) = "Exact fit", "Exact-fit text was truncated"
     Check FitSingleLineText("Text", 0) = "", "Zero-width text overflows"
+    Check IsNull(GridMark(Null, "a")), "Null search cell differs"
+    Check GridMark("a<b & c", "") = "a&lt;b &amp; c", "Unsearched cell not escaped"
+    text = GridMark("Pump pump", "PUMP")
+    Check UBound(Split(text, "</font>")) = 2 And InStr(text, ">Pump</font> <") > 0, "Search matches not marked"
     measured = MeasureText(ChrW(&H2026), 9, 400)
     Check FitSingleLineText("Long text", measured - 1) = "", "Tiny cell emits overflowing ellipsis"
     text = "Wide WWW and narrow iii characters in a long description"
@@ -161,6 +165,10 @@ Public Function TestKit(ByVal root As String) As String
     ResizeGrid grid, px(200), cols
     Check grid.ScrollBars = 3, "Narrow grid clips minimum columns instead of scrolling"
     Check grid.txtCol1.Width >= px(292), "Narrow grid discarded Description width"
+    GridHighlight host.sfRows, "desc"
+    Check InStr(Nz(grid.txtCol1, ""), ">Desc</font>") > 0, "Table search match not marked"
+    GridHighlight host.sfRows, ""
+    Check InStr(Nz(grid.txtCol1, ""), "<font") = 0, "Cleared table search left a mark"
     DoCmd.Close acForm, "frmTest", acSaveNo
     BuildMessageDialog
     DoCmd.OpenForm "dlgMessage"

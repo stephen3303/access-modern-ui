@@ -367,7 +367,8 @@ End Sub
       `c` centered, `b` bold, `m` muted, `p` a status pill, `w` wraps onto `rowLines`
       lines (the last column always wraps when `rowLines` > 1); text longer than that
       stops at the end of the last line. Never let a cell cut text off mid-word: widen
-      the column or make it wrap. A pill column draws the
+      the column or make it wrap. `s` marks the text matching the page's search box.
+      A pill column draws the
       value as a rounded badge whose variant comes from the app's
       `StatusVariant(value)` (it gets a Variant, which may be Null, and returns a
       `BadgeColors` variant or "" for no pill). Map statuses there, never as colors.
@@ -387,6 +388,12 @@ End Sub
         every column in proportion. Call `GridFit Me.sfList, "hdrList"` from the
         host's `Form_Resize`; it also moves the captions `GridHeaders` drew with that
         prefix. Columns never get narrower than designed.
+    - **Search matches are marked.** On a page with a search box, give every column
+      the search looks in the `s` option, and call `GridHighlight Me.sfList, term` with
+      the box's text whenever it changes (with the filter). Each match shows in
+      `CLR_WARNING_FG` on `CLR_WARNING_BG`, ignoring case; `""` clears the marks. An `s`
+      column is a rich text box showing `GridMark(field, [txtFind])`, so `PrintGrid`
+      and `ExportGrid` still print and export the plain field. Not for pill columns.
     - **Clicking a row opens it.** There are no `>` or Open buttons in rows: the row
       click selects the record and the host's `GridClick` shows it (in a detail panel,
       section 6.8, or a dialog).
