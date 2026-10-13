@@ -11,17 +11,20 @@
 #
 # Numbered: executable lines inside a Sub, Function or Property.
 # Left alone: the declarations section, procedure headers and End lines, blank
-# and comment lines, continuation lines, labels, lines already numbered, Dim /
-# Static / Const, #If directives, and block lines VBA may not accept a label on
-# (Case, Else, ElseIf, End If, End Select, End With, Loop, Next, Wend).
+# and comment lines, continuation lines, lines that start with a label (even with
+# a statement after it), Dim / Static / Const, #If directives, and block lines
+# VBA may not accept a label on (Case, Else, ElseIf, End If, End Select, End With,
+# Loop, Next, Wend). An error on one of those is logged at the numbered line
+# before it, e.g. the Select Case line for a failing "Case 1: DoThing".
+# A module that already has line numbers (numbered by hand, or numbered before)
+# is returned unchanged, so generated numbers never collide with its own.
 
 $script:VbaProcStart = '^\s*((Public|Private|Friend)\s+)?(Static\s+)?(Sub|Function|Property\s+(Get|Let|Set))\s+[A-Za-z_]'
 $script:VbaProcEnd = '^\s*End\s+(Sub|Function|Property)\b'
 $script:VbaSkip = @(
     '^\s*$',                                                    # blank
     "^\s*('|Rem\b)",                                            # comment
-    '^\s*\d+(\s|:|$)',                                          # already numbered
-    '^\s*[A-Za-z_][A-Za-z0-9_]*:\s*(''.*)?$',                   # label (Err_Handler:)
+    '^\s*[A-Za-z_][A-Za-z0-9_]*:(?!=)',                         # label (Err_Handler:, Retry: DoWork)
     '^\s*(Dim|Static|Const)\s',                                 # declarations
     '^\s*#',                                                    # #If / #Else / #End If
     '^\s*Attribute\s',                                          # VB_ attributes
@@ -32,6 +35,7 @@ $script:VbaSkip = @(
 # Number one module's text. Accepts CRLF or LF and returns CRLF text.
 function Add-VbaLineNumbers([string]$Text) {
     $lines = $Text -split "`r?`n"
+    if (@($lines -match '^\s*\d+(\s|:|$)').Count -gt 0) { return ($lines -join "`r`n") }
     $inProc = $false
     $continued = $false     # the previous line ended with " _"
     for ($i = 0; $i -lt $lines.Count; $i++) {
