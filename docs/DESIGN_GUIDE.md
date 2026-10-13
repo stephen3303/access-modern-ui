@@ -516,6 +516,17 @@ Write app-specific helpers next to the builds that use them. Examples:
     dialog high or on another monitor.
 - **List subforms** (continuous forms of cards or rows) call back to their host with
   `Me.Parent.<PublicProc>`.
+- **New version notice**: once the app has opened (after sign-in checks, before the
+  first page), call `CheckForUpdate APP_VERSION, <release folder>`.
+  - The release folder is wherever users copy the app from. The release script writes
+    `version.txt` there, holding the release's version (`1.2.0`) on its first line.
+  - A newer version gets one information `KitMsgBox` naming both versions and the folder,
+    once per session. The app keeps running; nothing is copied for the user.
+  - Pass `advice` (third argument) when "copy the new version from the folder" is the
+    wrong next step, for example when the app's data lives inside its own file.
+  - A blank folder or a missing file skips the check. A read failure is logged with
+    `LogError` and never shown, so an offline share can't stop the app opening. An
+    unreachable network folder can still delay opening by about 20 seconds.
 
 ### 6.6 Visual components
 
