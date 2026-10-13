@@ -43,7 +43,7 @@ access/
   kit/
     modules/*.bas            reusable: modUIKit, modKitUI, modDarkMode, modPng, modGridOut,
                              modCsv, modCrypto, modKitUtil (copied unchanged from the kit)
-    forms/*.vba              kit code-behind: subGrid, dlgAppearance
+    forms/*.vba              kit code-behind: subGrid, dlgAppearance, dlgDatePick
   src/
     modules/*.bas            the app's own standard modules (incl. generated modPalette)
     themes/light/modTheme.bas   build palette constants (generated)
@@ -328,9 +328,12 @@ End Sub
   - `Lbl`: transparent label.
   - `Txt`: input with `CLR_INPUT_BG`, a 1px `CLR_INPUT_BORDER` border and inner margins.
   - `DateBox`: a date input, 120px wide, with its date left-aligned like text, and a
-    30px outline calendar button 4px to its right that opens the date picker
-    (`PickDate`). Access's own picker icon, which shows only on focus, is off. The
-    pair is 154px (`DATEFIELD_W`), so it fits a half-width field column.
+    30px outline calendar button 4px to its right that opens the kit's date picker
+    (`PickDate`, `dlgDatePick`, built by `BuildDatePicker`): a month of day cells with
+    previous and next arrows, the box's date highlighted, today in bold, and Today,
+    Clear and Cancel. Access's own picker is off: it shows only on focus, and
+    `acCmdShowDatePicker` is refused once it is off. The pair is 154px
+    (`DATEFIELD_W`), so it fits a half-width field column.
   - `RO`: read-only text, borderless, transparent, no tab stop. Show read-only dates
     left-aligned (`TextAlign = 1`) so they line up with text values.
   - `Cbo`, `Lst`, `Chk`
@@ -338,6 +341,8 @@ End Sub
     themed hover and pressed colors and `Shape = 1` for rounded corners.
   - `Link`: clickable label.
   - `Box`: rectangle; pass -1 for no fill or no border.
+  - `Rule`: a 1px hairline (a line control), flat (h = 0) or upright (w = 0). Use it
+    for every divider and edge: Access paints a filled 1px `Box` 2 device pixels thick.
   - `RowBack`: row background that paints but never takes focus.
   - `Img`, `SubF`, `TabCtl`
   - `TabStrip x, y, w, handler, "key|Caption", ...`: a tab given as `"key|Caption|n"`
@@ -493,7 +498,7 @@ Write app-specific helpers next to the builds that use them. Examples:
   card sits on (default `CLR_BG`), which fills outside the arc. The box itself has no
   border: Access paints a rectangle's right and bottom border a pixel past the corner
   images, which shows as a thin square line. The four straight edges are 1px
-  `CLR_BORDER` boxes (`box<nm>_t`, `_b`, `_l`, `_r`) that stop at the corner images.
+  `CLR_BORDER` rules (`box<nm>_t`, `_b`, `_l`, `_r`) that stop at the corner images.
   Anchor the card with `hAnchor`/`vAnchor`; the corners and edges follow, so a card
   that stretches with the window keeps round corners.
   - Keep content at least 12px in from the card's edge so nothing covers a corner. An
@@ -758,7 +763,7 @@ The Appearance dialog grows by itself, because it is built from `PALETTE_COUNT`.
    `QueueNav`/`ShowPage`/`RefreshNav`, and `PageKey`/`Reopen`.
 6. For each page, write a `Build_pg<Name>` using `PageHeader`, cards, grids and buttons,
    and a `src/forms/pg<Name>.vba` where every handler uses the standard error handler.
-7. Copy the dialogs: `dlgAppearance`, and a non-modal `dlgHelp` with `help.txt` and the F1
+7. Copy the dialogs: `dlgAppearance`, `BuildDatePicker` (for date fields), and a non-modal `dlgHelp` with `help.txt` and the F1
    `AutoKeys` macro.
 8. Write `README.md` and `DEVELOPING.md` using the structure in section 4, linking to the
    kit's README for the builder catalog.

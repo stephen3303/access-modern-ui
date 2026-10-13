@@ -10,6 +10,8 @@ Option Explicit
 Private Const SCROLL_W As Long = 300
 ' Widest a form can be: 22 inches (twips).
 Private Const MAX_FORM_W As Long = 31680
+' The DateBox the date picker (dlgDatePick) is open for (PickDate).
+Private m_dateTarget As Control
 
 ' ---------------------------------------------------------------------------
 ' Tables
@@ -170,19 +172,35 @@ End Sub
 ' Date fields
 ' ---------------------------------------------------------------------------
 
-' Click on a DateBox's calendar button: open the date picker on the box nm.
-' Does nothing while the box is disabled or locked.
+' Click on a DateBox's calendar button: open the date picker for the box nm
+' and wait for it to close. Does nothing while the box is disabled or locked.
 Public Function PickDate(frm As Form, ByVal nm As String)
     Dim c As Control
     On Error GoTo Fail
     Set c = frm.Controls(nm)
     If Not c.Enabled Or c.Locked Then Exit Function
     c.SetFocus
-    DoCmd.RunCommand acCmdShowDatePicker
+    Set m_dateTarget = c
+    DoCmd.OpenForm "dlgDatePick", WindowMode:=acDialog
+    Set m_dateTarget = Nothing
     Exit Function
 Fail:
+    Set m_dateTarget = Nothing
     HandleError "modKitUI.PickDate", nm
 End Function
+
+' The open date picker's box: its value (Null when none is open), and
+' setting it. Setting a value does not fire the box's own update events; the
+' record's BeforeUpdate still checks it when it is saved.
+Public Function DateTargetValue() As Variant
+    DateTargetValue = Null
+    If Not m_dateTarget Is Nothing Then DateTargetValue = m_dateTarget.Value
+End Function
+
+Public Sub SetDateTarget(ByVal v As Variant)
+    If m_dateTarget Is Nothing Then Exit Sub
+    m_dateTarget.Value = v
+End Sub
 
 ' ---------------------------------------------------------------------------
 ' Tabs and filter chips

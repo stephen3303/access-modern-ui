@@ -231,8 +231,9 @@ End Function
 
 ' Date entry: a DATEBOX_W text box nm bound to src (dd mmm yyyy, left-aligned
 ' like text, Access's own picker icon off) and a calendar button cal_<nm>
-' 4px to its right, h tall like the box, that opens the date picker on it
-' (PickDate). The pair takes DATEFIELD_W. Returns the text box.
+' 4px to its right, h tall like the box, that opens the kit's date picker for
+' it (PickDate, dlgDatePick: build it with BuildDatePicker). The pair takes
+' DATEFIELD_W. Returns the text box.
 Public Function DateBox(ByVal nm As String, ByVal src As String, ByVal x As Long, ByVal y As Long, ByVal h As Long, _
         Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control
     Dim c As Control, b As Control
@@ -249,6 +250,35 @@ Public Function DateBox(ByVal nm As String, ByVal src As String, ByVal x As Long
     b.OnClick = "=PickDate([Form],""" & nm & """)"
     Set DateBox = c
 End Function
+
+' The date picker a DateBox's calendar button opens (dlgDatePick, code in
+' forms\dlgDatePick.vba): previous and next month arrows around the month's
+' name, the weekday initials, six weeks of day cells (34 x 30px on a 34 x 32
+' grid), and Today, Clear and Cancel. Build it with the app's other dialogs.
+Public Sub BuildDatePicker()
+    Dim c As Control, i As Long
+    NewDialog "Choose a date", px(270), px(316)
+    Ev F, "OnLoad"
+    Set c = Link("lnkPrev", ChrW(&HE76B), px(16), px(12), px(28), px(28), "=MoveMonth(-1)", 10, CLR_FG)
+    c.FontName = "Segoe MDL2 Assets": c.TextAlign = 2: c.ControlTipText = "Previous month"
+    Set c = Lbl("lblMonth", "Month", px(44), px(12), px(182), px(28), 11, True)
+    c.TextAlign = 2
+    Set c = Link("lnkNext", ChrW(&HE76C), px(226), px(12), px(28), px(28), "=MoveMonth(1)", 10, CLR_FG)
+    c.FontName = "Segoe MDL2 Assets": c.TextAlign = 2: c.ControlTipText = "Next month"
+    For i = 0 To 6
+        Set c = Lbl("wd" & i, Mid$("SuMoTuWeThFrSa", i * 2 + 1, 2), px(16) + i * px(34), px(48), px(34), px(18), 8, True, CLR_MUTED_FG)
+        c.TextAlign = 2
+    Next
+    For i = 0 To 41
+        Set c = Link("d" & i, "1", px(16) + (i Mod 7) * px(34), px(70) + (i \ 7) * px(32), px(34), px(30), _
+            "=PickDay(" & i & ")", 10, CLR_FG)
+        c.TextAlign = 2
+    Next
+    Link "lnkToday", "Today", px(16), px(273), px(56), px(24), "=PickToday()", 9
+    Link "lnkClear", "Clear", px(76), px(273), px(56), px(24), "=PickClear()", 9
+    Set c = Btn("btnCancel", "Cancel", px(164), px(270), px(90), px(30), "outline"): c.Cancel = True
+    SaveForm "dlgDatePick"
+End Sub
 
 ' Background box for a continuous-form row: paints (with conditional colors)
 ' but can never take focus. Disabled + locked keeps the normal appearance.
@@ -397,6 +427,20 @@ Public Function Box(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal 
     Set Box = c
 End Function
 
+' A 1px rule (hairline line control) from (x, y), w long and flat (h = 0),
+' or h long and upright (w = 0), in color. Use it, not a 1px filled Box, for
+' dividers and edges: Access paints a filled 15-twip rectangle 2 device
+' pixels thick, a hairline always 1.
+Public Function Rule(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
+        ByVal color As Long, Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control
+    Dim c As Control
+    Set c = Mk(acLine, nm, x, y, w, h, sec, parentCtl)
+    c.BorderStyle = 1
+    c.BorderWidth = 0
+    c.BorderColor = color
+    Set Rule = c
+End Function
+
 ' Subform control showing the form srcObj.
 Public Function SubF(ByVal nm As String, ByVal srcObj As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
         Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control
@@ -475,7 +519,7 @@ Public Sub BuildGrid(ByVal finalName As String, ByVal cols As Variant, ByVal w A
         If InStr(opts, "p") > 0 Then PillCol c, p(0)
         x = x + cw
     Next
-    Set c = Box("boxRowLine", 0, h - px(1), w, px(1), CLR_BORDER): If Not fit Then Anchor c, 2, 0
+    Set c = Rule("boxRowLine", 0, h - px(1), w, 0, CLR_BORDER): If Not fit Then Anchor c, 2, 0
     SaveForm finalName, "subGrid"
 End Sub
 
@@ -739,7 +783,7 @@ End Sub
 ' palette. The fill (box<nm>) has no border of its own: Access paints a
 ' rectangle's right and bottom border a pixel past its corner images, which
 ' showed as a thin square line along those edges. Instead the four straight
-' edges are 1px boxes (box<nm>_t, _b, _l, _r) that stop at the corner images.
+' edges are 1px rules (box<nm>_t, _b, _l, _r) that stop at the corner images.
 ' back is the color the card sits on. hAnchor / vAnchor anchor the card (see
 ' Anchor) and the corners and edges follow. square = True leaves the corners
 ' square (and keeps the box's own border), for a card where a subform or
@@ -756,13 +800,13 @@ Public Sub Card(ByVal nm As String, ByVal title As String, ByVal x As Long, ByVa
         r = px(CARD_RADIUS)
         ' The fill stops a pixel short on the right and bottom, inside the edges.
         Set c = Box("box" & nm, x, y, w - px(1), h - px(1), CLR_SURFACE, -1, acDetail, parentCtl): Anchor c, hAnchor, vAnchor
-        Set c = Box("box" & nm & "_t", x + r, y, w - 2 * r, px(1), CLR_BORDER, -1, acDetail, parentCtl)
+        Set c = Rule("box" & nm & "_t", x + r, y, w - 2 * r, 0, CLR_BORDER, acDetail, parentCtl)
         Anchor c, hAnchor, EdgeAnchor(vAnchor, False)
-        Set c = Box("box" & nm & "_b", x + r, y + h - px(1), w - 2 * r, px(1), CLR_BORDER, -1, acDetail, parentCtl)
+        Set c = Rule("box" & nm & "_b", x + r, y + h - px(1), w - 2 * r, 0, CLR_BORDER, acDetail, parentCtl)
         Anchor c, hAnchor, EdgeAnchor(vAnchor, True)
-        Set c = Box("box" & nm & "_l", x, y + r, px(1), h - 2 * r, CLR_BORDER, -1, acDetail, parentCtl)
+        Set c = Rule("box" & nm & "_l", x, y + r, 0, h - 2 * r, CLR_BORDER, acDetail, parentCtl)
         Anchor c, EdgeAnchor(hAnchor, False), vAnchor
-        Set c = Box("box" & nm & "_r", x + w - px(1), y + r, px(1), h - 2 * r, CLR_BORDER, -1, acDetail, parentCtl)
+        Set c = Rule("box" & nm & "_r", x + w - px(1), y + r, 0, h - 2 * r, CLR_BORDER, acDetail, parentCtl)
         Anchor c, EdgeAnchor(hAnchor, True), vAnchor
         For k = 1 To 4
             farX = (k = 2 Or k = 3)
@@ -873,7 +917,7 @@ Public Sub TabStrip(ByVal x As Long, ByVal y As Long, ByVal totalW As Long, ByVa
         Box "ul_" & k, x, y + px(28), w, px(2), CLR_PRIMARY
         x = x + w + px(4)
     Next
-    Set c = Box("boxTabLine", x0, y + px(30), totalW, px(1), CLR_BORDER)
+    Set c = Rule("boxTabLine", x0, y + px(30), totalW, 0, CLR_BORDER)
     Anchor c, 2, 0
 End Sub
 

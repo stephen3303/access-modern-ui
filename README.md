@@ -11,6 +11,7 @@ docs/DESIGN_GUIDE.md          how apps in this style are designed and built (rea
 docs/ADOPTION_PLAN.md         moving SABER and Submarine Program Manager onto the kit (agent task list)
 kit/modules/*.bas             the reusable modules, loaded before the app's own
 kit/forms/dlgAppearance.vba   code-behind for the palette picker
+kit/forms/dlgDatePick.vba     code-behind for the date picker (BuildDatePicker)
 kit/forms/subGrid.vba         code-behind for BuildGrid tables
 tools/make_themes.py          generates the build palette and the palette modules, checks contrast
 tools/AccessWatch.ps1         makes a build script report Visual Basic and Access dialogs instead of hanging
@@ -62,6 +63,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 | `ShowTip(frm, nm)` | the "?" marks from `TitleTip` | modUI |
 | `frmMain` with `PageKey` and `Reopen pg` | `SetPalette` (reopens the window) | frmMain |
 | `dlgAppearance` form | `ShowAppearance` | `Build_dlgAppearance` + dlgAppearance.vba |
+| `dlgDatePick` form | `PickDate` (`DateBox` buttons) | call the kit's `BuildDatePicker` with the app's dialogs |
 | `BandLabels()`, `BandBack(label)` | `BandCF` | modUI |
 | `BadgeColors(variant)` (returns `Array(back, fore)`) | `BadgeCF`, `BuildGrid` | modUI |
 | `StatusVariant(value)` (a Variant, may be Null; returns a badge variant or "") | `BuildGrid` pill columns (`p`) | modUI |
@@ -97,12 +99,14 @@ Sizes are in twips. `px(n)` converts CSS pixels at 15 twips per pixel.
 |---|---|
 | `Lbl nm, cap, x, y, w, h [, size, bold, fore]` | Label with a transparent background |
 | `Txt nm, src, x, y, w, h` | Text box (a field name, or an expression starting with `=`) |
+| `BuildDatePicker` | Builds `dlgDatePick`, the month calendar `DateBox` buttons open. Call it once with the app's dialogs. |
 | `DateBox nm, src, x, y, h` | Date entry: a 120px text box (dd mmm yyyy, left-aligned) and a calendar button `cal_<nm>` 4px to its right that opens the date picker. The pair is `DATEFIELD_W` (154px) wide. |
 | `RO nm, src, x, y, w, h` | Read-only text: no border, not a tab stop |
 | `Cbo` / `Lst` / `Chk` | Combo box, list box, check box with its label |
 | `Btn nm, cap, x, y, w, h [, kind]` | Button. `kind` is `primary`, `outline`, `ghost`, `destructive` or `nav`. |
 | `Link nm, cap, x, y, w, h, onClick` | Clickable text (links and tab labels) |
 | `Box nm, x, y, w, h, back [, border]` | Rectangle. Pass -1 for no fill or no border. |
+| `Rule nm, x, y, w, h, color` | 1px hairline divider, flat (h = 0) or upright (w = 0). A filled 1px `Box` paints 2px, so dividers use this. |
 | `Card nm, title, x, y, w, h [, parentCtl, hAnchor, vAnchor, back, square]` | Rounded card: surface, 1px border, 10pt title and a dark-only accent bar. `square:=True` keeps square corners where a subform covers a corner. |
 | `Progress nm, expr, x, y, w, h` | Rounded progress capsule filled to `expr` percent (a field or a number; Null is 0) |
 | `RowBack` | Row background for a continuous form that paints but never takes focus |
@@ -147,7 +151,7 @@ Sizes are in twips. `px(n)` converts CSS pixels at 15 twips per pixel.
 | `SelectFirstRow sf` | Select a table's first row and call the host's `GridClick`, as a click would. Returns the id, or Null for an empty table. |
 | `ShowDetail host, detailCtl, formName, where [, emptyCtl]` | List/detail pages: show the matching record in the detail subform, saving a changed one first, and hide the empty state |
 | `ClearDetail host, detailCtl [, emptyCtl]` | Empty the detail subform and show the empty state |
-| `PickDate frm, nm` | A `DateBox` calendar button's click: open the date picker on box `nm` (not while it is disabled or locked) |
+| `PickDate frm, nm` | A `DateBox` calendar button's click: open the kit's date picker (`dlgDatePick`) for box `nm` and write the chosen date into it (not while the box is disabled or locked) |
 | `SetCount ctl, n` | Show a count after a tab or chip caption, "Name (n)" |
 | `StyleChip lbl, isOn [, n]` | Filter chip on or off, with an optional count |
 | `SetVisible c, v` | Show or hide a control, moving the focus away when it or a control inside it has the focus (avoids error 2165) |
