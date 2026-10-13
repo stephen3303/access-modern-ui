@@ -28,6 +28,7 @@ Private Const MAIN_FORM_PROP As String = "KitMainForm"    ' database property: t
 Private Const HKEY_CURRENT_USER As LongPtr = &H80000001
 Private Const KEY_READ As Long = &H20019
 Private Const ERROR_SUCCESS As Long = 0
+Private Const ERROR_MORE_DATA As Long = 234
 Private Const REG_DWORD As Long = 4
 Private Const DRIVE_REMOTE As Long = 4
 
@@ -203,8 +204,8 @@ End Function
 
 ' True when Access will open this file with a prompt (or the code off) next
 ' time: not in a Trusted Location, not remembered as a trusted document (the
-' user chose Enable Content and Access kept it, under Trusted Records, unless
-' policy turns trusted documents off), and macros not all enabled
+' user chose Enable Content and Access kept it, under TrustRecords, unless
+' trusted documents are turned off), and macros not all enabled
 ' (VBAWarnings = 1, the policy's value winning over the user's). Read only.
 Public Function TrustNeeded() As Boolean
     Dim sec As String, pol As String
@@ -213,7 +214,12 @@ Public Function TrustNeeded() As Boolean
     pol = "Software\Policies\Microsoft\Office\" & Application.Version & "\Access\Security"
     If RegDword(pol, "", "VBAWarnings", RegDword(sec, "", "VBAWarnings", 0)) = 1 Then Exit Function
     If InTrustedLocation() Then Exit Function
-    If RegDword(pol, "Trusted Documents", "DisableTrustedDocuments", 0) <> 1 Then
+    ' Trusted documents count unless policy (or, without one, the user) turns them off.
+    If RegDword(pol, "Trusted Documents", "DisableTrustedDocuments", _
+            RegDword(sec, "Trusted Documents", "DisableTrustedDocuments", 0)) <> 1 Then
+        ' Office 2010 and later keep them under Trusted Documents\TrustRecords;
+        ' Trusted Records is read too, in case a version keeps them there.
+        If TrustedRecord(sec & "\Trusted Documents\TrustRecords", CurrentProject.FullName) Then Exit Function
         If TrustedRecord(sec & "\Trusted Records", CurrentProject.FullName) Then Exit Function
     End If
     TrustNeeded = True
@@ -223,17 +229,21 @@ Fail:
     TrustNeeded = True
 End Function
 
-' True when the key root (Trusted Records) has a value named for file. Office
+' True when the key root (TrustRecords) has a value named for file. Office
 ' writes the names in more than one form (C:\..., file:///C:/..., with
 ' %USERPROFILE% for the profile folder), so each is normalized before comparing.
 Private Function TrustedRecord(ByVal root As String, ByVal file As String) As Boolean
-    Dim hKey As LongPtr, i As Long, nm As String, n As Long
+    Dim hKey As LongPtr, i As Long, nm As String, n As Long, rc As Long
     file = NormPath(file)
     If RegOpenKeyExW(HKEY_CURRENT_USER, StrPtr(root), 0, KEY_READ, hKey) <> ERROR_SUCCESS Then Exit Function
     Do
         nm = String$(2048, vbNullChar): n = 2048
-        If RegEnumValueW(hKey, i, StrPtr(nm), n, 0, 0, 0, 0) <> ERROR_SUCCESS Then Exit Do
-        If RecordPath(Left$(nm, n)) = file Then TrustedRecord = True: Exit Do
+        rc = RegEnumValueW(hKey, i, StrPtr(nm), n, 0, 0, 0, 0)
+        If rc = ERROR_SUCCESS Then
+            If RecordPath(Left$(nm, n)) = file Then TrustedRecord = True: Exit Do
+        ElseIf rc <> ERROR_MORE_DATA Then
+            Exit Do                     ' ERROR_NO_MORE_ITEMS; a name too long to be this file is skipped
+        End If
         i = i + 1
     Loop
     RegCloseKey hKey

@@ -38,9 +38,9 @@ watching for Visual Basic error dialogs as well as the error log:
   row; editing and saving updates the list; a search with no match shows both empty
   states; Print previews and Export writes exactly the rows shown, with the captions.
 - Folder trust: the page shows this folder's path and the steps, nothing is cut off, and
-  Close (or Esc) closes it. Opened from a folder that isn't a Trusted Location, the demo
-  shows the page at startup, over the main window after Enable Content, or on its own
-  with the code turned off.
+  Close (or Esc) closes it. Opened from a folder that isn't a Trusted Location, with the
+  code turned off, the demo shows the page on its own. After Enable Content, Access
+  remembers the file as trusted, so the page doesn't open over the main window.
 
 ## Files
 
