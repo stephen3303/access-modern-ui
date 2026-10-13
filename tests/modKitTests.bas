@@ -173,7 +173,7 @@ Public Function TestKit(ByVal root As String) As String
     Check CompareVersions("v1.2", "1.2.0") = 0, "Missing version part not read as 0"
     Check CompareVersions("1.0.0", "1.0.1-beta") = -1, "Version suffix not ignored"
     Check ReleasedVersion("") = "", "Blank release folder read a version"
-    text = Environ$("TEMP") & "\kit-version-test"
+    text = CurrentProject.Path & "\version-test"          ' the run's own folder (native-smoke.ps1)
     EnsureFolder text
     WriteTextFile text & "\" & KIT_VERSION_FILE, vbCrLf & " 1.4.0 " & vbCrLf & "notes"
     Check ReleasedVersion(text & "\") = "1.4.0", "Release folder version misread"
