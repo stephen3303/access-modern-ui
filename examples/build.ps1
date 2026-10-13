@@ -3,13 +3,19 @@
 #
 #   build.ps1                 build a new front end (<AppName>_FE.accdb) from source
 #   build.ps1 -UiOnly         rebuild code, forms and reports inside the existing front end
+#   -NoLineNumbers            load the code without line numbers (see below)
+#
+# The code loaded into the front end gets line numbers (tools\VbaLineNumbers.ps1,
+# copied next to this script) so the error log names the failing line. src\ is
+# copied to a staging folder and numbered there; the files in git are not changed.
 #
 # The app's src\modules must contain a public BuildAll(srcRoot, outDir, uiOnly) that
 # returns "OK" or the step that failed. Requires Microsoft Access (2016+ / Microsoft 365).
 param(
     [switch]$UiOnly,
     [string]$AppName = 'MyApp',
-    [string]$OutDir
+    [string]$OutDir,
+    [switch]$NoLineNumbers
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -18,6 +24,14 @@ $kit = Join-Path $root 'kit'
 if (-not $OutDir) { $OutDir = Split-Path -Parent $root }
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 $fe = Join-Path $OutDir "$($AppName)_FE.accdb"
+
+# BuildAll reads src\forms\<name>.vba through srcRoot, so it gets the staged copy.
+. (Join-Path $root 'VbaLineNumbers.ps1')
+$stage = Join-Path $env:TEMP "$($AppName)_src"
+Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
+if (Test-Path $stage) { throw "Can't clear the staging folder $stage (a file in it is open?)" }
+Copy-Item $src $stage -Recurse
+if (-not $NoLineNumbers) { Add-VbaLineNumbersToFolder (Join-Path $stage 'forms') }
 
 $acc = New-Object -ComObject Access.Application
 try {
@@ -40,6 +54,7 @@ try {
         # LoadFromText expects Windows line endings.
         $tmp = Join-Path $env:TEMP ("kit_" + $f.Name)
         $text = [IO.File]::ReadAllText($f.FullName) -replace "`r?`n", "`r`n"
+        if (-not $NoLineNumbers) { $text = Add-VbaLineNumbers $text }
         [IO.File]::WriteAllText($tmp, $text, [Text.Encoding]::ASCII)
         $acc.LoadFromText(5, $f.BaseName, $tmp)
         Remove-Item $tmp
@@ -48,7 +63,7 @@ try {
     # Compile first so syntax errors surface before any work runs.
     $acc.DoCmd.RunCommand(126)   # acCmdCompileAndSaveAllModules
 
-    $a1 = [string]$src; $a2 = [string]$OutDir; $a3 = [bool]$UiOnly
+    $a1 = [string]$stage; $a2 = [string]$OutDir; $a3 = [bool]$UiOnly
     $result = $acc.Run('BuildAll', [ref]$a1, [ref]$a2, [ref]$a3)
     Write-Host "BuildAll: $result"
     if ($result -ne 'OK') { exit 1 }

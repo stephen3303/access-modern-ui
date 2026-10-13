@@ -101,7 +101,7 @@ End Function
 ' The grid's visible columns, left to right: Array(source, caption, width,
 ' format, text align), read from the columns BuildGrid made (txtCol0, ...).
 Private Function GridColumns(gridForm As Form) As Collection
-    Dim out As New Collection, c As Control, i As Long, t() As String
+    Dim out As New Collection, c As Control, i As Long, t() As String, src As String
     Do
         Set c = Nothing
         On Error Resume Next
@@ -110,7 +110,11 @@ Private Function GridColumns(gridForm As Form) As Collection
         If c Is Nothing Then Exit Do
         If c.Visible Then
             t = Split(c.Tag & "||", "|")
-            out.Add Array(c.ControlSource, IIf(Len(t(0)) > 0, t(0), c.ControlSource), c.Width + px(8), c.Format, c.TextAlign)
+            src = c.ControlSource
+            ' A search column (BuildGrid option "s") shows the marked text of
+            ' hidden txtSrc<i>: use that control's field instead.
+            If Left$(src, 10) = "=GridMark(" Then src = gridForm.Controls("txtSrc" & i).ControlSource
+            out.Add Array(src, IIf(Len(t(0)) > 0, t(0), src), c.Width + px(8), c.Format, c.TextAlign)
         End If
         i = i + 1
     Loop

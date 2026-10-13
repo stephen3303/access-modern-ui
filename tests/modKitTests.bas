@@ -9,14 +9,15 @@ Public Function TestKit(ByVal root As String) As String
     Dim grid As Form, host As Form, c As Control, cols As Variant, i As Long
     Dim rows As DAO.Recordset, ids As Object, height As Long
     Dim text As String, fitted As String, measured As Long
-    Dim db As DAO.Database, badName As Long, badScale As Long
+    Dim db As DAO.Database, badName As Long, badScale As Long, badView As Long
     g_SrcRoot = root & "\kit": UseBuildPalette
     CurrentDb.Execute "CREATE TABLE test_rows (id LONG PRIMARY KEY, category TEXT(60), description TEXT(255))"
     For i = 1 To 23
         CurrentDb.Execute "INSERT INTO test_rows VALUES (" & i & ",'Long category','Description " & i & "')"
     Next
-    cols = Array("category|Category|160|c", "description|Description|300|t")
+    cols = Array("category|Category|160|c", "description|Description|300|ts")
     BuildGrid "subTest", cols, px(600)
+    BuildGrid "subTestName", Array("name|Name|200|s"), px(300)
     NewForm "", 0, px(200), px(60)
     Txt "ringC", "", 0, 0, px(100), px(30)
     Btn "ringSave", "Save", px(110), 0, px(80), px(30)
@@ -26,6 +27,7 @@ Public Function TestKit(ByVal root As String) As String
     GridHeaders "sortHead", cols, px(24), px(40), sortSf:="sfRows"
     SubF "sfRows", "Form.subTest", px(24), px(82), px(600), px(180)
     SubF "sfReuse", "Form.subTest", px(24), px(320), px(600), px(180)
+    SubF "sfName", "Form.subTestName", px(24), px(700), px(300), px(50)
     GridFooter "sfRows", "pager", "id"
     Lbl "filter0", "All (23)", 0, 0, px(100), px(30)
     Lbl "filter1", "Retirement (2)", 0, 0, px(100), px(30)
@@ -47,6 +49,7 @@ Public Function TestKit(ByVal root As String) As String
     Txt "reqA", "", 0, px(660), px(80), px(30)
     Txt "reqB", "", px(100), px(660), px(80), px(30)
     Toggle "tglTest", "", px(220), px(663), onChange:="ToggleChanged"
+    SecretBox "secret", "", px(400), px(700), px(160), px(30)     ' clear of the ring, required and toggle fields
     SaveForm "frmTest", "testHost"
     DoCmd.OpenForm "frmTest"
     Set host = Forms("frmTest"): Set grid = host.sfRows.Form
@@ -55,6 +58,13 @@ Public Function TestKit(ByVal root As String) As String
     measured = MeasureText("Exact fit", 9, 400)
     Check FitSingleLineText("Exact fit", measured) = "Exact fit", "Exact-fit text was truncated"
     Check FitSingleLineText("Text", 0) = "", "Zero-width text overflows"
+    Check IsNull(GridMark(Null, "a")), "Null search cell differs"
+    Check GridMark("a<b & c", "") = "a&lt;b &amp; c", "Unsearched cell not escaped"
+    Check GridMark("a   b", "") = "a &nbsp; b", "Cell spaces collapsed"
+    Check GridMark(" a", "") = "&nbsp;a", "Leading space collapsed"
+    Check GridMark("Pump overhaul", "pump") Like "*</font> overhaul", "Space after a match changed"
+    text = GridMark("Pump pump", "PUMP")
+    Check UBound(Split(text, "</font>")) = 2 And InStr(text, ">Pump</font> <") > 0, "Search matches not marked"
     measured = MeasureText(ChrW(&H2026), 9, 400)
     Check FitSingleLineText("Long text", measured - 1) = "", "Tiny cell emits overflowing ellipsis"
     text = "Wide WWW and narrow iii characters in a long description"
@@ -113,6 +123,17 @@ Public Function TestKit(ByVal root As String) As String
     Check Not host.pillBound.Visible And Not host.pillBound_bg.Visible, "Hidden bound pill left its image"
     SetVisible host.pillBound, True
     Check host.pillBound.Visible And host.pillBound_bg.Visible, "Shown bound pill lost its image"
+    ' SecretBox: hidden on open, the eye shows then hides it, HideSecrets hides it again.
+    Check host.secret.Width = px(126) And host.eye_secret.Left = px(530), "Secret field pair is not 160px"
+    Check host.secret.InputMask = SECRET_MASK, "Secret field opens shown"
+    ToggleSecret host, "secret"
+    Check host.secret.InputMask = "" And host.eye_secret.ControlTipText = "Hide", "Eye did not show the secret"
+    Check Screen.ActiveControl.Name = "secret", "Eye left the focus off its field"
+    ToggleSecret host, "secret"
+    Check host.secret.InputMask = SECRET_MASK And host.eye_secret.Caption = ChrW(EYE_SHOW), "Eye did not hide the secret"
+    ToggleSecret host, "secret"
+    HideSecrets host
+    Check host.secret.InputMask = SECRET_MASK And host.eye_secret.ControlTipText = "Show", "HideSecrets left the secret shown"
     grid.RecordSource = "SELECT * FROM test_rows ORDER BY id"
     ' Click-to-sort captions: ascending with an up arrow, then reversed; the arrow moves with the column.
     Check host.head1.OnClick = "" And Right$(host.head1.Tag, 1) = "|", "Unsortable caption has a sort click"
@@ -239,6 +260,13 @@ Public Function TestKit(ByVal root As String) As String
     ResizeGrid grid, px(200), cols
     Check grid.ScrollBars = 3, "Narrow grid clips minimum columns instead of scrolling"
     Check grid.txtCol1.Width >= px(292), "Narrow grid discarded Description width"
+    GridHighlight host.sfRows, "desc"
+    Check InStr(Nz(grid.txtCol1, ""), ">Desc</font>") > 0, "Table search match not marked"
+    GridHighlight host.sfRows, ""
+    Check InStr(Nz(grid.txtCol1, ""), "<font") = 0, "Cleared table search left a mark"
+    host.sfName.Form.RecordSource = "SELECT id, description AS name FROM test_rows ORDER BY id"
+    GridHighlight host.sfName, "desc"
+    Check InStr(Nz(host.sfName.Form.txtCol0, ""), ">Desc</font>ription 1") > 0, "Search column named name shows the wrong value"
     host.reqA = "   "
     host.reqB = Null
     text = RequiredMissing(host, "reqA=First;reqB=Second", fitted)
@@ -256,6 +284,13 @@ Public Function TestKit(ByVal root As String) As String
     Check Not host.btn2.Visible And Not host.btn3.Visible, "Message dialog shows unused buttons"
     Check host.btn1.Left + host.btn1.Width = host.btn3.Left + host.btn3.Width, "Message OK button is not right-aligned"
     DoCmd.Close acForm, "dlgMessage", acSaveNo
+    ' SecretBox refuses a continuous form: one eye would show every row.
+    NewForm "", 1, px(300), px(100)
+    On Error Resume Next
+    SecretBox "secret", "", 0, 0, px(160), px(30): badView = Err.Number: Err.Clear
+    On Error GoTo 0
+    DoCmd.Close acForm, F.Name, acSaveNo
+    Check badView = 5, "SecretBox accepted a continuous form"
     ' Splash: CloseSplash and SplashStatus do nothing without one, the footer clears the
     ' subtitle, and the bitmap that hides Access's splash is 58 bytes.
     CloseSplash
@@ -311,5 +346,23 @@ Public Function TestKit(ByVal root As String) As String
     Check CenteredStart(1700, 2300, 400, 0, 1920) = 1520, "Dialog left past the work area's right edge"
     Check CenteredStart(-300, 300, 400, 0, 1920) = 0, "Dialog left past the work area's left edge"
     Check CenteredStart(0, 1000, 1200, 0, 1000) = 0, "Oversized dialog hides its title bar"
+    Check ErrorLineSource() = "test line 8", "Error log did not record the failing line (Erl)"
+    ' Backdrop: nested dims share one layer, and a dialog that fails to open
+    ' leaves the app undimmed.
+    ' One call per line: "DimApp:" at the start of a line is a line label, not a call.
+    DimApp
+    DimApp
+    UndimApp
+    Check AppDimmed(), "Inner dialog removed the outer dialog's dim"
+    UndimApp
+    Check Not AppDimmed(), "Dim left on after its last dialog"
+    On Error Resume Next
+    RunDialog "dlgNoSuchForm"
+    badName = Err.Number
+    On Error GoTo 0
+    Check badName <> 0, "RunDialog hid a missing dialog"
+    Check Not AppDimmed(), "Dim left on after a dialog failed to open"
+    BackdropOnClose
+    Check Not AppDimmed(), "A dialog closing with no dim waiting changed the count"
     TestKit = checks & " kit checks passed"
 End Function
