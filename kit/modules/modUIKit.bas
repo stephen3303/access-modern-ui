@@ -506,9 +506,9 @@ Public Function Toggle(ByVal nm As String, ByVal src As String, ByVal x As Long,
     c.Transparent = True
     c.Tag = onChange
     handler = "=ToggleSwitch([Form],""" & nm & """)"
+    ' A command button raises Click for both halves of a double click
+    ' (Click, DblClick, Click), so OnDblClick stays empty.
     c.OnClick = handler
-    ' The second click of a double click raises DblClick, not Click.
-    c.OnDblClick = handler
     c.OnGotFocus = "=ToggleFocus([Form],""" & nm & """,True)"
     c.OnLostFocus = "=ToggleFocus([Form],""" & nm & """,False)"
     Set Toggle = c
