@@ -162,6 +162,19 @@ Public Function TestKit(ByVal root As String) As String
     Check grid.ScrollBars = 3, "Narrow grid clips minimum columns instead of scrolling"
     Check grid.txtCol1.Width >= px(292), "Narrow grid discarded Description width"
     DoCmd.Close acForm, "frmTest", acSaveNo
+    ' Trust check: matching Trusted Locations, a codeless dlgTrust, and the AutoExec
+    ' macro that opens it with the code off.
+    Check PathCovers("C:\Apps\", False, "c:\apps") And Not PathCovers("C:\Apps", False, "C:\Apps\Sub"), "Trusted Location matching differs"
+    Check PathCovers("C:\", True, "C:\Apps\Sub") And Not PathCovers("C:\Apps", True, "C:\AppsOld"), "Trusted Location subfolder matching differs"
+    BuildTrustCheck "frmTest"
+    DoCmd.OpenForm "dlgTrust", acDesign
+    Check Not Forms("dlgTrust").HasModule And Len(Forms("dlgTrust").OnOpen) = 0, "dlgTrust needs code to open"
+    DoCmd.Close acForm, "dlgTrust", acSaveNo
+    text = CurrentProject.Path & "\autoexec_test.txt"
+    Application.SaveAsText acMacro, "AutoExec", text
+    fitted = Replace(ReadTextFile(text), vbNullChar, "")   ' SaveAsText may write UTF-16
+    Kill text
+    Check InStr(fitted, "IsTrusted") > 0 And InStr(fitted, "dlgTrust") > 0 And InStr(fitted, "TrustStartup") > 0, "AutoExec lost its trust rows"
     BuildMessageDialog
     DoCmd.OpenForm "dlgMessage"
     Set host = Forms("dlgMessage")

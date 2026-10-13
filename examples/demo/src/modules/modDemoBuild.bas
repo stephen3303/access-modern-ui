@@ -325,11 +325,11 @@ End Sub
 ' BuildTrustCheck opens frmMain at startup (in place of StartUpForm) and shows
 ' its trust page when the demo's folder isn't a Trusted Location.
 Private Sub SetStartupOptions()
-    BuildTrustCheck "frmMain"
     SetProp "AppTitle", dbText, APP_NAME
     SetProp "StartUpShowDBWindow", dbBoolean, False
     SetProp "ShowDocumentTabs", dbBoolean, False
     SetProp "Perform Name AutoCorrect", dbLong, 0
     SetProp "Track Name AutoCorrect Info", dbLong, 0
     SetProp "AppBuild", dbText, Format$(Now(), "yyyy-mm-dd hh:nn")
+    BuildTrustCheck "frmMain"       ' after any StartUpForm setting: it removes StartUpForm
 End Sub

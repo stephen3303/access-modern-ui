@@ -39,7 +39,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 | modGridOut | `PrintGrid` and `ExportGrid`: print or export a table as the user sees it |
 | modCsv | UTF-8 text files, RFC 4180 CSV read/write, query-to-CSV export |
 | modCrypto | SHA-256 through Windows CNG, salted password hashing |
-| modTrust | Startup check for an untrusted folder: `BuildTrustCheck mainForm` (build step, in place of `StartUpForm`) adds an `AutoExec` macro and `dlgTrust`, a page explaining how to add the folder as a Trusted Location. `InTrustedLocation` reads the Trust Center settings (never changes them), `ShowTrustHelp` opens the page |
+| modTrust | Startup check for an untrusted folder: `BuildTrustCheck mainForm` (build step, in place of `StartUpForm`) adds an `AutoExec` macro and `dlgTrust`, a page explaining how to add the folder as a Trusted Location. `TrustNeeded` and `InTrustedLocation` read the Trust Center settings (never change them), `ShowTrustHelp` opens the page. It replaces any `AutoExec` the app has |
 | modKitUtil | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `SetVisible`, `SetEnabled` |
 
 ## Starting a new app with the kit
@@ -52,7 +52,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 3. In the app's own modules, provide the names the kit calls (listed below).
 4. For the palette picker, copy `examples\modules\modBuildAppearance.bas` to `src\modules` and `kit\forms\dlgAppearance.vba` to `src\forms`. For date fields, copy `kit\forms\dlgDatePick.vba` to `src\forms` too, and for messages copy `kit\forms\dlgMessage.vba`: `SaveForm` attaches code-behind from `src\forms` only, so without them `dlgDatePick` and `dlgMessage` build with no code.
 5. Write a `BuildAll` entry point that calls `UseBuildPalette`, sets `g_SrcRoot`, and builds the forms. The design guide (section 2) describes what it does.
-6. For startup, call `BuildTrustCheck "frmMain"` (or the login form) instead of setting `StartUpForm`. When the app's folder isn't a Trusted Location, users then see how to trust it instead of an Enable Content prompt every time.
+6. For startup, call `BuildTrustCheck "frmMain"` (or the login form, or `frmSplash` when the app has a splash screen) last in the startup step, instead of setting `StartUpForm`. When Access would ask to enable content, users then see how to trust the folder.
 
 ### What the app must provide
 

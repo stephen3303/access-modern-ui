@@ -13,8 +13,11 @@ Option Explicit
 '                    when the code is turned off.
 '     code off       (CurrentProject.IsTrusted False): opens dlgTrust and stops.
 '     code on        runs TrustStartup: opens the main form, then dlgTrust over
-'                    it when the folder still isn't a Trusted Location (the
-'                    user chose Enable Content, which only trusts this one file).
+'                    it when Access will ask again next time: the folder isn't
+'                    a Trusted Location and the user chose Enable Content only
+'                    for this session. Once Access remembers the file as a
+'                    trusted document, or every macro is allowed, the page
+'                    stays away.
 '   dlgTrust         has no code and no Open hook, so it works with the code
 '                    off. Its Close button runs the macro mcrTrustClose.
 
@@ -35,6 +38,9 @@ Private Declare PtrSafe Function RegEnumKeyExW Lib "advapi32" (ByVal hKey As Lon
     ByVal cchClass As LongPtr, ByVal lastWrite As LongPtr) As Long
 Private Declare PtrSafe Function RegQueryValueExW Lib "advapi32" (ByVal hKey As LongPtr, ByVal valueName As LongPtr, _
     ByVal reserved As LongPtr, valueType As Long, ByVal data As LongPtr, cbData As Long) As Long
+Private Declare PtrSafe Function RegEnumValueW Lib "advapi32" (ByVal hKey As LongPtr, ByVal index As Long, _
+    ByVal valueName As LongPtr, cchValueName As Long, ByVal reserved As LongPtr, ByVal valueType As LongPtr, _
+    ByVal data As LongPtr, ByVal cbData As LongPtr) As Long
 Private Declare PtrSafe Function RegCloseKey Lib "advapi32" (ByVal hKey As LongPtr) As Long
 Private Declare PtrSafe Function ExpandEnvironmentStringsW Lib "kernel32" (ByVal src As LongPtr, _
     ByVal dst As LongPtr, ByVal size As Long) As Long
@@ -45,14 +51,18 @@ Private Declare PtrSafe Function GetDriveTypeW Lib "kernel32" (ByVal root As Lon
 ' ---------------------------------------------------------------------------
 
 ' Build step, in place of setting StartUpForm: builds dlgTrust and the macros
-' AutoExec and mcrTrustClose, and remembers mainForm for TrustStartup. Any
-' StartUpForm set earlier is removed, so mainForm doesn't open twice.
+' AutoExec and mcrTrustClose, and remembers mainForm for TrustStartup.
+' mainForm is the form the app starts on: the login form, frmMain, or the
+' splash screen (frmSplash) when the app has one. Call it after anything that
+' sets StartUpForm: it removes StartUpForm, so the first form opens only
+' through AutoExec (with the code off it doesn't open at all). It replaces any
+' AutoExec macro the app already has.
 Public Sub BuildTrustCheck(ByVal mainForm As String)
     Dim db As DAO.Database, n As Long, d As String
     Build_dlgTrust
     LoadMacro CLOSE_MACRO, MacroRow("", "Close", "2", TRUST_FORM, "2")      ' form dlgTrust, don't save
     LoadMacro "AutoExec", _
-        MacroRow("Not [CurrentProject].[IsTrusted]", "OpenForm", TRUST_FORM, "0") & _
+        MacroRow("Not [CurrentProject].[IsTrusted]", "OpenForm", TRUST_FORM, "0", "", "", "-1", "0") & _
         MacroRow("Not [CurrentProject].[IsTrusted]", "StopMacro") & _
         MacroRow("", "RunCode", "TrustStartup()")
     Set db = CurrentDb
@@ -153,17 +163,20 @@ End Function
 ' Replace macro name with the given rows (a temporary file, as LoadFromText
 ' needs one).
 Private Sub LoadMacro(ByVal name As String, ByVal rows As String)
-    Dim path As String, f As Integer
+    Dim path As String, fh As Integer, n As Long, d As String
     path = Environ$("TEMP") & "\kit_macro_" & name & ".txt"
-    f = FreeFile
-    Open path For Output As #f
-    Print #f, "Version =196611" & vbCrLf & "ColumnsShown =2" & vbCrLf & rows;
-    Close #f
+    fh = FreeFile
+    Open path For Output As #fh
+    Print #fh, "Version =196611" & vbCrLf & "ColumnsShown =2" & vbCrLf & rows;
+    Close #fh
     On Error Resume Next
     DoCmd.DeleteObject acMacro, name
-    On Error GoTo 0
+    Err.Clear
     Application.LoadFromText acMacro, name, path
-    Kill path
+    n = Err.Number: d = Err.Description
+    Kill path                           ' the temporary file goes whether or not the load worked
+    On Error GoTo 0
+    If n <> 0 Then Err.Raise n, , "Could not load the macro " & name & ": " & d
 End Sub
 
 ' ---------------------------------------------------------------------------
@@ -171,8 +184,9 @@ End Sub
 ' ---------------------------------------------------------------------------
 
 ' AutoExec, with the code on: open the main form, then the trust page over it
-' when the folder isn't a Trusted Location. Does nothing under automation
-' (a build script opening the file), so nothing opens or waits there.
+' when Access will ask to enable content again next time (TrustNeeded). Does
+' nothing under automation (a build script opening the file), so nothing
+' opens or waits there.
 Public Function TrustStartup()
     Dim mainForm As String
     On Error GoTo Err_Handler
@@ -181,10 +195,58 @@ Public Function TrustStartup()
     mainForm = CurrentDb.Properties(MAIN_FORM_PROP)
     On Error GoTo Err_Handler
     If Len(mainForm) > 0 Then DoCmd.OpenForm mainForm
-    If Not InTrustedLocation() Then ShowTrustHelp
+    If TrustNeeded() Then ShowTrustHelp
     Exit Function
 Err_Handler:
     HandleError "modTrust.TrustStartup", "main form " & mainForm
+End Function
+
+' True when Access will open this file with a prompt (or the code off) next
+' time: not in a Trusted Location, not remembered as a trusted document (the
+' user chose Enable Content and Access kept it, under Trusted Records, unless
+' policy turns trusted documents off), and macros not all enabled
+' (VBAWarnings = 1, the policy's value winning over the user's). Read only.
+Public Function TrustNeeded() As Boolean
+    Dim sec As String, pol As String
+    On Error GoTo Fail
+    sec = "Software\Microsoft\Office\" & Application.Version & "\Access\Security"
+    pol = "Software\Policies\Microsoft\Office\" & Application.Version & "\Access\Security"
+    If RegDword(pol, "", "VBAWarnings", RegDword(sec, "", "VBAWarnings", 0)) = 1 Then Exit Function
+    If InTrustedLocation() Then Exit Function
+    If RegDword(pol, "Trusted Documents", "DisableTrustedDocuments", 0) <> 1 Then
+        If TrustedRecord(sec & "\Trusted Records", CurrentProject.FullName) Then Exit Function
+    End If
+    TrustNeeded = True
+    Exit Function
+Fail:
+    LogError "modTrust.TrustNeeded"
+    TrustNeeded = True
+End Function
+
+' True when the key root (Trusted Records) has a value named for file. Office
+' writes the names in more than one form (C:\..., file:///C:/..., with
+' %USERPROFILE% for the profile folder), so each is normalized before comparing.
+Private Function TrustedRecord(ByVal root As String, ByVal file As String) As Boolean
+    Dim hKey As LongPtr, i As Long, nm As String, n As Long
+    file = NormPath(file)
+    If RegOpenKeyExW(HKEY_CURRENT_USER, StrPtr(root), 0, KEY_READ, hKey) <> ERROR_SUCCESS Then Exit Function
+    Do
+        nm = String$(2048, vbNullChar): n = 2048
+        If RegEnumValueW(hKey, i, StrPtr(nm), n, 0, 0, 0, 0) <> ERROR_SUCCESS Then Exit Do
+        If RecordPath(Left$(nm, n)) = file Then TrustedRecord = True: Exit Do
+        i = i + 1
+    Loop
+    RegCloseKey hKey
+End Function
+
+' A Trusted Records value name as a normalized Windows path.
+Private Function RecordPath(ByVal s As String) As String
+    If LCase$(Left$(s, 8)) = "file:///" Then
+        s = Mid$(s, 9)
+    ElseIf LCase$(Left$(s, 7)) = "file://" Then
+        s = "\\" & Mid$(s, 8)
+    End If
+    RecordPath = NormPath(Replace(s, "/", "\"))
 End Function
 
 ' Open the trust page (dlgTrust) in the current palette. It has no Open hook,
@@ -218,6 +280,7 @@ Public Function InTrustedLocation(Optional ByVal folder As String = "") As Boole
     usr = "Software\Microsoft\Office\" & Application.Version & "\Access\Security\Trusted Locations"
     If RegDword(pol, "", "AllLocationsDisabled", 0) = 1 Then Exit Function
     If RegDword(common, "", "AllLocationsDisabled", 0) = 1 Then Exit Function
+    If RegDword(usr, "", "AllLocationsDisabled", 0) = 1 Then Exit Function
     ' A policy setting wins over the user's own.
     allowNet = (RegDword(pol, "", "AllowNetworkLocations", RegDword(usr, "", "AllowNetworkLocations", 0)) = 1)
     isNet = (Left$(folder, 2) = "\\")
@@ -236,7 +299,6 @@ End Function
 ' True when one of the Location keys under root covers folder.
 Private Function ListHas(ByVal root As String, ByVal folder As String) As Boolean
     Dim hKey As LongPtr, i As Long, nm As String, n As Long, p As String, subs As Boolean
-    If Right$(folder, 1) <> "\" Then folder = folder & "\"
     If RegOpenKeyExW(HKEY_CURRENT_USER, StrPtr(root), 0, KEY_READ, hKey) <> ERROR_SUCCESS Then Exit Function
     Do
         nm = String$(256, vbNullChar): n = 256
@@ -244,16 +306,22 @@ Private Function ListHas(ByVal root As String, ByVal folder As String) As Boolea
         nm = Left$(nm, n)
         p = RegString(root, nm, "Path")
         If Len(p) > 0 Then
-            p = NormPath(p)
             subs = (RegDword(root, nm, "AllowSubfolders", 0) = 1)
-            ' Compare with a closing backslash on both: a drive root (c:\) already
-            ' has one, so add it only to other paths.
-            If Right$(p, 1) <> "\" Then p = p & "\"
-            If folder = p Or (subs And Left$(folder, Len(p)) = p) Then ListHas = True: Exit Do
+            If PathCovers(p, subs, folder) Then ListHas = True: Exit Do
         End If
         i = i + 1
     Loop
     RegCloseKey hKey
+End Function
+
+' True when the Trusted Location loc (with subfolders when subs) covers
+' folder. Both are compared normalized and ending in one backslash: a drive
+' root (c:\) already has one. Public so the kit's smoke test can check it.
+Public Function PathCovers(ByVal loc As String, ByVal subs As Boolean, ByVal folder As String) As Boolean
+    loc = NormPath(loc): folder = NormPath(folder)
+    If Right$(loc, 1) <> "\" Then loc = loc & "\"
+    If Right$(folder, 1) <> "\" Then folder = folder & "\"
+    PathCovers = (folder = loc) Or (subs And Left$(folder, Len(loc)) = loc)
 End Function
 
 ' Lower case, environment variables expanded, no trailing backslash.
