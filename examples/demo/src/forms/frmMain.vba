@@ -11,6 +11,7 @@ Private Sub Form_Load()
     On Error GoTo Err_Handler
     DoCmd.Maximize
     ShowPage Nz(TempVars("StartPage"), "cards")
+    MarkDueDates            ' item due dates on the date picker
     TempVars("StartPage") = Null
     Exit Sub
 Err_Handler:
