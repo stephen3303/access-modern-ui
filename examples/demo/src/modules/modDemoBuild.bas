@@ -103,6 +103,7 @@ Private Sub BuildUserInterface()
     BuildMessageDialog             ' the kit's dlgMessage, for KitMsgBox
     BuildInputDialog               ' the kit's dlgInput, for KitInputBox
     BuildDatePicker                ' the kit's dlgDatePick, for DateBox
+    BuildSplash "frmMain", "access-modern-ui demo"   ' the kit's frmSplash, the startup form
     Build_frmMain
 End Sub
 
@@ -330,14 +331,16 @@ Private Sub SetProp(ByVal name As String, ByVal kind As Integer, ByVal value As 
     End If
 End Sub
 
-' Open on frmMain without the navigation pane or document tabs, and record
-' when this front end was built (error-log entries show it).
+' Open on the splash screen, which opens frmMain, without Access's own
+' splash, the navigation pane or document tabs, and record when this front
+' end was built (error-log entries and the splash show it).
 Private Sub SetStartupOptions()
     SetProp "AppTitle", dbText, APP_NAME
-    SetProp "StartUpForm", dbText, "frmMain"
+    SetProp "StartUpForm", dbText, "frmSplash"
     SetProp "StartUpShowDBWindow", dbBoolean, False
     SetProp "ShowDocumentTabs", dbBoolean, False
     SetProp "Perform Name AutoCorrect", dbLong, 0
     SetProp "Track Name AutoCorrect Info", dbLong, 0
     SetProp "AppBuild", dbText, Format$(Now(), "yyyy-mm-dd hh:nn")
+    HideAccessSplash                ' last: it writes a file, so a failure leaves the settings above in place
 End Sub

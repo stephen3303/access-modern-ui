@@ -300,6 +300,21 @@ Public Function TestKit(ByVal root As String) As String
     On Error GoTo 0
     DoCmd.Close acForm, F.Name, acSaveNo
     Check badView = 5, "SecretBox accepted a continuous form"
+    ' Splash: CloseSplash and SplashStatus do nothing without one, the footer clears the
+    ' subtitle, and the bitmap that hides Access's splash is 58 bytes.
+    CloseSplash
+    SplashStatus "Starting"
+    BuildSplash "frmMain", "Subtitle"
+    DoCmd.OpenForm "frmSplash", acDesign
+    Set host = Forms("frmSplash")
+    Check host.lblSplashSub.Top + host.lblSplashSub.Height <= host.lnSplash.Top, "Splash subtitle overlaps its footer"
+    CloseSplash
+    Check IsFormOpen("frmSplash"), "CloseSplash closed a splash in Design view"
+    DoCmd.Close acForm, "frmSplash", acSaveNo
+    HideAccessSplash
+    text = CurrentProject.Path & "\" & Left$(CurrentProject.Name, InStrRev(CurrentProject.Name, ".") - 1) & ".bmp"
+    Check FileLen(text) = 58, "HideAccessSplash did not write a 58-byte bitmap"
+    Kill text
     Check CompareVersions("1.10.0", "1.9.2") = 1, "Version parts compared as text"
     Check CompareVersions("v1.2", "1.2.0") = 0, "Missing version part not read as 0"
     Check CompareVersions("1.0.0", "1.0.1-beta") = -1, "Version suffix not ignored"

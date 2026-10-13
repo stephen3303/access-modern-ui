@@ -9,7 +9,9 @@ test changes to it. It has one local table of fictional items and three pages:
 | Tables | `BuildGrid` with every option (header band, zebra rows, status pills, 38px rows, proportional fit through `GridFit`) next to a default table, both sorted by clicking a column caption; `TabStrip` and chips with counts; search and a category filter to the right of the chips |
 | List and detail | The list/detail pattern (`SelectFirstRow`, `ShowDetail`, `ClearDetail`), click-to-sort captions, `PrintGrid` and `ExportGrid` in the list's sort; the Due field is a `DateBox` whose date picker marks federal holidays and every item's due date (`MarkDate`); a compact `Toggle` switch (Flagged for review) on the detail panel's Save row; a `SecretBox` (the item's access code) |
 
-Appearance in the sidebar switches palettes.
+Appearance in the sidebar switches palettes. The demo opens on the kit's splash screen
+(`BuildSplash`), which opens the main window and closes; `HideAccessSplash` replaces
+Access's own splash with `KitDemo.bmp`.
 
 ## Build and open
 
@@ -30,6 +32,11 @@ Access dialog it meets (a compile error, an error message) instead of hanging.
 Click through every page in one light palette (Navy) and one dark palette (Midnight),
 watching for Visual Basic error dialogs as well as the error log:
 
+- Splash: opening `KitDemo.accdb` shows no Access logo, then the splash centred in the
+  palette's sidebar color with the icon, "Kit Demo", the subtitle, "Build <stamp>" on the
+  right and a status line; it closes once the main window is up. The splash takes the palette
+  saved last, so to see it in another palette pick one in Appearance, then close and reopen
+  the file.
 - Cards: corners are round in every palette; hovering the buttons and cards doesn't flicker.
 - Progress: 0 shows only the track, 37 is a third full, 100 is full.
 - Input box (square card): Ask opens with "Sailor" selected, OK reports the text (an
