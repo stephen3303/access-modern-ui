@@ -662,9 +662,23 @@ Private Function PillImage(c As Control) As Control
 End Function
 
 ' Blue left accent bar used beside section titles in the dark theme.
-Public Sub AccentBar(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal h As Long, Optional ByVal parentCtl As String = "")
-    DarkOnly Box(nm, x, y, px(3), h, CLR_PRIMARY, -1, acDetail, parentCtl)
-End Sub
+Public Function AccentBar(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal h As Long, _
+        Optional ByVal parentCtl As String = "") As Control
+    Dim c As Control
+    Set c = Box(nm, x, y, px(3), h, CLR_PRIMARY, -1, acDetail, parentCtl)
+    DarkOnly c
+    Set AccentBar = c
+End Function
+
+' AccentBar beside a title label whose top is at labelTop, in size-pt text:
+' it spans the text itself (0.3 to 1.1 of the font's pixel height below the
+' label's top, cap tops to baseline), not the label or a subtitle under it.
+Public Function TitleBar(ByVal nm As String, ByVal x As Long, ByVal labelTop As Long, ByVal size As Integer, _
+        Optional ByVal parentCtl As String = "") As Control
+    Dim fpx As Long
+    fpx = (size * 4 + 1) \ 3                  ' points to pixels at 96 dpi
+    Set TitleBar = AccentBar(nm, x, labelTop + px((fpx * 3) \ 10), px((fpx * 8) \ 10), parentCtl)
+End Function
 
 ' Hidden in light palettes; ThemeForm shows it in dark ones.
 Public Sub DarkOnly(c As Control)
@@ -733,8 +747,7 @@ Public Sub Card(ByVal nm As String, ByVal title As String, ByVal x As Long, ByVa
         Next
     End If
     If Len(title) > 0 Then
-        Set c = Box("bar" & nm, x + px(8), y + px(10), px(3), px(20), CLR_PRIMARY, -1, acDetail, parentCtl)
-        DarkOnly c
+        Set c = TitleBar("bar" & nm, x + px(8), y + px(10), 10, parentCtl)
         Anchor c, IIf(hAnchor = 1, 1, 0), IIf(vAnchor = 1, 1, 0)
         Set c = Lbl("lbl" & nm & "Hdr", title, x + px(14), y + px(10), w - px(28), px(20), 10, True, CLR_FG, acDetail, parentCtl)
         Anchor c, hAnchor, IIf(vAnchor = 1, 1, 0)
@@ -766,7 +779,7 @@ End Function
 ' tip: explanation shown by a "?" beside the title (TitleTip). lblSubtitle is
 ' filled at run time by pages that show context under the title.
 Public Sub PageHeader(ByVal title As String, ByVal tip As String, Optional ByVal x As Long = 480)
-    AccentBar "barTitle", x - px(14), px(24), px(48)
+    TitleBar "barTitle", x - px(14), px(22), 15
     Lbl "lblTitle", title, x, px(22), px(560), px(30), 15, True
     Lbl "lblSubtitle", "", x, px(52), px(700), px(20), 9, False, CLR_MUTED_FG
     If Len(tip) > 0 Then TitleTip "tipTitle", tip, Replace(title, "&&", "&"), x, px(22), px(30), 15, ""

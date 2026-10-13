@@ -342,8 +342,10 @@ End Sub
   - `Progress nm, expr, x, y, w, h`: a rounded progress capsule (section 6.6).
 - **Page furniture**
   - `PageHeader title, tip`: 15pt bold title at y = 22px, 9pt muted subtitle at
-    y = 52px, a "?" tip and a dark-only accent bar.
-  - `TitleTip`, `AccentBar`/`DarkOnly`
+    y = 52px, a "?" tip and a dark-only accent bar the height of the title's text
+    (it does not reach the subtitle).
+  - `TitleTip`, `AccentBar`/`DarkOnly`, `TitleBar` (an accent bar sized to a title's
+    font: cap tops to baseline)
   - `ContextBanner`: inset box with an icon, name, subline and optional pill.
 - **Tables**
   - `BuildGrid name, cols, w, [rowLines], [back]`: a styled read-only table. It is a
@@ -477,7 +479,7 @@ Write app-specific helpers next to the builds that use them. Examples:
   - Badge variants (shadcn): `success`, `warning`, `info`, `destructive`, `default`,
     `outline`, `secondary`. `BadgeColors(variant)` returns `Array(back, fore)`.
 - **Cards**: `Card` draws a `CLR_SURFACE` box with a 1px `CLR_BORDER` border, a 10pt 600
-  title at (x + 14px, y + 10px) and a dark-only 3px accent bar beside it. Its corners
+  title at (x + 14px, y + 10px) and a dark-only 3px accent bar beside it, the height of the title's text. Its corners
   are rounded (12px): each corner is a small image control showing `CardPng(fill,
   border, back, r, corner)`, laid over the box's square corner. `back` is the color the
   card sits on (default `CLR_BG`), which fills outside the arc. The box itself has no
