@@ -17,6 +17,8 @@ Option Explicit
 ' ignored and the table keeps its design.
 
 Private Const SETTINGS_KEY As String = "Columns"
+' Width GridFit leaves for the table's vertical scroll bar (modKitUI SCROLL_W).
+Private Const SCROLL_W As Long = 300
 
 ' The table the open dlgColumns is for (ChooseGridColumns), and the layout
 ' chosen in it ("" while none is).
@@ -50,7 +52,7 @@ End Sub
 ' and for a table not built with fit:=True.
 Public Sub SetGridColumns(sf As Control, ByVal prefix As String, ByVal layout As String)
     Dim g As Form, host As Form, order() As Long, shown() As Boolean, n As Long, k As Long
-    Dim c As Control, t() As String, x As Long, w As Long, hiddenW As Long, design As Long
+    Dim c As Control, t() As String, x As Long, w As Long, allW As Long, design As Long
     Set g = sf.Form
     Set host = sf.Parent
     CheckFitGrid g
@@ -73,15 +75,17 @@ Public Sub SetGridColumns(sf As Control, ByVal prefix As String, ByVal layout As
         Else
             c.Tag = t(0) & "|" & px(8) & "|" & w
             SetCaption host, prefix, order(k), px(8), w, False
-            hiddenW = hiddenW + w
         End If
+        allW = allW + w
         SetVisible c, shown(k)
     Next
-    ' The table's Tag "grid:<width>" is the width GridFit scales from. Taking
-    ' the hidden columns off it lets the shown ones fill the table; the design
-    ' width is kept after a "|" (GridFit reads only the number before it).
+    ' The table's Tag "grid:<width>" is the width GridFit scales from. Shrink
+    ' it so the shown columns (x - px(8) wide) take the share of the table
+    ' that all the columns take in the design, scroll bar aside: then they
+    ' fill the table as far as the full set would. The design width is kept
+    ' after a "|" (GridFit reads only the number before it).
     design = DesignWidth(g)
-    g.Tag = "grid:" & (design - hiddenW) & "|" & design
+    g.Tag = "grid:" & (SCROLL_W + CLng(CDbl(design - SCROLL_W) * x / (allW + px(8)))) & "|" & design
     GridFit sf, prefix
 End Sub
 

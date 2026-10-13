@@ -185,8 +185,12 @@ Public Function TestKit(ByVal root As String) As String
     DoCmd.OpenForm "frmTestFit"
     Set host = Forms("frmTestFit"): Set sf = host.sfFit
     sf.Form.RecordSource = "SELECT * FROM test_rows ORDER BY id"
+    SetGridColumns sf, "fit", DefaultLayout(3)
+    Set grid = sf.Form
+    height = grid.txtCol2.Left + grid.txtCol2.Width          ' right edge of all the columns
     SetGridColumns sf, "fit", "2,0,1h"
     Set grid = sf.Form
+    Check Abs(grid.txtCol0.Left + grid.txtCol0.Width - height) <= px(2), "Shown columns did not fill the table as far as all of them"
     Check grid.txtCol2.Left < grid.txtCol0.Left, "Moved column did not move"
     Check Not grid.txtCol1.Visible And Not host.fit1.Visible, "Hidden column or caption still shows"
     Check Abs(host.fit2.Left - (sf.Left + grid.txtCol2.Left)) <= 15, "Caption did not follow its column"
