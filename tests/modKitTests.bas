@@ -25,8 +25,8 @@ Public Function TestKit(ByVal root As String) As String
     NewForm "", 0, px(700), px(700)
     GridHeaders "head", cols, px(24), px(60)
     GridHeaders "sortHead", cols, px(24), px(40), sortSf:="sfRows"
-    GridHeaders "fillHead", cols, px(24), px(710), w:=px(600)
-    GridHeaders "fitHead", cols, px(24), px(730), w:=px(600), fit:=True
+    GridHeaders "fillHead", cols, px(24), px(770), w:=px(600)
+    GridHeaders "fitHead", cols, px(24), px(790), w:=px(600), fit:=True
     SubF "sfRows", "Form.subTest", px(24), px(82), px(600), px(180)
     SubF "sfReuse", "Form.subTest", px(24), px(320), px(600), px(180)
     SubF "sfName", "Form.subTestName", px(24), px(700), px(300), px(50)
