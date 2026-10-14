@@ -14,9 +14,11 @@ kit/forms/dlgAppearance.vba   code-behind for the palette picker
 kit/forms/dlgDatePick.vba     code-behind for the date picker (BuildDatePicker)
 kit/forms/dlgMessage.vba      code-behind for the message dialog (BuildMessageDialog, KitMsgBox)
 kit/forms/dlgToast.vba        code-behind for the toast (BuildToast, KitToast)
+kit/forms/frmSplash.vba       code-behind for the splash screen (BuildSplash)
 kit/forms/subGrid.vba         code-behind for BuildGrid tables
 tools/make_themes.py          generates the build palette and the palette modules, checks contrast
 tools/AccessWatch.ps1         makes a build script report Visual Basic and Access dialogs instead of hanging
+tools/VbaLineNumbers.ps1      numbers the build copy of the code so the error log names the failing line
 examples/build.ps1            build script that loads the kit, then the app, then calls BuildAll
 examples/modules/             modErrors (error handler and log), Build_dlgAppearance
 examples/palette/             make_themes.py output for the 8 shipped palettes
@@ -36,22 +38,23 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 | modUIKit | Build-time form and control builders (catalog below) |
 | modDarkMode | Palette engine: `ThemeForm` repaints each form on open (and, on Windows 11, colors pop-up title bars and borders through `ThemeTitleBar`), `Th()` gives runtime colors, and `SetPalette`/`ShowAppearance` switch palettes |
 | modPng | Anti-aliased PNGs for rounded shapes: `PillPng` (pills and badges), `CardPng` (card corners), `ProgressPng` (progress capsules), `ColumnPillPng` (uniform-width pills in a table column), `RoundedCardPng` (whole resizable card backgrounds), `TogglePng` and `RingPng` (toggle switch track and focus ring), cached in `%LOCALAPPDATA%\<APP_NAME>\pills` |
-| modKitUI | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSwitch`, `ToggleFocus`, `KitMsgBox`, `KitToast`, `CheckRequired`, `SetCount`, `StyleChip` (catalog below) |
+| modKitUI | Run-time page helpers: `GridFit`, `GridHighlight`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSwitch`, `ToggleFocus`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `KitToast`, `CheckRequired`, `SplashStatus`, `SetCount`, `StyleChip` (catalog below) |
 | modGridOut | `PrintGrid` and `ExportGrid`: print or export a table as the user sees it |
 | modCsv | UTF-8 text files, RFC 4180 CSV read/write, query-to-CSV export |
 | modCrypto | SHA-256 through Windows CNG, salted password hashing |
 | modKitUtil | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `CenterOnApp`, `SetVisible`, `SetEnabled` |
 | modKitUpdate | `CheckForUpdate current, folder, [advice]`: at startup, tells the user when the release folder's `version.txt` names a newer version (`ReleasedVersion`, `CompareVersions`) |
+| modBackdrop | `DimApp`/`UndimApp`: dims the app behind a modal dialog, like a web modal (`RunDialog` and `KitMsgBox` use it) |
 
 ## Starting a new app with the kit
 
-1. Copy `kit\` into the app's `access\` folder, and `examples\build.ps1` next to it. Copy `tools\make_themes.py` to `access\tools\`.
+1. Copy `kit\` into the app's `access\` folder, and `examples\build.ps1` and `tools\VbaLineNumbers.ps1` next to it. Copy `tools\make_themes.py` to `access\tools\`.
 2. In `make_themes.py`:
    - Set the color roles (`P`) and the palettes (`PALETTES`).
    - Set `FIXED` to the colors that must never change with the palette.
    - Run the script. It writes `src\themes\light\modTheme.bas` and `src\modules\modPalette.bas`, and prints a contrast check.
 3. In the app's own modules, provide the names the kit calls (listed below).
-4. For the palette picker, copy `examples\modules\modBuildAppearance.bas` to `src\modules` and `kit\forms\dlgAppearance.vba` to `src\forms`. For date fields, copy `kit\forms\dlgDatePick.vba` to `src\forms` too, and for messages copy `kit\forms\dlgMessage.vba` and `kit\forms\dlgToast.vba`: `SaveForm` attaches code-behind from `src\forms` only, so without them `dlgDatePick`, `dlgMessage` and `dlgToast` build with no code.
+4. For the palette picker, copy `examples\modules\modBuildAppearance.bas` to `src\modules` and `kit\forms\dlgAppearance.vba` to `src\forms`. For date fields, copy `kit\forms\dlgDatePick.vba` to `src\forms` too, for messages copy `kit\forms\dlgMessage.vba` and `kit\forms\dlgToast.vba`, and for the splash screen copy `kit\forms\frmSplash.vba`: `SaveForm` attaches code-behind from `src\forms` only, so without them `dlgDatePick`, `dlgMessage`, `dlgToast` and `frmSplash` build with no code.
 5. Write a `BuildAll` entry point that calls `UseBuildPalette`, sets `g_SrcRoot`, and builds the forms. The design guide (section 2) describes what it does.
 
 ### What the app must provide
@@ -60,7 +63,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 |---|---|---|
 | `CLR_*` roles, `FONT_UI`, `THEME_DARK` | modUIKit | modTheme (generated) |
 | `PALETTE_COUNT`, `PaletteKey`, `PaletteName`, `PaletteIsDark`, `PaletteSwatch`, `PaletteOf` | modDarkMode, dlgAppearance | modPalette (generated) |
-| `APP_NAME` | modPng, modKitUpdate | modGlobals |
+| `APP_NAME` | modPng, modKitUpdate, `BuildSplash` | modGlobals |
 | `HandleError`, `LogError`, `RaiseAgain` | modDarkMode, modCsv, modKitUI, modKitUpdate | modErrors (`examples/modules`) |
 | `MeasureText(s, size, weight)` (Segoe UI text width in twips; size in points, weight 400 normal / 700 bold) | modTextUI, modPng, `TitleTip`/`PageHeader` | modWrap |
 | `ShowTip(frm, nm)` | the "?" marks from `TitleTip` | modUI |
@@ -69,6 +72,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 | `dlgDatePick` form | `PickDate` (`DateBox` buttons) | call the kit's `BuildDatePicker` with the app's dialogs + copy `kit\forms\dlgDatePick.vba` to src\forms |
 | `dlgMessage` form | `KitMsgBox` (the app's `Notify` and `HandleError`) | call the kit's `BuildMessageDialog` with the app's dialogs + copy `kit\forms\dlgMessage.vba` to src\forms |
 | `dlgToast` form | `KitToast` | call the kit's `BuildToast` with the app's dialogs + copy `kit\forms\dlgToast.vba` to src\forms |
+| `frmSplash` form (optional) | the startup form, `SplashStatus` | call the kit's `BuildSplash` + copy `kit\forms\frmSplash.vba` to src\forms; set `StartUpForm` to `frmSplash` |
 | `BandLabels()`, `BandBack(label)` | `BandCF` | modUI |
 | `BadgeColors(variant)` (returns `Array(back, fore)`) | `BadgeCF`, `BuildGrid` | modUI |
 | `StatusVariant(value)` (a Variant, may be Null; returns a badge variant or "") | `BuildGrid` pill columns (`p`) | modUI |
@@ -109,6 +113,8 @@ Control heights and font sizes never scale. `TabStrip` and `LayoutFilterRow` alr
 | `NewDialog caption, w, h` | Modal pop-up dialog that sizes to its design. Its code-behind's `Form_Load` should end with `CenterOnApp Me` (the builder can't add it). |
 | `NewReport recSrc, w` | Start a report. Reports use the `PRINT_` colors and are never repainted. |
 | `SaveForm name [, codeName]` | Save under the final name and attach `src\forms\<name>.vba` as the code-behind |
+| `BuildSplash [nextForm, subtitle, glyph]` | Builds `frmSplash`, a 480 x 280px splash screen (taller at a roomier `SetSpacing`) in the palette's sidebar colors: an MDL2 icon glyph, `APP_NAME`, a subtitle, the version (database property `AppVersion`, else `AppBuild`) and a status line. Make it the `StartUpForm`. It opens `nextForm` (default `frmMain`), whose Load does the start-up work under it, then closes, after at least 1.2 seconds. |
+| `HideAccessSplash` | Writes a 1 x 1 pixel `<database name>.bmp` next to the front end, which Access shows in place of its own splash. Call it last in BuildAll's startup step; ignore the .bmp in git and ship it with the front end. |
 | `Trace s` / `BuildTrace` | Record build steps, so a failed build reports where it stopped |
 
 **Controls**
@@ -121,6 +127,7 @@ Control heights and font sizes never scale. `TabStrip` and `LayoutFilterRow` alr
 | `BuildMessageDialog` | Builds `dlgMessage`, the dialog `KitMsgBox` opens. Call it once with the app's dialogs. |
 | `BuildToast` | Builds `dlgToast`, the toast `KitToast` shows. Call it once with the app's dialogs. |
 | `DateBox nm, src, x, y, h` | Date entry: a 120px text box (dd mmm yyyy, left-aligned) and a calendar button `cal_<nm>` 4px to its right that opens the date picker. The pair is `DATEFIELD_W` (154px) wide. |
+| `SecretBox nm, src, x, y, w, h` | Password or other sensitive entry: a text box that shows asterisks (input mask `Password`) and an eye button `eye_<nm>` 4px to its right, 30px wide, that shows or hides the text. The pair is `w` wide. Masking is display only, so hash passwords (`HashPassword`) before saving. Single-record forms only: on a continuous form it raises error 5. |
 | `RO nm, src, x, y, w, h` | Read-only text: no border, not a tab stop |
 | `Cbo` / `Lst` / `Chk` | Combo box (with the focus ring), list box, check box with its label |
 | `Toggle nm, src, x, y [, w, h, onChange]` | On/off switch for a yes/no field `src` ("" for unbound): a 44 x 24px track, `CLR_PRIMARY` with the knob right when on, `CLR_MUTED_FG` with it left when off, the knob `CLR_SURFACE`. Click it, or Tab to it and press Space. The value is the hidden check box `<nm>_val`; `onChange` names a Public Sub in the form's code-behind called after each change. Hide it with `SetVisible` on `<nm>`; `SetEnabled` on `<nm>` stops clicks but doesn't dim it. Single forms only (the focus ring would show on every row of a continuous form). |
@@ -149,7 +156,7 @@ Control heights and font sizes never scale. `TabStrip` and `LayoutFilterRow` alr
 
 | Builder | What it does |
 |---|---|
-| `BuildGrid name, cols, w [, rowLines, back, zebra, rowPx, fit]` | Styled read-only table subform. Columns are `"field\|caption\|width px\|options"`; options `r` right, `c` center, `b` bold, `m` muted, `p` status pill (`StatusVariant`), `w` wrap onto `rowLines` lines instead of cutting text off. `zebra` fills every other row, `rowPx` sets the row height, `fit` lets `GridFit` scale the columns. Clicking a row selects and opens it: no open buttons. |
+| `BuildGrid name, cols, w [, rowLines, back, zebra, rowPx, fit]` | Styled read-only table subform. Columns are `"field\|caption\|width px\|options"`; options `r` right, `c` center, `b` bold, `m` muted, `p` status pill (`StatusVariant`), `w` wrap onto `rowLines` lines instead of cutting text off, `s` mark the text matching the page's search (`GridHighlight`). `zebra` fills every other row, `rowPx` sets the row height, `fit` lets `GridFit` scale the columns. Clicking a row selects and opens it: no open buttons. |
 | `GridHeaders prefix, cols, x, y [, parentCtl, band, w, sortSf]` | Column captions above a `BuildGrid` table. `band:=True` puts them on a filled strip. `sortSf` (the table's subform control) makes them sort the table on click, again to reverse, with an up/down arrow; a fifth column part names a different sort field. |
 | `CF c, expr, back, fore [, bold]` | Expression-based conditional format |
 | `BadgeCF c, field, value, variant, ...` | Rounded badge colors keyed on a status field |
@@ -164,11 +171,12 @@ Control heights and font sizes never scale. `TabStrip` and `LayoutFilterRow` alr
 | `VCenter` | Vertically center single-line text |
 | `Ev c, "OnClick", ...` | Point event properties at the form module's handlers |
 
-**Run time** (modKitUI, modGridOut, modKitUtil)
+**Run time** (modKitUI, modGridOut, modKitUtil, modBackdrop)
 
 | Helper | What it does |
 |---|---|
 | `GridFit sf [, prefix]` | Scale a `fit` table's columns, and its `GridHeaders` captions, to the subform's width. Call it from the host's `Form_Resize`. |
+| `GridHighlight sf, term` | Mark `term` in a table's `s` columns, in `CLR_WARNING_FG` on `CLR_WARNING_BG`, ignoring case. Call it with the search box text whenever the search changes; `""` clears the marks. Print and export show the plain text. |
 | `GridScroll g` | A `BuildGrid` table's OnCurrent (set by `BuildGrid`): show its vertical scroll bar only when its rows overflow |
 | `GridScrollAll frm` | `GridScroll` for every table on a window and the forms in it. Call it from the window's `Form_Resize`. |
 | `GridSort host, sfName, prefix, col` | A sortable `GridHeaders` caption's click (set by `GridHeaders ..., sortSf`): sort the table by that column (ties in id order), or reverse it, and move the arrow; a paginated table goes back to page 1. Call it to sort in code so the arrow matches. |
@@ -176,14 +184,20 @@ Control heights and font sizes never scale. `TabStrip` and `LayoutFilterRow` alr
 | `ShowDetail host, detailCtl, formName, where [, emptyCtl]` | List/detail pages: show the matching record in the detail subform, saving a changed one first, and hide the empty state |
 | `ClearDetail host, detailCtl [, emptyCtl]` | Empty the detail subform and show the empty state |
 | `PickDate frm, nm` | A `DateBox` calendar button's click: open the kit's date picker (`dlgDatePick`) for box `nm` and write the chosen date into it (not while the box is disabled or locked, or its form is read-only) |
+| `SplashStatus msg` | Show what start-up is doing on the splash screen's status line, "Opening the data file...". Does nothing once the splash has closed. |
+| `CloseSplash` | Close the splash screen now. `KitMsgBox` calls it, so a start-up message never opens behind the splash; call it yourself before a plain `MsgBox` or a file dialog at start-up. |
 | `ToggleSwitch frm, nm` / `ToggleFocus frm, nm, hasFocus` | A `Toggle`'s click and focus handlers (set by the builder): flip the value and call `onChange` (not while its value is locked or its form is read-only); show the switch's focus ring and take an input's `FocusRing` off |
 | `MarkDate d, label` / `ClearMarkedDates` | Mark an app date (a deadline, a drill) on the date picker with a tooltip label; a second label on the same day is added after "; ". Set marks before the picker opens, for example at startup from the app's deadlines table. |
 | `FederalHoliday d` | The US federal holiday on day `d`, on its observed day (a Saturday holiday on Friday, a Sunday one on Monday, "(observed)" added), or "". The date picker marks these on its own. |
+| `ToggleSecret frm, nm` | A `SecretBox` eye button's click: show box `nm`'s text if hidden, hide it if shown, and put the focus back in the box |
+| `HideSecrets frm` | Hide every `SecretBox` on a form again. Call it from the form's `Form_Current` so the next record opens hidden. |
 | `FocusRing frm, nm, isOn` | The GotFocus (`True`) and LostFocus (`False`) that `Txt` and `Cbo` set: a `CLR_PRIMARY` border on the field being typed in, and the border it had before (a required field's red outline too) when it loses the focus. Only the border color changes, so nothing moves. Not on locked fields, read-only forms or continuous-form rows. One field is ringed at a time. A form that handles a kit input's GotFocus or LostFocus itself calls it from that handler. |
 | `FocusRingEnter frm, nm` / `FocusRingClear` | The Enter and Exit that `SubF` sets, so a field inside a subform loses its ring when the focus leaves the subform and gets it back on return (Access fires no LostFocus or GotFocus for it then). `FocusRingClear` is also the GotFocus of `Btn`, `Chk`, `Lst` and the focus sink. |
 | `KitMsgBox msg [, style, title]` | `MsgBox` in the kit's look, centred over Access (a `MsgBox` is centred on the monitor, so on a large or second screen it opens outside Access). Takes OK, OK/Cancel, Yes/No and Yes/No/Cancel, the four icons and `vbDefaultButton2`/`3`, and returns what `MsgBox` would. Anything else, or a dialog that isn't built yet, falls back to `MsgBox`. Use it in the app's `Notify` and `HandleError`. |
 | `CheckRequired frm, fields` | Save check: outline every empty required input in `CLR_DESTRUCTIVE`, list them in one `KitMsgBox` and focus the first. `fields` is `"txtName=Item;txtOwner=Owner"` in tab order. Returns True when all are filled; a filled input gets its normal border back. `RequiredMissing` does the same without the message and returns the list. |
 | `KitToast msg [, variant, ms]` | A message that doesn't interrupt: a toast in the bottom-right corner of `frmMain` that fades after `ms` milliseconds (default 3000) without taking the focus. `variant` is `success`, `info` (default), `warning` or `destructive` and sets the icon and accent bar. Up to 3 lines; a new toast replaces the one showing; a click closes it. Use it to confirm what the user just did ("Saved"); anything they must read or answer goes in `KitMsgBox`. If `dlgToast` isn't built, the message goes to the status bar. |
+| `RunDialog(name [, openArgs, dimBehind])` | Open a modal dialog and return True when it set `TempVars("DialogResult") = "ok"`. The app behind it is dimmed while it is open (pass `dimBehind:=False` to skip), and the dim comes off when it closes or fails to open. |
+| `DimApp` / `UndimApp` | Dim the Access window with a see-through layer of `CLR_SIDEBAR`, and remove it. Pair every `DimApp` with one `UndimApp`, on the error path too; nested dialogs share one layer. Only needed for a modal form opened without `RunDialog` or `KitMsgBox`. Dialogs built with `NewDialog` call `BackdropOnClose` as they close, which removes a dim a VBA reset left behind. |
 | `SetCount ctl, n` | Show a count after a tab or chip caption, "Name (n)" |
 | `StyleChip lbl, isOn [, n]` | Filter chip on or off, with an optional count |
 | `SetVisible c, v` | Show or hide a control, moving the focus away when it or a control inside it has the focus (avoids error 2165) |

@@ -19,6 +19,11 @@ Public Const CARD_RADIUS As Long = 12
 ' field with its 30px calendar button 4px to the right (154 px).
 Public Const DATEBOX_W As Long = 1800
 Public Const DATEFIELD_W As Long = 2310
+' SecretBox: the input mask that hides its text, and the eye button's
+' glyphs (Segoe MDL2 Assets View and Hide) for "show" and "hide".
+Public Const SECRET_MASK As String = "Password"
+Public Const EYE_SHOW As Long = &HE890&
+Public Const EYE_HIDE As Long = &HED1A&
 ' Badge variants a status pill can take (BadgeColors).
 Private Const BADGE_VARIANTS As String = "success,warning,info,destructive,default,outline,secondary"
 ' Spacing tokens (CSS px, guide 6.4) for Sp(), so a layout written with them
@@ -176,6 +181,7 @@ Public Sub NewDialog(ByVal caption As String, ByVal w As Long, ByVal h As Long)
         .CloseButton = True
         .Section(acDetail).BackColor = CLR_DIALOG
         .Section(acDetail).AlternateBackColor = CLR_DIALOG
+        .OnClose = "=BackdropOnClose()"    ' clears a dim a VBA reset left (modBackdrop)
     End With
 End Sub
 
@@ -329,6 +335,31 @@ Public Function DateBox(ByVal nm As String, ByVal src As String, ByVal x As Long
     Set DateBox = c
 End Function
 
+' Sensitive entry (passwords, PINs, SSNs): a text box nm bound to src that
+' shows its text as asterisks (InputMask "Password", which also stops it
+' being copied), and an eye button eye_<nm> 4px to its right, 30px wide and h
+' tall like the box, that shows or hides the text (ToggleSecret). The pair
+' takes w; the box gets w less 34px. Masking is display only: the field
+' still stores what was typed, so hash passwords before saving them
+' (HashPassword). Single-record forms only: a continuous form shares one
+' InputMask across its rows, so one eye would show every row's value.
+' Returns the text box.
+Public Function SecretBox(ByVal nm As String, ByVal src As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, _
+        ByVal h As Long, Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control
+    Dim c As Control, b As Control
+    If F.DefaultView <> 0 Then Err.Raise 5, , "SecretBox " & nm & " needs a single-record form: one eye would show every row"
+    Set c = Txt(nm, src, x, y, w - px(34), h, 10, sec, parentCtl)
+    c.InputMask = SECRET_MASK
+    Set b = Btn("eye_" & nm, ChrW(EYE_SHOW), x + w - px(30), y, px(30), h, "outline", sec, parentCtl)
+    b.FontName = "Segoe MDL2 Assets"
+    b.FontSize = 10
+    b.FontWeight = 400
+    b.TabStop = False
+    b.ControlTipText = "Show"
+    b.OnClick = "=ToggleSecret([Form],""" & nm & """)"
+    Set SecretBox = c
+End Function
+
 ' The date picker a DateBox's calendar button opens (dlgDatePick, code in
 ' forms\dlgDatePick.vba): previous and next month arrows around the month's
 ' name, the weekday initials, six weeks of day cells (34 x 30px on a 34 x 32
@@ -429,6 +460,86 @@ Public Sub BuildToast()
     Rule "ruleLeft", 15, 0, 0, h, CLR_INPUT_BORDER
     Rule "ruleRight", w, 0, 0, h, CLR_INPUT_BORDER
     SaveForm "dlgToast"
+End Sub
+
+' Splash screen frmSplash, shown while the app starts: the app's icon glyph,
+' APP_NAME, a subtitle, its version (database property AppVersion, else the
+' AppBuild stamp) and a status line (SplashStatus), on the sidebar color of
+' the user's palette (ThemeForm repaints it). Make it the StartUpForm. Its
+' code-behind (kit\forms\frmSplash.vba) opens nextForm, whose Load does the
+' app's start-up work under the splash, then closes. Call it once with the
+' app's dialogs, and HideAccessSplash for Access's own splash.
+' glyph: a Segoe MDL2 Assets character; default ChrW(&HE80F), home.
+Public Sub BuildSplash(Optional ByVal nextForm As String = "frmMain", Optional ByVal subtitle As String = "", _
+        Optional ByVal glyph As String = "")
+    Dim c As Control, w As Long, h As Long, pad As Long, y As Long
+    ' 480 x 280px at the default spacing. Padding and gaps follow SetSpacing,
+    ' so a roomier scale makes the splash taller rather than overlapping the
+    ' subtitle and the footer.
+    w = px(480): pad = Sp(SP_PAGE)
+    h = pad + px(48) + Sp(16) + px(36) + Sp(SP_ITEM_GAP) + px(20) _
+        + Sp(SP_DIALOG) + Sp(SP_ROW_GAP) + px(1) + px(18) + pad
+    If h < px(280) Then h = px(280)
+    NewForm "", 0, w, h
+    With F
+        .Caption = APP_NAME
+        .Tag = nextForm                             ' read by frmSplash.vba
+        .PopUp = True                               ' stays over the window nextForm opens in
+        .Modal = False
+        .BorderStyle = 0
+        .AutoCenter = True
+        .AutoResize = True
+        .ControlBox = False
+        .MinMaxButtons = 0
+        .CloseButton = False
+        .ShortcutMenu = False
+        .Section(acDetail).BackColor = CLR_SIDEBAR
+        .Section(acDetail).AlternateBackColor = CLR_SIDEBAR
+    End With
+    Ev F, "OnLoad", "OnTimer"
+    If Len(glyph) = 0 Then glyph = ChrW(&HE80F)
+    Set c = Lbl("lblSplashIcon", glyph, pad, pad, px(48), px(48), 28, False, CLR_WHITE)
+    c.FontName = "Segoe MDL2 Assets"
+    y = pad + px(48) + Sp(16)
+    Lbl "lblSplashName", APP_NAME, pad, y, w - 2 * pad, px(36), 20, True, CLR_WHITE
+    y = y + px(36) + Sp(SP_ITEM_GAP)
+    Lbl "lblSplashSub", subtitle, pad, y, w - 2 * pad, px(20), 10, False, CLR_NAV_FG
+    ' Footer: a hairline, then the status line left and the version right.
+    y = h - pad - px(18)
+    Rule "lnSplash", pad, y - Sp(SP_ROW_GAP) - px(1), w - 2 * pad, 0, CLR_SIDEBAR_LINE
+    Lbl "lblSplashStatus", "Starting" & ChrW(8230), pad, y, w - 2 * pad - px(180) - Sp(SP_ROW_GAP), px(18), 9, False, CLR_NAV_MUTED
+    Set c = Lbl("lblSplashVersion", "", w - pad - px(180), y, px(180), px(18), 9, False, CLR_NAV_MUTED)
+    c.TextAlign = 3
+    SaveForm "frmSplash"
+End Sub
+
+' Hide Access's own splash screen. When a database is opened, Access shows
+' <database name>.bmp from the database's folder in place of its logo, so
+' this writes a 1 x 1 pixel bitmap there (58 bytes, rewritten each build).
+' Call it from BuildAll's startup step and ship the .bmp with the front end.
+Public Sub HideAccessSplash()
+    Dim path As String, b(57) As Byte, i As Long, fh As Integer
+    path = CurrentProject.Name
+    If InStrRev(path, ".") > 0 Then path = Left$(path, InStrRev(path, ".") - 1)
+    path = CurrentProject.Path & "\" & path & ".bmp"
+    ' BITMAPFILEHEADER (14 bytes) + BITMAPINFOHEADER (40) + one 24-bit pixel
+    ' padded to 4 bytes. Unset bytes stay 0; the pixel is black.
+    b(0) = 66: b(1) = 77                ' "BM"
+    b(2) = 58                           ' file size
+    b(10) = 54                          ' offset of the pixel data
+    b(14) = 40                          ' info header size
+    b(18) = 1: b(22) = 1                ' width 1, height 1
+    b(26) = 1                           ' planes
+    b(28) = 24                          ' bits per pixel
+    b(34) = 4                           ' pixel data size
+    For i = 38 To 42 Step 4
+        b(i) = &H13: b(i + 1) = &HB     ' 2835 pixels per metre (72 dpi)
+    Next
+    If FileExists(path) Then Kill path
+    fh = FreeFile
+    Open path For Binary Access Write As #fh
+    Put #fh, , b
+    Close #fh
 End Sub
 
 ' Background box for a continuous-form row: paints (with conditional colors)
@@ -685,7 +796,8 @@ End Function
 ' options: "r" right-aligned, "c" centered, "b" bold, "m" muted, "p" a
 ' rounded status pill colored by the app's StatusVariant(value), "w" wraps
 ' onto rowLines lines (rather than cutting text off mid-word; text longer
-' than that stops at the end of the last line). The last
+' than that stops at the end of the last line), "s" marks the text matching
+' the page's search box (GridHighlight) in the highlight colors. The last
 ' column takes the rest of the width (and stretches with the form); with
 ' rowLines > 1 it always wraps. back is the color of what the
 ' table sits on. zebra fills every other row with CLR_ROW2. rowPx sets the
@@ -716,6 +828,8 @@ Public Sub BuildGrid(ByVal finalName As String, ByVal cols As Variant, ByVal w A
     ' the selected row's condition still fills it.
     If zebra Then c.BackStyle = 0
     Set c = RO("txtSel", "", 0, 0, px(4), px(4)): c.Visible = False
+    ' The search term GridHighlight sets, which the "s" columns mark.
+    Set c = RO("txtFind", "", 0, 0, px(4), px(4)): c.Visible = False
     x = px(8)
     For i = 0 To UBound(cols)
         p = Split(cols(i), "|")
@@ -740,6 +854,7 @@ Public Sub BuildGrid(ByVal finalName As String, ByVal cols As Variant, ByVal w A
             If wrap Then c.TopMargin = 0
             If InStr(opts, "r") > 0 Then c.TextAlign = 3
             If InStr(opts, "c") > 0 Then c.TextAlign = 2
+            If InStr(opts, "s") > 0 Then SearchCol c, p(0), i
         End If
         c.Tag = p(1) & "|" & x & "|" & cw
         c.OnClick = "=RowClick()"
@@ -770,6 +885,18 @@ Private Sub PillCol(c As Control, ByVal field As String)
         CF c, "StatusVariant(" & ref & ")=""" & v & """", col(0), col(1)
     Next
     RoundCF c, first
+End Sub
+
+' A grid column that marks the search term (option "s"): a rich text cell
+' showing GridMark([txtSrc<i>], [txtFind]), where hidden txtSrc<i> is bound to
+' the column's field. The field goes through a control because a bare field
+' reference in an expression can bind to a form property instead ([name] is
+' the form's Name). modGridOut prints and exports txtSrc<i>'s source.
+Private Sub SearchCol(c As Control, ByVal field As String, ByVal i As Long)
+    Dim src As Control
+    Set src = RO("txtSrc" & i, field, 0, 0, px(4), px(4)): src.Visible = False
+    c.ControlSource = "=GridMark([txtSrc" & i & "],[txtFind])"
+    c.TextFormat = 1                        ' acTextFormatHTMLRichText
 End Sub
 
 ' Column captions for a BuildGrid table whose subform sits at (x, y + px(22)).
