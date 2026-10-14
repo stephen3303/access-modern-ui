@@ -105,7 +105,14 @@ public static class KitReviewWin {
         return 1.0;
     }
 
-    public static int[] PrimaryScreen() { return new int[] { GetSystemMetrics(0), GetSystemMetrics(1) }; }
+    [DllImport("user32.dll")] static extern bool SystemParametersInfo(uint action, uint param, ref RECT r, uint ini);
+
+    // Width and height of the main display less the taskbar: the size a maximized window gets.
+    public static int[] WorkArea() {
+        var r = new RECT();
+        if (SystemParametersInfo(0x30, 0, ref r, 0)) return new int[] { r.R - r.L, r.B - r.T };   // SPI_GETWORKAREA
+        return new int[] { GetSystemMetrics(0), GetSystemMetrics(1) };
+    }
 
     public static int[] VirtualScreen() {
         return new int[] { GetSystemMetrics(76), GetSystemMetrics(77), GetSystemMetrics(78), GetSystemMetrics(79) };
@@ -211,6 +218,61 @@ public static class KitReviewWin {
             for (int j = 0; j < 24; j++)
                 if (b.GetPixel(r.X + r.Width * i / 24, r.Y + r.Height * j / 24).ToArgb() != first) return false;
         return true;
+    }
+}
+
+// Keeps every top-level window of the Access process off the desktop for the whole
+// session (off-screen mode), not just during a call: a startup popup such as SABER's
+// frmLogin, a dialog opened later, or one that re-centres itself on a timer. A WinEvent
+// hook moves a window the moment it is shown or moved onto the desktop; a sweep every
+// 50 ms catches anything the hook missed.
+public class KitReviewKeeper {
+    delegate void WinEventProc(IntPtr hook, uint ev, IntPtr h, int idObject, int idChild, uint thread, uint time);
+    [StructLayout(LayoutKind.Sequential)] struct MSG { public IntPtr hwnd; public uint message; public IntPtr wParam, lParam; public uint time; public int x, y; }
+    [DllImport("user32.dll")] static extern IntPtr SetWinEventHook(uint min, uint max, IntPtr mod, WinEventProc cb, uint pid, uint tid, uint flags);
+    [DllImport("user32.dll")] static extern bool UnhookWinEvent(IntPtr hook);
+    [DllImport("user32.dll")] static extern bool PeekMessage(out MSG m, IntPtr h, uint min, uint max, uint remove);
+    [DllImport("user32.dll")] static extern bool TranslateMessage(ref MSG m);
+    [DllImport("user32.dll")] static extern IntPtr DispatchMessage(ref MSG m);
+    [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr h, uint flags);
+
+    readonly uint pid; volatile bool stop; Thread thread;
+    WinEventProc proc;   // held so the delegate isn't collected while the hook is live
+    public int Moved;
+
+    public KitReviewKeeper(uint pid) { this.pid = pid; }
+    public void Start() { thread = new Thread(Loop); thread.IsBackground = true; thread.Start(); }
+    public void Stop() { stop = true; if (thread != null) thread.Join(2000); }
+
+    static bool OnDesktop(IntPtr h) {
+        var v = KitReviewWin.VirtualScreen(); var r = KitReviewWin.Rect(h);
+        return r[0] < v[0] + v[2] && r[0] + r[2] > v[0] && r[1] < v[1] + v[3] && r[1] + r[3] > v[1];
+    }
+
+    void Check(IntPtr h) {
+        if (!KitReviewWin.IsIconic(h) && OnDesktop(h)) { KitReviewWin.Park(h); Interlocked.Increment(ref Moved); }
+    }
+
+    void Loop() {
+        proc = (hook, ev, h, idObject, idChild, t, time) => {
+            if (idObject != 0 || idChild != 0 || h == IntPtr.Zero) return;   // the window itself, not a part of it
+            if (GetAncestor(h, 2) != h) return;                               // top-level windows only
+            try { Check(h); } catch { }
+        };
+        // EVENT_OBJECT_SHOW (0x8002) through EVENT_OBJECT_LOCATIONCHANGE (0x800B), for the
+        // Access process only; out of context, so delivered to this thread's message loop.
+        IntPtr hook = SetWinEventHook(0x8002, 0x800B, IntPtr.Zero, proc, pid, 0, 0x2);   // WINEVENT_SKIPOWNPROCESS
+        var sw = Stopwatch.StartNew();
+        MSG m;
+        while (!stop) {
+            while (PeekMessage(out m, IntPtr.Zero, 0, 0, 1)) { TranslateMessage(ref m); DispatchMessage(ref m); }   // PM_REMOVE
+            if (sw.ElapsedMilliseconds >= 50) {
+                sw.Reset(); sw.Start();
+                try { foreach (var h in KitReviewWin.TopWindows(pid)) Check(h); } catch { }
+            }
+            Thread.Sleep(5);
+        }
+        if (hook != IntPtr.Zero) UnhookWinEvent(hook);
     }
 }
 
@@ -415,6 +477,11 @@ function Open-ReviewApp {
         [void][KitReviewWin]::Size($hwnd, $w, $h)
         if ($Mode -eq 'offscreen') { [void][KitReviewWin]::Park($hwnd) } else { [void][KitReviewWin]::Show($hwnd, 0, 0) }
     }
+    $keeper = $null
+    if ($Mode -eq 'offscreen') {
+        $keeper = New-Object KitReviewKeeper -ArgumentList ([uint32]$proc.Id)
+        $keeper.Start()
+    }
     & $place                     # while still hidden, so it never appears on the desktop
     $acc.Visible = $true         # PrintWindow needs a shown (not minimized) window
     & $place
@@ -422,7 +489,7 @@ function Open-ReviewApp {
 
     $script:Review = [pscustomobject]@{
         Acc = $acc; Hwnd = $hwnd; Pid = $proc.Id; Process = $proc; Path = $Path; Mode = $Mode; Out = $OutputDirectory
-        Palette = 'Navy'; Dialogs = @(); LogMark = $null; FileMark = $null; Sizes = @{}
+        Palette = 'Navy'; Dialogs = @(); LogMark = $null; FileMark = $null; Sizes = @{}; Keeper = $keeper
     }
     try {
         # ModalSec 0: a splash or sign-in form shown at startup is left open.
@@ -458,6 +525,7 @@ function Close-ReviewApp {
     $r.Acc = $null
     [GC]::Collect(); [GC]::WaitForPendingFinalizers(); [GC]::Collect()
     if (-not $r.Process.WaitForExit(15000)) { $r.Process.Kill(); $notes += 'Access did not quit within 15s; ended it.' }
+    if ($r.Keeper) { $r.Keeper.Stop(); $notes += "Windows moved off the desktop during the session: $($r.Keeper.Moved)." }
     $script:Review = $null
     [pscustomobject]@{ Closed = $true; Note = ($notes -join ' ') }
 }
@@ -473,9 +541,16 @@ function Test-ReviewCompile {
 function Invoke-ReviewRun {
     param([Parameter(Mandatory)][string]$Name, [object[]]$Arguments = @(), [int]$TimeoutSec = 120)
     if ($Arguments.Count -gt 8) { throw 'At most 8 arguments.' }
-    # Run passes its arguments ByRef; [ref] holders let output arguments (an error
-    # message, say) come back.
-    $refs = @(foreach ($a in $Arguments) { [ref]$a })
+    # Run passes its arguments ByRef, so each gets its own reference holder (a [ref] to
+    # the loop variable would make every argument the same one) and output arguments
+    # come back. JSON whole numbers arrive as Int64, which a VBA Long rejects (type
+    # mismatch), so they become Int32, or Double when too large; decimals become Double.
+    $refs = @(foreach ($a in $Arguments) {
+        $v = $a
+        if ($v -is [long]) { $v = if ($v -ge [int]::MinValue -and $v -le [int]::MaxValue) { [int]$v } else { [double]$v } }
+        elseif ($v -is [decimal]) { $v = [double]$v }
+        [Management.Automation.PSReference]::new($v)
+    })
     $r = Invoke-ReviewGuarded -TimeoutSec $TimeoutSec {
         $acc = $script:Review.Acc
         switch ($refs.Count) {
@@ -593,8 +668,9 @@ function Set-ReviewFormSize {
     if ($root -ne $app) {
         if ($script:Review.Mode -eq 'offscreen') { [void][KitReviewWin]::Park($root) }
     } elseif ($Maximize) {
-        # The maximized check: the Access window at the full size of the main display.
-        $ps = [KitReviewWin]::PrimaryScreen()
+        # The maximized check: the Access window at the size a maximized window gets on the
+        # main display (its work area, without the taskbar).
+        $ps = [KitReviewWin]::WorkArea()
         [void][KitReviewWin]::Size($app, $ps[0], $ps[1])
         Start-Sleep -Milliseconds 600
     } else {
