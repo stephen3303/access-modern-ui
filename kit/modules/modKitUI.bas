@@ -155,7 +155,12 @@ End Sub
 Private Sub ShrinkHost(host As Form, ByVal prefix As String)
     Dim hostW As Long, c As Control, i As Long, w As Long
     hostW = HostDesignW(host, prefix)
-    If host.Width = hostW Then Exit Sub
+    If host.Width = hostW Then
+        ' The detail section can be left short after the host's width came
+        ' back (RestoreAnchored).
+        If host.Section(acDetail).Height <> CLng(m_hostW(HostKey(host) & "|*detail")) Then RestoreAnchored host
+        Exit Sub
+    End If
     If host.Width > hostW Then
         If Len(prefix) > 0 Then
             Do While HasCtl(host, prefix & i)
@@ -196,26 +201,36 @@ Private Sub PlaceCaption(host As Form, ByVal prefix As String, ByVal i As Long, 
     FitCtl host.Controls(prefix & i), capX, capW
 End Sub
 
-' Put each anchored control of GridFit's host back at the design Left and
-' Width HostDesignW recorded.
+' Put each anchored control of GridFit's host back at the design Left,
+' Width, Top and Height HostDesignW recorded, and the detail section at its
+' design height. The width change shifts the vertical anchoring too: after a
+' widen and narrow the Tables page's detail section read 8160 twips for 8400,
+' and its tables reached 16px lower. A taller section goes first (a control
+' can't reach past it), a shorter one after the controls.
 Private Sub RestoreAnchored(host As Form)
-    Dim c As Control, k As String, v() As String
+    Dim c As Control, k As String, v() As String, secH As Long
     k = HostKey(host)
+    secH = CLng(m_hostW(k & "|*detail"))
+    If host.Section(acDetail).Height < secH Then host.Section(acDetail).Height = secH
     For Each c In host.Controls
         If Anchored(c) Then
             v = Split(m_hostW(k & "|" & c.Name), "|")
             If c.Width > CLng(v(1)) Then c.Width = CLng(v(1))
             If c.Left <> CLng(v(0)) Then c.Left = CLng(v(0))
             If c.Width <> CLng(v(1)) Then c.Width = CLng(v(1))
+            If c.Height > CLng(v(3)) Then c.Height = CLng(v(3))
+            If c.Top <> CLng(v(2)) Then c.Top = CLng(v(2))
+            If c.Height <> CLng(v(3)) Then c.Height = CLng(v(3))
         End If
     Next
+    If host.Section(acDetail).Height > secH Then host.Section(acDetail).Height = secH
 End Sub
 
-' True when c is anchored right or both sides. A tab control's pages have no
-' anchoring of their own.
+' True when c is anchored right, bottom or both ways. A tab control's pages
+' have no anchoring of their own.
 Private Function Anchored(c As Control) As Boolean
     If c.ControlType = acPage Then Exit Function
-    Anchored = c.HorizontalAnchor <> 0
+    Anchored = c.HorizontalAnchor <> 0 Or c.VerticalAnchor <> 0
 End Function
 
 ' Key of a GridFit host in m_hostW.
@@ -228,8 +243,9 @@ End Function
 ' fall back to the host's Width on its first fit, which can be short of the
 ' design width while the page is still opening. Kept per window (and name,
 ' in case a window handle is reused) so a reopened page starts again. The
-' first fit also records each anchored control's design "Left|Width"
-' (ShrinkHost), under the host's key, "|" and the control's name.
+' first fit also records each anchored control's design "Left|Width|Top|
+' Height" (RestoreAnchored), under the host's key, "|" and the control's
+' name, and the detail section's height under the key and "|*detail".
 Private Function HostDesignW(host As Form, ByVal prefix As String) As Long
     Dim k As String, c As Control, found As Boolean, p As Variant
     If m_hostW Is Nothing Then Set m_hostW = New Collection
@@ -247,8 +263,9 @@ Private Function HostDesignW(host As Form, ByVal prefix As String) As Long
         Next
     End If
     m_hostW.Add HostDesignW, k
+    m_hostW.Add host.Section(acDetail).Height, k & "|*detail"
     For Each c In host.Controls
-        If Anchored(c) Then m_hostW.Add c.Left & "|" & c.Width, k & "|" & c.Name
+        If Anchored(c) Then m_hostW.Add c.Left & "|" & c.Width & "|" & c.Top & "|" & c.Height, k & "|" & c.Name
     Next
 End Function
 
