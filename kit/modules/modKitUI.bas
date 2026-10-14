@@ -18,8 +18,9 @@ Private Const MAX_FORM_W As Long = 31680
 ' descending (Unicode code points, for ChrW).
 Private Const SORT_UP As Long = &H25B2
 Private Const SORT_DOWN As Long = &H25BC
-' Design width of each GridFit host (by its window and the table's subform
-' control), read on the first fit, before any caption has widened the host.
+' Design width of each GridFit host (by its window), read on its first fit,
+' before any caption has widened it. One per host, shared by all its tables:
+' a second table's first fit can come after the first one's captions grew it.
 Private m_hostW As Collection
 ' The DateBox the date picker (dlgDatePick) is open for (PickDate).
 Private m_dateTarget As Control
@@ -69,7 +70,7 @@ Public Sub GridFit(sf As Control, Optional ByVal prefix As String = "")
     ' An anchored control's Width keeps its design value, so add how much
     ' wider than designed the host is. The host's design width, not its
     ' Width now: moving the captions can have widened it.
-    hostW = HostDesignW(host, sf)
+    hostW = HostDesignW(host)
     needW = hostW
     avail = sf.Width
     If sf.HorizontalAnchor = 2 Then avail = avail + host.InsideWidth - hostW
@@ -136,12 +137,12 @@ Public Sub GridFit(sf As Control, Optional ByVal prefix As String = "")
     End If
 End Sub
 
-' Design width of GridFit's host form for the table in sf: the host's Width
-' the first time it is fitted, kept per window so a reopened page starts again.
-Private Function HostDesignW(host As Form, sf As Control) As Long
+' Design width of GridFit's host form: its Width the first time any of its
+' tables is fitted, kept per window so a reopened page starts again.
+Private Function HostDesignW(host As Form) As Long
     Dim k As String
     If m_hostW Is Nothing Then Set m_hostW = New Collection
-    k = host.Hwnd & "|" & sf.Name
+    k = CStr(host.Hwnd)
     On Error Resume Next
     HostDesignW = m_hostW(k)
     If Err.Number <> 0 Then
