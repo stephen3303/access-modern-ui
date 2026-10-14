@@ -4,9 +4,9 @@ Option Explicit
 ' Access UI kit - click-to-filter table headers. GridHeaders(..., filterSf)
 ' puts a funnel at the right end of each caption whose column shows a field.
 ' Clicking it opens dlgFilter (GridFilter), which lists the column's values;
-' the user picks the ones to show. The funnel turns CLR_PRIMARY while its
-' column is filtered. Filters work alongside click-to-sort and the column
-' chooser.
+' the user ticks the ones to show. While its column is filtered the funnel
+' shows white on a CLR_PRIMARY chip. Filters work alongside click-to-sort
+' and the column chooser.
 '
 ' The table's Filter is the page's own filter (search box, chips) AND each
 ' header filter, so PrintGrid, ExportGrid and pagination (GridFooter) follow
@@ -28,10 +28,14 @@ Public Const FILTER_GLYPH As Long = &HE71C&
 ' GridFit lay them out.
 Public Const FILTER_W As Long = 300
 Public Const FILTER_GAP As Long = 30
-' Most values the filter dialog lists, and most characters of them: a value
-' list's row source holds at most 32,750 characters.
+' The filter dialog's list: rows shown at once and row height (px), and the
+' check box glyphs (Segoe MDL2 Assets Checkbox and CheckboxComposite).
+Public Const FILTER_ROWS As Long = 10
+Public Const FILTER_ROW_H As Long = 24
+Public Const BOX_EMPTY As Long = &HE739&
+Public Const BOX_TICKED As Long = &HE73A&
+' Most values the filter dialog lists.
 Private Const MAX_VALUES As Long = 500
-Private Const MAX_LIST_CHARS As Long = 30000
 ' Longest value text the dialog shows; longer ones end in an ellipsis.
 Private Const MAX_SHOWN As Long = 80
 ' Longest Filter this module sets. Access SQL allows 64K characters; the
@@ -74,7 +78,7 @@ Private m_choice As String
 ' its empty state. A failure is shown (HandleError), as for any click.
 Public Function GridFilter(host As Form, ByVal sfName As String, ByVal prefix As String, ByVal col As Long)
     Dim sf As Control, vals As Variant, st As Object, kept As Object, i As Long, keep() As Variant, n As Long
-    Dim shown() As String, checked() As Boolean, chars As Long, more As Boolean, t() As String, entry As Variant
+    Dim shown() As String, checked() As Boolean, more As Boolean, t() As String, entry As Variant
     On Error GoTo Fail
     If m_open Then Exit Function
     Set sf = host.Controls(sfName)
@@ -95,17 +99,11 @@ Public Function GridFilter(host As Form, ByVal sfName As String, ByVal prefix As
     ReDim shown(UBound(vals)): ReDim checked(UBound(vals))
     For i = 0 To UBound(vals)
         shown(i) = ValueText(vals(i))
-        chars = chars + Len(shown(i)) + 8
-        If chars > MAX_LIST_CHARS Then
-            ReDim Preserve shown(i - 1): ReDim Preserve checked(i - 1): ReDim Preserve vals(i - 1)
-            more = True
-            Exit For
-        End If
         If kept Is Nothing Then checked(i) = True Else checked(i) = kept.Exists(ValueKey(vals(i)))
     Next
     m_title = "Filter by " & ColumnCaption(sf, col)
-    m_hint = "Choose the values to show. Click a value to select or clear it."
-    If more Then m_hint = "Choose the values to show. Only the first " & (UBound(shown) + 1) & _
+    m_hint = "Tick the values to show. Click a value, or press Space, to tick or clear it."
+    If more Then m_hint = "Tick the values to show. Only the first " & (UBound(shown) + 1) & _
         " values are listed: clearing any hides the unlisted ones too."
     m_items = shown
     m_checked = checked
@@ -376,8 +374,8 @@ Private Function Combined(st As Object, ByVal skip As Long, ByVal withBase As Bo
     Combined = s
 End Function
 
-' Color each funnel of the table: CLR_PRIMARY when its column is filtered,
-' else CLR_MUTED_FG, with a tip saying which.
+' Style each funnel of the table: white on a CLR_PRIMARY chip when its column
+' is filtered, else a muted glyph, with a tip saying which.
 Private Sub StyleFunnels(host As Form, st As Object)
     Dim i As Long, c As Control, nm As String, prefix As String, cols As Object, entry As Variant, fore As Long
     prefix = st("Prefix")
@@ -387,8 +385,12 @@ Private Sub StyleFunnels(host As Form, st As Object)
         nm = prefix & "Filter" & i
         If CtlExists(host, nm) Then
             Set c = host.Controls(nm)
-            fore = Th(IIf(cols.Exists(i), CLR_PRIMARY, CLR_MUTED_FG))
+            ' Filtered: a white funnel on a CLR_PRIMARY chip (as StyleChip's
+            ' selected chip), so it stands out by shape and lightness, not only hue.
+            fore = Th(IIf(cols.Exists(i), CLR_WHITE, CLR_MUTED_FG))
             If c.ForeColor <> fore Then c.ForeColor = fore
+            If c.BackColor <> Th(CLR_PRIMARY) Then c.BackColor = Th(CLR_PRIMARY)
+            If c.BackStyle <> IIf(cols.Exists(i), 1, 0) Then c.BackStyle = IIf(cols.Exists(i), 1, 0)
             If cols.Exists(i) Then
                 entry = cols(i)
                 c.ControlTipText = "Filtered: showing " & entry(2) & IIf(entry(2) = 1, " value", " values") & ". Click to change."
@@ -501,24 +503,45 @@ End Function
 ' ---------------------------------------------------------------------------
 
 ' The filter dialog GridFilter opens (dlgFilter, code in forms\dlgFilter.vba):
-' a hint, a list of the column's values where the selected ones show, the
-' count selected and Select all under it, and OK and Cancel along the bottom
-' right. Build it with the app's other dialogs.
+' a hint; a list of the column's values, FILTER_ROWS rows at a time, each a
+' check box glyph and the value, drawn by the kit so a selected value shows a
+' CLR_PRIMARY check rather than Access's list highlight; up and down arrows
+' (and the mouse wheel) to scroll it; the count selected and Select all under
+' it; and OK and Cancel along the bottom right. The keyboard works through
+' txtFocusSink, which takes the focus: Up, Down, Page Up, Page Down, Home and
+' End move the CLR_PRIMARY_SOFT cursor row, Space ticks or clears it. Build it
+' with the app's other dialogs.
 Public Sub BuildFilterDialog()
-    Dim c As Control, w As Long, listY As Long, listH As Long, rowY As Long, btnY As Long
+    Dim c As Control, w As Long, listW As Long, listY As Long, rowY As Long, btnY As Long, r As Long, y As Long, arrowX As Long
     w = px(320)
-    listY = px(64): listH = px(240)
-    rowY = listY + listH + px(12)
+    listW = w - 2 * px(SP_DIALOG)
+    listY = px(64)
+    rowY = listY + FILTER_ROWS * px(FILTER_ROW_H) + px(2) + px(12)
     btnY = rowY + px(30) + px(20)
+    arrowX = px(SP_DIALOG) + listW - px(24)
     NewDialog "Filter", w, btnY + px(30) + px(SP_DIALOG)
-    Ev F, "OnLoad"
-    Lbl "lblHint", "", px(SP_DIALOG), px(20), w - 2 * px(SP_DIALOG), px(36), 9, False, CLR_MUTED_FG
-    ' Hidden position and the value; 20px left for the scroll bar.
-    Set c = Lst("lstValues", "", px(SP_DIALOG), listY, w - 2 * px(SP_DIALOG), listH, 2, "0;" & (w - 2 * px(SP_DIALOG) - px(20)))
-    c.RowSourceType = "Value List"
-    c.ColumnHeads = False
-    c.MultiSelect = 1                        ' simple: each click selects or clears a value
-    Ev c, "AfterUpdate"
+    Ev F, "OnLoad", "OnMouseWheel"
+    Set c = F.Controls("txtFocusSink")
+    c.BackColor = CLR_DIALOG                 ' a focused transparent box paints its BackColor
+    Ev c, "OnKeyDown"
+    Lbl "lblHint", "", px(SP_DIALOG), px(20), listW, px(36), 9, False, CLR_MUTED_FG
+    Box "boxList", px(SP_DIALOG), listY, listW, FILTER_ROWS * px(FILTER_ROW_H) + px(2), CLR_INPUT_BG, CLR_BORDER
+    For r = 0 To FILTER_ROWS - 1
+        y = listY + px(1) + r * px(FILTER_ROW_H)
+        ' The cursor row's fill; dlgFilter shows it on one row at a time.
+        Set c = Box("boxRow" & r, px(SP_DIALOG) + px(1), y, arrowX - px(SP_DIALOG) - px(1), px(FILTER_ROW_H), CLR_PRIMARY_SOFT)
+        c.OnClick = "=PickRow(" & r & ")"
+        Set c = Lbl("lblChk" & r, ChrW(BOX_EMPTY), px(SP_DIALOG) + px(8), y + px(4), px(16), px(16), 10, False, CLR_MUTED_FG)
+        c.FontName = "Segoe MDL2 Assets"
+        c.TextAlign = 2
+        c.OnClick = "=PickRow(" & r & ")"
+        Set c = Lbl("lblVal" & r, "", px(SP_DIALOG) + px(32), y + px(3), arrowX - px(SP_DIALOG) - px(36), px(18), 9, False, CLR_FG)
+        c.OnClick = "=PickRow(" & r & ")"
+    Next
+    Set c = Link("lnkUp", ChrW(&HE70E), arrowX, listY + px(4), px(20), px(20), "=ScrollList(-1)", 9, CLR_MUTED_FG)
+    c.FontName = "Segoe MDL2 Assets": c.TextAlign = 2: c.ControlTipText = "Scroll up"
+    Set c = Link("lnkDown", ChrW(&HE70D), arrowX, listY + FILTER_ROWS * px(FILTER_ROW_H) - px(22), px(20), px(20), "=ScrollList(1)", 9, CLR_MUTED_FG)
+    c.FontName = "Segoe MDL2 Assets": c.TextAlign = 2: c.ControlTipText = "Scroll down"
     Lbl "lblCount", "", px(SP_DIALOG), rowY + px(6), px(160), px(18), 9, False, CLR_MUTED_FG
     Btn "btnAll", "Select all", w - px(SP_DIALOG) - px(88), rowY, px(88), px(30), "ghost"
     Set c = Btn("btnOK", "OK", w - px(SP_DIALOG) - px(88) - px(8) - px(88), btnY, px(88), px(30), "primary")

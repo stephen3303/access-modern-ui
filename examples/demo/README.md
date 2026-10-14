@@ -58,9 +58,10 @@ watching for Visual Basic error dialogs as well as the error log:
   and clicking a caption still sorts after columns are moved.
 - Header filters (first table): each caption shows a muted funnel at its
   right end. Clicking it lists the column's values (Due in date order, `(Blanks)` last);
-  clearing values hides their rows, the funnel turns the primary color, and the chip
+  clearing values' ticks hides their rows, the funnel turns white on a primary chip, and the chip
   and tab counts and the empty state follow. Select all reads Clear all when every
-  value is selected; OK is disabled with none; Cancel changes nothing. The filters
+  value is ticked and doesn't scroll the list; the arrows, mouse wheel and keyboard
+  (arrows, Page Up/Down, Home, End, Space) work; OK is disabled with none; Cancel changes nothing. The filters
   stay when a chip, the search or the category changes, and when a caption sorts.
   Hiding a filtered column in the column chooser hides its funnel.
 - Focus ring: clicking or tabbing into the search box, the category filter or a detail

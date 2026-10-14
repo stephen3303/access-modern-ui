@@ -490,7 +490,8 @@ Public Function TestKit(ByVal root As String) As String
     SetColumnFilter sf, "flt", 0, Array("Alpha", Null)
     Check RowCount(sf.Form) = 3, "Header filter not combined with the page filter"
     Check GridColumnFiltered(sf, 0) And Not GridColumnFiltered(sf, 1), "Filtered columns reported wrongly"
-    Check host.fltFilter0.ForeColor = Th(CLR_PRIMARY) And host.fltFilter1.ForeColor = Th(CLR_MUTED_FG), "Funnels don't show which column is filtered"
+    Check host.fltFilter0.BackStyle = 1 And host.fltFilter0.BackColor = Th(CLR_PRIMARY) And host.fltFilter0.ForeColor = Th(CLR_WHITE), "Filtered column's funnel not shown on a chip"
+    Check host.fltFilter1.BackStyle = 0 And host.fltFilter1.ForeColor = Th(CLR_MUTED_FG), "Unfiltered column's funnel not muted"
     vals = GridColumnValues(sf, "flt", 1)
     Check UBound(vals) = 1 And vals(0) = 5 And vals(1) = 7, "Column values ignore the other filters, or not in sort-field order"
     vals = GridColumnValues(sf, "flt", 0)
@@ -506,7 +507,7 @@ Public Function TestKit(ByVal root As String) As String
     sf.Form.Filter = "id = 2"
     sf.Form.FilterOn = True
     Check Not GridColumnFiltered(sf, 0), "Header filter kept after the page set Filter itself"
-    Check host.fltFilter0.ForeColor = Th(CLR_MUTED_FG), "Funnel still highlighted after its filter was replaced"
+    Check host.fltFilter0.BackStyle = 0 And host.fltFilter0.ForeColor = Th(CLR_MUTED_FG), "Funnel still highlighted after its filter was replaced"
     SetColumnFilter sf, "flt", 0, Array("Alpha")
     Check RowCount(sf.Form) = 0, "Page's own Filter not kept as the page filter"
     ClearGridFilters sf

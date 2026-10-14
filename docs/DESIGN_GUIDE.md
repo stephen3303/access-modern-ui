@@ -489,11 +489,16 @@ End Sub
       column shows a field; the caption's text stops 2px short of it, and the last
       caption takes its column's width. Clicking the funnel opens `dlgFilter`: the
       column's values (those the page's filter and the other columns' filters leave, in
-      the column's sort order, `(Blanks)` last for Null and empty text) in a list where
-      the selected values show. Select all selects every value, or clears them; OK needs
-      one selected; Cancel changes nothing. Selecting every value removes the filter.
-      While a column is filtered its funnel is `CLR_PRIMARY` and its tip says how many
-      values show.
+      the column's sort order, `(Blanks)` last for Null and empty text), ten rows at a
+      time, each with a check box glyph: ticked (`CLR_PRIMARY`) values show. The rows
+      are kit-drawn labels, not a list box, because a list box shows its selection in
+      Access's own colors whatever the palette. A click ticks or clears a value; the
+      arrows and the mouse wheel scroll; Up, Down, Page Up, Page Down, Home and End move
+      a `CLR_PRIMARY_SOFT` cursor row and Space ticks it. Select all ticks every value,
+      or clears them, without scrolling; OK needs one ticked; Cancel changes nothing.
+      Ticking every value removes the filter. While a column is filtered its funnel is
+      white on a `CLR_PRIMARY` chip, like a selected filter chip, so it stands out by
+      more than hue, and its tip says how many values show.
     - The table's `Filter` is the page's filter AND each column's (`[status] IN (...)`),
       so sorting, pagination, `PrintGrid` and `ExportGrid` follow it. A page that filters
       the table itself (search, chips) calls `SetGridFilter Me.sfList, where` instead of
