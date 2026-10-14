@@ -117,6 +117,14 @@ Check 'removed handler reported' ($changes -contains 'txtTitle.OnClick: "[Event 
 Check 'record source change reported' (@($diff.Changed | Where-Object { $_.Property -eq 'RecordSource' }).Count -eq 1)
 Check 'redrawn picture reported' (@($diff.Changed | Where-Object { $_.Object -eq 'imgPill' -and $_.Property -eq 'PictureData' }).Count -eq 1)
 Check 'only real changes' ($diff.Changed.Count -eq 5)
+$moved = @(
+    'Begin Form', 'Begin',
+    'Begin FormHeader', 'Name ="FormHeader"', 'Begin', 'Begin Label', 'Name ="lblA"', 'Left =0', 'End', 'End', 'End',
+    'Begin Section', 'Name ="Detail"', 'Begin', 'End', 'End',
+    'End', 'End')
+$movedTo = $moved[0..1] + $moved[2..4] + @('End', 'End') + $moved[11..13] + $moved[5..8] + $moved[14..17]
+$m = Compare-FormText -Before (ConvertFrom-FormText -Lines $moved) -After (ConvertFrom-FormText -Lines $movedTo)
+Check 'move to another section reported' ($m.Changed.Count -eq 1 -and $m.Changed[0].Property -eq '(inside)' -and $m.Changed[0].Before -eq 'Section FormHeader' -and $m.Changed[0].After -eq 'Section Detail')
 $same = Compare-FormText -Before $before -After (ConvertFrom-FormText -Lines $base)
 Check 'identical forms compare equal' (($same.Added.Count + $same.Removed.Count + $same.Changed.Count) -eq 0)
 

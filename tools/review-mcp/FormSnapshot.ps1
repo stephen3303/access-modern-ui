@@ -147,6 +147,9 @@ function Compare-FormText {
         if (-not $b.Contains($k)) { continue }
         $x = $b[$k]; $y = $a[$k]
         if ($x.Type -ne $y.Type) { [pscustomobject]@{ Object = $k; Property = '(control type)'; Before = $x.Type; After = $y.Type } }
+        # Which section or tab page holds it is the Begin nesting, not a property.
+        $px = if ($x.Parent) { $x.Parent.Key } else { '' }; $py = if ($y.Parent) { $y.Parent.Key } else { '' }
+        if ($px -ne $py) { [pscustomobject]@{ Object = $k; Property = '(inside)'; Before = $px; After = $py } }
         $names = @($x.Props.Keys) + @($y.Props.Keys | Where-Object { -not $x.Props.Contains($_) })
         foreach ($p in $names) {
             $v1 = if ($x.Props.Contains($p)) { $x.Props[$p] } else { $null }
