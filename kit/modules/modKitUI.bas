@@ -623,7 +623,16 @@ Public Function ToggleSecret(frm As Form, ByVal nm As String)
     ShowSecret frm, nm, (c.InputMask = SECRET_MASK)
     If c.Enabled And c.Visible Then
         c.SetFocus
+        ' The caret is a nicety, so it must never cost an error message. Access can
+        ' refuse the box's Text (error 2196) just after SetFocus, before the focus
+        ' has really arrived; the saved Value is the same text then.
+        On Error Resume Next
         c.SelStart = Len(Nz(c.Text, ""))
+        If Err.Number <> 0 Then
+            Err.Clear
+            c.SelStart = Len(Nz(c.Value, ""))
+        End If
+        On Error GoTo Fail
     End If
     Exit Function
 Fail:
