@@ -102,8 +102,10 @@ Private Sub BuildUserInterface()
     Build_pgList
     Build_dlgAppearance
     BuildMessageDialog             ' the kit's dlgMessage, for KitMsgBox
+    BuildInputDialog               ' the kit's dlgInput, for KitInputBox
     BuildDatePicker                ' the kit's dlgDatePick, for DateBox
     BuildColumnsDialog             ' the kit's dlgColumns, for ChooseGridColumns
+    BuildSplash "frmMain", "access-modern-ui demo"   ' the kit's frmSplash, the startup form
     Build_frmMain
 End Sub
 
@@ -219,8 +221,10 @@ Private Sub Build_pgCards()
 
     x = CX + 2 * (w + px(16))
     Card "Square", "Square card", x, y, w, h, square:=True
-    Lbl "lblSquareBody", "Square corners: the fallback for a card where a subform or a control that repaints often covers a corner.", _
-        x + px(14), y + px(38), w - px(28), px(54), 9, False, CLR_MUTED_FG
+    Lbl "lblSquareBody", "Square corners: the fallback for a card where a subform or a control that repaints often covers a corner. " & _
+        "Its buttons ask a question (KitInputBox).", x + px(14), y + px(38), w - px(28), px(54), 9, False, CLR_MUTED_FG
+    Btn "btnSquareA", "Ask", x + px(14), y + h - px(42), px(96), px(28)
+    Btn "btnSquareB", "Ask masked", x + px(118), y + h - px(42), px(96), px(28), "outline"
 
     y = px(250): h = PAGE_H - y - px(16)
     Card "Items", "Items in a rounded card", CX, y, CW(), h, , 2, 2
@@ -331,14 +335,16 @@ Private Sub SetProp(ByVal name As String, ByVal kind As Integer, ByVal value As 
     End If
 End Sub
 
-' Open on frmMain without the navigation pane or document tabs, and record
-' when this front end was built (error-log entries show it).
+' Open on the splash screen, which opens frmMain, without Access's own
+' splash, the navigation pane or document tabs, and record when this front
+' end was built (error-log entries and the splash show it).
 Private Sub SetStartupOptions()
     SetProp "AppTitle", dbText, APP_NAME
-    SetProp "StartUpForm", dbText, "frmMain"
+    SetProp "StartUpForm", dbText, "frmSplash"
     SetProp "StartUpShowDBWindow", dbBoolean, False
     SetProp "ShowDocumentTabs", dbBoolean, False
     SetProp "Perform Name AutoCorrect", dbLong, 0
     SetProp "Track Name AutoCorrect Info", dbLong, 0
     SetProp "AppBuild", dbText, Format$(Now(), "yyyy-mm-dd hh:nn")
+    HideAccessSplash                ' last: it writes a file, so a failure leaves the settings above in place
 End Sub

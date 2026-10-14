@@ -415,6 +415,115 @@ Public Sub BuildMessageDialog()
     SaveForm "dlgMessage"
 End Sub
 
+' The input dialog KitInputBox opens (dlgInput, code in forms\dlgInput.vba):
+' dlgMessage's look without the icon. The prompt in 10pt text wraps across a
+' 380px column (room for 6 lines, scrolling for more), a 30px input sits 12px
+' under it, and OK (primary, Enter) and Cancel (outline, Esc) 88px buttons sit
+' 20px below along the bottom right, in dlgMessage's sizes and order.
+' dlgInput fills in the prompt, the starting text and the mask for each
+' question, and shrinks the dialog to the prompt's lines. Build it with the
+' app's other dialogs.
+Public Sub BuildInputDialog()
+    Dim c As Control, promptH As Long, inY As Long, btnY As Long
+    promptH = 6 * CLng(10 * 20 * 1.36)              ' 6 lines of 10pt text
+    inY = px(22) + promptH + px(12)
+    btnY = inY + px(30) + px(20)
+    NewDialog "Input", px(420), btnY + px(30) + px(16)
+    F.CloseButton = False                           ' Esc or a button closes it, like InputBox
+    Ev F, "OnLoad"
+    ' Read-only text box rather than a label, so a longer prompt can scroll.
+    Set c = RO("txtPrompt", "", px(20), px(22), px(380), promptH, 10, False, CLR_FG)
+    c.TopMargin = 0: c.LeftMargin = 0: c.RightMargin = 0: c.BottomMargin = 0
+    c.ScrollBars = 2                                ' shows only while it has the focus
+    c.BackColor = CLR_DIALOG                        ' painted while it has the focus
+    Txt "txtValue", "", px(20), inY, px(380), px(30), 10
+    Set c = Btn("btnOK", "OK", px(420) - px(20) - 2 * px(88) - px(8), btnY, px(88), px(30))
+    c.Default = True
+    Set c = Btn("btnCancel", "Cancel", px(420) - px(20) - px(88), btnY, px(88), px(30), "outline")
+    c.Cancel = True
+    SaveForm "dlgInput"
+End Sub
+
+' Splash screen frmSplash, shown while the app starts: the app's icon glyph,
+' APP_NAME, a subtitle, its version (database property AppVersion, else the
+' AppBuild stamp) and a status line (SplashStatus), on the sidebar color of
+' the user's palette (ThemeForm repaints it). Make it the StartUpForm. Its
+' code-behind (kit\forms\frmSplash.vba) opens nextForm, whose Load does the
+' app's start-up work under the splash, then closes. Call it once with the
+' app's dialogs, and HideAccessSplash for Access's own splash.
+' glyph: a Segoe MDL2 Assets character; default ChrW(&HE80F), home.
+Public Sub BuildSplash(Optional ByVal nextForm As String = "frmMain", Optional ByVal subtitle As String = "", _
+        Optional ByVal glyph As String = "")
+    Dim c As Control, w As Long, h As Long, pad As Long, y As Long
+    ' 480 x 280px at the default spacing. Padding and gaps follow SetSpacing,
+    ' so a roomier scale makes the splash taller rather than overlapping the
+    ' subtitle and the footer.
+    w = px(480): pad = Sp(SP_PAGE)
+    h = pad + px(48) + Sp(16) + px(36) + Sp(SP_ITEM_GAP) + px(20) _
+        + Sp(SP_DIALOG) + Sp(SP_ROW_GAP) + px(1) + px(18) + pad
+    If h < px(280) Then h = px(280)
+    NewForm "", 0, w, h
+    With F
+        .Caption = APP_NAME
+        .Tag = nextForm                             ' read by frmSplash.vba
+        .PopUp = True                               ' stays over the window nextForm opens in
+        .Modal = False
+        .BorderStyle = 0
+        .AutoCenter = True
+        .AutoResize = True
+        .ControlBox = False
+        .MinMaxButtons = 0
+        .CloseButton = False
+        .ShortcutMenu = False
+        .Section(acDetail).BackColor = CLR_SIDEBAR
+        .Section(acDetail).AlternateBackColor = CLR_SIDEBAR
+    End With
+    Ev F, "OnLoad", "OnTimer"
+    If Len(glyph) = 0 Then glyph = ChrW(&HE80F)
+    Set c = Lbl("lblSplashIcon", glyph, pad, pad, px(48), px(48), 28, False, CLR_WHITE)
+    c.FontName = "Segoe MDL2 Assets"
+    y = pad + px(48) + Sp(16)
+    Lbl "lblSplashName", APP_NAME, pad, y, w - 2 * pad, px(36), 20, True, CLR_WHITE
+    y = y + px(36) + Sp(SP_ITEM_GAP)
+    Lbl "lblSplashSub", subtitle, pad, y, w - 2 * pad, px(20), 10, False, CLR_NAV_FG
+    ' Footer: a hairline, then the status line left and the version right.
+    y = h - pad - px(18)
+    Rule "lnSplash", pad, y - Sp(SP_ROW_GAP) - px(1), w - 2 * pad, 0, CLR_SIDEBAR_LINE
+    Lbl "lblSplashStatus", "Starting" & ChrW(8230), pad, y, w - 2 * pad - px(180) - Sp(SP_ROW_GAP), px(18), 9, False, CLR_NAV_MUTED
+    Set c = Lbl("lblSplashVersion", "", w - pad - px(180), y, px(180), px(18), 9, False, CLR_NAV_MUTED)
+    c.TextAlign = 3
+    SaveForm "frmSplash"
+End Sub
+
+' Hide Access's own splash screen. When a database is opened, Access shows
+' <database name>.bmp from the database's folder in place of its logo, so
+' this writes a 1 x 1 pixel bitmap there (58 bytes, rewritten each build).
+' Call it from BuildAll's startup step and ship the .bmp with the front end.
+Public Sub HideAccessSplash()
+    Dim path As String, b(57) As Byte, i As Long, fh As Integer
+    path = CurrentProject.Name
+    If InStrRev(path, ".") > 0 Then path = Left$(path, InStrRev(path, ".") - 1)
+    path = CurrentProject.Path & "\" & path & ".bmp"
+    ' BITMAPFILEHEADER (14 bytes) + BITMAPINFOHEADER (40) + one 24-bit pixel
+    ' padded to 4 bytes. Unset bytes stay 0; the pixel is black.
+    b(0) = 66: b(1) = 77                ' "BM"
+    b(2) = 58                           ' file size
+    b(10) = 54                          ' offset of the pixel data
+    b(14) = 40                          ' info header size
+    b(18) = 1: b(22) = 1                ' width 1, height 1
+    b(26) = 1                           ' planes
+    b(28) = 24                          ' bits per pixel
+    b(34) = 4                           ' pixel data size
+    For i = 38 To 42 Step 4
+        b(i) = &H13: b(i + 1) = &HB     ' 2835 pixels per metre (72 dpi)
+    Next
+    If FileExists(path) Then Kill path
+    fh = FreeFile
+    Open path For Binary Access Write As #fh
+    Put #fh, , b
+    Close #fh
+End Sub
+
 ' Background box for a continuous-form row: paints (with conditional colors)
 ' but can never take focus. Disabled + locked keeps the normal appearance.
 Public Function RowBack(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long) As Control

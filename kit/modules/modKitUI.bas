@@ -5,8 +5,9 @@ Option Explicit
 ' scale their columns (GridFit), list/detail pages (SelectFirstRow,
 ' ShowDetail, ClearDetail), search matches marked in tables (GridHighlight),
 ' tabs and filter chips with counts (SetCount, StyleChip), focus rings on
-' inputs (FocusRing), toggle switches (ToggleSwitch, ToggleFocus) and messages
-' in the kit's look (KitMsgBox). Colors set here go through Th() so they follow
+' inputs (FocusRing), toggle switches (ToggleSwitch, ToggleFocus), the splash
+' screen's status line (SplashStatus) and messages and questions in the kit's
+' look (KitMsgBox, KitInputBox). Colors set here go through Th() so they follow
 ' the palette.
 
 ' Width the table's vertical scroll bar takes (twips).
@@ -28,12 +29,22 @@ Private m_msgText As String
 Private m_msgStyle As Long
 Private m_msgTitle As String
 Private m_msgAnswer As Long
+' The splash screen BuildSplash builds (SplashStatus, CloseSplash).
+Private Const SPLASH_FORM As String = "frmSplash"
 ' The field showing the focus ring (FocusRing): the control, its form's
 ' window and its name, and the border color the ring covers.
 Private m_ringCtl As Control
 Private m_ringHwnd As Long
 Private m_ringName As String
 Private m_ringWas As Long
+' The question the input dialog (dlgInput) is asking (KitInputBox), and the
+' text typed (Null until OK is clicked).
+Private m_inOpen As Boolean
+Private m_inPrompt As String
+Private m_inTitle As String
+Private m_inDefault As String
+Private m_inMasked As Boolean
+Private m_inAnswer As Variant
 
 ' ---------------------------------------------------------------------------
 ' Tables
@@ -609,6 +620,43 @@ Private Sub ClearRing()
 End Sub
 
 ' ---------------------------------------------------------------------------
+' Splash screen
+' ---------------------------------------------------------------------------
+
+' Show msg on the splash screen's status line (frmSplash, BuildSplash) while
+' the app starts, for example "Opening the data file...". Does nothing once
+' the splash has closed, so start-up code can call it either way.
+Public Sub SplashStatus(ByVal msg As String)
+    If Not SplashOpen() Then Exit Sub
+    Forms(SPLASH_FORM).Controls("lblSplashStatus").Caption = msg
+    Forms(SPLASH_FORM).Repaint
+End Sub
+
+' Close the splash screen if it is open. KitMsgBox calls it: the splash is a
+' pop-up, so a message opened during start-up could sit behind it. Access can
+' refuse (2585) while the splash's own Timer is still running; the splash then
+' closes itself when that event ends, so the refusal is ignored.
+Public Sub CloseSplash()
+    If Not SplashOpen() Then Exit Sub
+    On Error Resume Next
+    DoCmd.Close acForm, SPLASH_FORM, acSaveNo
+    On Error GoTo 0
+End Sub
+
+' True when the kit's splash is open in Form view: not one open in Design
+' view, and not an app's own form that happens to be called frmSplash (it
+' has no lblSplashStatus). A missing control is expected there, so its error
+' leaves the answer False.
+Private Function SplashOpen() As Boolean
+    Dim frm As Form
+    If Not IsFormOpen(SPLASH_FORM) Then Exit Function
+    On Error Resume Next
+    Set frm = Forms(SPLASH_FORM)
+    SplashOpen = (frm.CurrentView = 1) And (frm.Controls("lblSplashStatus").Name = "lblSplashStatus")
+    On Error GoTo 0
+End Function
+
+' ---------------------------------------------------------------------------
 ' Toggle switches
 ' ---------------------------------------------------------------------------
 
@@ -665,6 +713,7 @@ Public Function KitMsgBox(ByVal msg As String, Optional ByVal style As VbMsgBoxS
         Optional ByVal title As String = "") As VbMsgBoxResult
     Dim btns As Long
     btns = style And 7
+    CloseSplash                    ' a start-up message must not open behind the splash
     If m_msgOpen Then GoTo Plain
     If Not (btns = vbOKOnly Or btns = vbOKCancel Or btns = vbYesNo Or btns = vbYesNoCancel) Then GoTo Plain
     On Error GoTo Failed
@@ -708,6 +757,85 @@ End Function
 
 Public Sub SetKitMsgAnswer(ByVal answer As Long)
     m_msgAnswer = answer
+End Sub
+
+' InputBox in the kit's look: opens the input dialog (dlgInput, built by
+' BuildInputDialog), centred over Access like dlgMessage, and waits. Returns
+' the text typed when OK is clicked (a String, "" if the box was left empty)
+' or Null on Cancel, Esc or any other close, so an empty answer and a cancel
+' can be told apart. masked:=True shows each typed character as * (the
+' SECRET_MASK input mask) for a PIN or password; the text returned is the real
+' one.
+' A question while one is already showing, or a dialog that can't open (not
+' built yet), uses InputBox itself, with Null for its Cancel. A masked
+' question never does: InputBox would show the secret, so it returns Null
+' instead (logged when the dialog failed to open).
+Public Function KitInputBox(ByVal prompt As String, Optional ByVal title As String = "", _
+        Optional ByVal defaultText As String = "", Optional ByVal masked As Boolean = False) As Variant
+    Dim s As String
+    If m_inOpen Then GoTo Plain
+    On Error GoTo Failed
+    m_inPrompt = prompt
+    m_inTitle = title
+    m_inDefault = defaultText
+    m_inMasked = masked
+    m_inAnswer = Null
+    m_inOpen = True
+    CloseSplash                    ' a start-up question must not open behind the splash
+    DimApp                          ' the app behind is dimmed, as for KitMsgBox
+    DoCmd.OpenForm "dlgInput", WindowMode:=acDialog
+    UndimApp
+    m_inOpen = False
+    KitInputBox = m_inAnswer
+    ClearInput                     ' don't keep a typed PIN or password in memory
+    Exit Function
+Failed:
+    ' Only this question's own dialog failed to open; a question already
+    ' showing (Plain from the first line) keeps m_inOpen set until it closes.
+    ' m_inOpen is set just before DimApp (which never raises), so it also says
+    ' this question's dim is still on. Log first: UndimApp may clear Err.
+    If masked Then LogError "modKitUI.KitInputBox", "masked input dialog did not open"
+    If m_inOpen Then UndimApp
+    m_inOpen = False
+    ClearInput
+    If masked Then
+        KitInputBox = Null
+        Exit Function
+    End If
+Plain:
+    If masked Then          ' asked while another question is open: no error to log
+        KitInputBox = Null
+        Exit Function
+    End If
+    s = InputBox(prompt, IIf(Len(title) > 0, title, APP_NAME), defaultText)
+    If StrPtr(s) = 0 Then KitInputBox = Null Else KitInputBox = s   ' StrPtr 0: Cancel
+End Function
+
+' What the open input dialog asks, and its answer (dlgInput calls these).
+Public Function KitInputPrompt() As String
+    KitInputPrompt = m_inPrompt
+End Function
+
+Public Function KitInputTitle() As String
+    KitInputTitle = m_inTitle
+End Function
+
+Public Function KitInputDefault() As String
+    KitInputDefault = m_inDefault
+End Function
+
+Public Function KitInputMasked() As Boolean
+    KitInputMasked = m_inMasked
+End Function
+
+Public Sub SetKitInputAnswer(ByVal answer As Variant)
+    m_inAnswer = answer
+End Sub
+
+' Forget the last question and its answer once KitInputBox has returned it.
+Private Sub ClearInput()
+    m_inPrompt = "": m_inTitle = "": m_inDefault = "": m_inMasked = False
+    m_inAnswer = Null
 End Sub
 
 ' ---------------------------------------------------------------------------
