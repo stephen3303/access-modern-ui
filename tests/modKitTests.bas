@@ -22,6 +22,11 @@ Public Function TestKit(ByVal root As String) As String
     Txt "ringC", "", 0, 0, px(100), px(30)
     Btn "ringSave", "Save", px(110), 0, px(80), px(30)
     SaveForm "subRing"
+    BuildToast
+    NewForm "test_rows", 0, px(300), px(40)
+    Ev F, "BeforeUpdate"
+    Txt "txtDesc", "description", 0, 0, px(280), px(30)
+    SaveForm "subRefuse", "testRefuse"
     NewForm "", 0, px(700), px(700)
     GridHeaders "head", cols, px(24), px(60)
     GridHeaders "sortHead", cols, px(24), px(40), sortSf:="sfRows"
@@ -30,6 +35,7 @@ Public Function TestKit(ByVal root As String) As String
     SubF "sfRows", "Form.subTest", px(24), px(82), px(600), px(180)
     SubF "sfReuse", "Form.subTest", px(24), px(320), px(600), px(180)
     SubF "sfName", "Form.subTestName", px(24), px(700), px(300), px(50)
+    SubF "sfRefuse", "Form.subRefuse", px(340), px(700), px(300), px(40)
     GridFooter "sfRows", "pager", "id"
     Lbl "filter0", "All (23)", 0, 0, px(100), px(30)
     Lbl "filter1", "Retirement (2)", 0, 0, px(100), px(30)
@@ -283,7 +289,42 @@ Public Function TestKit(ByVal root As String) As String
     host.reqA = "x"
     Check RequiredMissing(host, "reqA=First", fitted) = "" And fitted = "", "Filled required field reported"
     Check host.reqA.BorderColor = Th(CLR_INPUT_BORDER), "Filled required field kept its outline"
+    DoCmd.OpenForm "dlgToast", WindowMode:=acHidden     ' as KitToast does, but errors raise here
+    Forms("dlgToast").ShowToast "Saved R&D", "success", 3000
+    Check Forms("dlgToast").lblMsg.Caption = "Saved R&&D", "Toast took & as an access key"
+    KitToast "Saved", "success"
+    Check Forms("dlgToast").lblMsg.Caption = "Saved", "Toast lost its message"
+    Check Screen.ActiveForm.Name = "frmTest", "Toast took the focus"
+    DoCmd.Close acForm, "dlgToast", acSaveNo
+    Check SaveDetail(host, "sfRows"), "Unchanged detail panel reported a refused save"
+    host.sfRefuse.Form.txtDesc = "Changed"
+    Check Not SaveDetail(host, "sfRefuse"), "Refused detail save reported as saved"
+    Check host.sfRefuse.Form.Dirty, "Refused detail save dropped the change"
+    Check Not ShowDetail(host, "sfRefuse", "subRefuse", "id=2"), "ShowDetail moved on after a refused save"
+    host.sfRefuse.Form.Undo
     DoCmd.Close acForm, "frmTest", acSaveNo
+    ' Trust check: matching Trusted Locations, a codeless dlgTrust, and the AutoExec
+    ' macro that opens it with the code off.
+    Check PathCovers("C:\Apps\", False, "c:\apps") And Not PathCovers("C:\Apps", False, "C:\Apps\Sub"), "Trusted Location matching differs"
+    Check PathCovers("C:\", True, "C:\Apps\Sub") And Not PathCovers("C:\Apps", True, "C:\AppsOld"), "Trusted Location subfolder matching differs"
+    Check RecordPath("%USERPROFILE%/My%20Apps/App.accdb") = LCase$(Environ$("USERPROFILE") & "\my apps\app.accdb"), "Trusted document name not decoded"
+    BuildTrustCheck "frmTest"
+    DoCmd.OpenForm "dlgTrust", acDesign
+    Check Not Forms("dlgTrust").HasModule And Len(Forms("dlgTrust").OnOpen) = 0 And Len(Forms("dlgTrust").OnClose) = 0, _
+        "dlgTrust needs code to open or close"
+    Check Forms("dlgTrust").btnClose.OnClick = "mcrTrustClose", "dlgTrust Close doesn't run its macro"
+    DoCmd.Close acForm, "dlgTrust", acSaveNo
+    text = CurrentProject.Path & "\autoexec_test.txt"
+    Application.SaveAsText acMacro, "AutoExec", text
+    fitted = Replace(ReadTextFile(text), vbNullChar, "")   ' SaveAsText may write UTF-16
+    Kill text
+    Check InStr(fitted, "IsTrusted") > 0 And InStr(fitted, "dlgTrust") > 0 And InStr(fitted, "TrustStartup") > 0, "AutoExec lost its trust rows"
+    Application.SaveAsText acMacro, "mcrTrustClose", text
+    fitted = Replace(Replace(Replace(Replace(ReadTextFile(text), vbNullChar, ""), " ", ""), vbCr, ""), vbLf, "")
+    Kill text
+    ' With the code off Access only runs Close with Save at Prompt, so No (2) or Yes (1) breaks it
+    Check InStr(fitted, "dlgTrust") > 0 And InStr(fitted, "Argument=""dlgTrust""Argument=""1""") = 0 And _
+        InStr(fitted, "Argument=""dlgTrust""Argument=""2""") = 0, "mcrTrustClose doesn't close with Save at Prompt"
     BuildMessageDialog
     DoCmd.OpenForm "dlgMessage"
     Set host = Forms("dlgMessage")
@@ -291,6 +332,15 @@ Public Function TestKit(ByVal root As String) As String
     Check Not host.btn2.Visible And Not host.btn3.Visible, "Message dialog shows unused buttons"
     Check host.btn1.Left + host.btn1.Width = host.btn3.Left + host.btn3.Width, "Message OK button is not right-aligned"
     DoCmd.Close acForm, "dlgMessage", acSaveNo
+    BuildInputDialog
+    DoCmd.OpenForm "dlgInput"
+    Set host = Forms("dlgInput")
+    Check host.btnOK.Default And host.btnCancel.Cancel, "Input dialog lacks its Enter and Esc buttons"
+    Check host.btnCancel.Left + host.btnCancel.Width = px(400), "Input Cancel button is not right-aligned"
+    Check host.btnOK.Left + host.btnOK.Width + px(8) = host.btnCancel.Left, "Input OK button is not 8px left of Cancel"
+    Check Not host.txtPrompt.Visible And host.txtValue.Top = px(22), "Input dialog without a prompt keeps the prompt's space"
+    Check Len(host.txtValue.InputMask) = 0, "Unmasked input dialog masks its text"
+    DoCmd.Close acForm, "dlgInput", acSaveNo
     ' SecretBox refuses a continuous form: one eye would show every row.
     NewForm "", 1, px(300), px(100)
     On Error Resume Next
@@ -298,6 +348,21 @@ Public Function TestKit(ByVal root As String) As String
     On Error GoTo 0
     DoCmd.Close acForm, F.Name, acSaveNo
     Check badView = 5, "SecretBox accepted a continuous form"
+    ' Splash: CloseSplash and SplashStatus do nothing without one, the footer clears the
+    ' subtitle, and the bitmap that hides Access's splash is 58 bytes.
+    CloseSplash
+    SplashStatus "Starting"
+    BuildSplash "frmMain", "Subtitle"
+    DoCmd.OpenForm "frmSplash", acDesign
+    Set host = Forms("frmSplash")
+    Check host.lblSplashSub.Top + host.lblSplashSub.Height <= host.lnSplash.Top, "Splash subtitle overlaps its footer"
+    CloseSplash
+    Check IsFormOpen("frmSplash"), "CloseSplash closed a splash in Design view"
+    DoCmd.Close acForm, "frmSplash", acSaveNo
+    HideAccessSplash
+    text = CurrentProject.Path & "\" & Left$(CurrentProject.Name, InStrRev(CurrentProject.Name, ".") - 1) & ".bmp"
+    Check FileLen(text) = 58, "HideAccessSplash did not write a 58-byte bitmap"
+    Kill text
     Check CompareVersions("1.10.0", "1.9.2") = 1, "Version parts compared as text"
     Check CompareVersions("v1.2", "1.2.0") = 0, "Missing version part not read as 0"
     Check CompareVersions("1.0.0", "1.0.1-beta") = -1, "Version suffix not ignored"
@@ -356,5 +421,42 @@ Public Function TestKit(ByVal root As String) As String
     Check Not AppDimmed(), "Dim left on after a dialog failed to open"
     BackdropOnClose
     Check Not AppDimmed(), "A dialog closing with no dim waiting changed the count"
+    ' Column chooser on a fit table: order, hiding, captions, bad layouts.
+    Dim order() As Long, shown() As Boolean, sf As Control
+    Check ParseLayout("2,0,1h", 3, order, shown), "Valid column layout rejected"
+    Check order(0) = 2 And Not shown(2), "Column layout parsed wrongly"
+    Check Not ParseLayout("0,0,1", 3, order, shown), "Repeated column accepted"
+    Check Not ParseLayout("0,1", 3, order, shown), "Short column layout accepted"
+    Check Not ParseLayout("0h,1h,2h", 3, order, shown), "Layout with no shown column accepted"
+    cols = Array("category|Category|160|", "description|Description|200|", "id|Id|80|r")
+    BuildGrid "subTestFit", cols, px(600), fit:=True
+    NewForm "", 0, px(700), px(300)
+    GridHeaders "fit", cols, px(24), px(20)
+    SubF "sfFit", "Form.subTestFit", px(24), px(42), px(600), px(180)
+    SaveForm "frmTestFit", "testHost"
+    DoCmd.OpenForm "frmTestFit"
+    Set host = Forms("frmTestFit"): Set sf = host.sfFit
+    sf.Form.RecordSource = "SELECT * FROM test_rows ORDER BY id"
+    SetGridColumns sf, "fit", DefaultLayout(3)
+    Set grid = sf.Form
+    height = grid.txtCol2.Left + grid.txtCol2.Width          ' right edge of all the columns
+    host.fit2.Tag = host.fit2.Tag & "|id"                     ' as a sortable caption's
+    SetGridColumns sf, "fit", "2,0,1h"
+    Set grid = sf.Form
+    Check Abs(grid.txtCol0.Left + grid.txtCol0.Width - height) <= px(2), "Shown columns did not fill the table as far as all of them"
+    Check grid.txtCol2.Left < grid.txtCol0.Left, "Moved column did not move"
+    Check Not grid.txtCol1.Visible And Not host.fit1.Visible, "Hidden column or caption still shows"
+    Check Abs(host.fit2.Left - (sf.Left + grid.txtCol2.Left)) <= 15, "Caption did not follow its column"
+    Check grid.txtCol0.Width > px(160), "Shown columns did not widen into the hidden one's space"
+    Check grid.txtCol1.Width <= 15, "Hidden column kept its width (can push the form past its limit)"
+    Check Right$(host.fit2.Tag, 3) = "|id", "Caption lost a later Tag part (sort field)"
+    On Error Resume Next
+    SetGridColumns sf, "fit", "0,1"
+    Check Err.Number = 5, "Bad column layout was applied"
+    On Error GoTo 0
+    SetGridColumns sf, "fit", DefaultLayout(3)
+    Check grid.txtCol0.Left < grid.txtCol1.Left And grid.txtCol1.Left < grid.txtCol2.Left, "Default layout lost design order"
+    Check grid.txtCol1.Visible And host.fit1.Visible, "Default layout left a column hidden"
+    DoCmd.Close acForm, "frmTestFit", acSaveNo
     TestKit = checks & " kit checks passed"
 End Function

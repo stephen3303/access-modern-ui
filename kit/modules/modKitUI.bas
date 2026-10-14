@@ -5,9 +5,10 @@ Option Explicit
 ' scale their columns (GridFit), list/detail pages (SelectFirstRow,
 ' ShowDetail, ClearDetail), search matches marked in tables (GridHighlight),
 ' tabs and filter chips with counts (SetCount, StyleChip), focus rings on
-' inputs (FocusRing), toggle switches (ToggleSwitch, ToggleFocus) and messages
-' in the kit's look (KitMsgBox). Colors set here go through Th() so they follow
-' the palette.
+' inputs (FocusRing), toggle switches (ToggleSwitch, ToggleFocus), the splash
+' screen's status line (SplashStatus) and messages and questions in the kit's
+' look (KitMsgBox, KitInputBox, and KitToast for ones that fade on their own).
+' Colors set here go through Th() so they follow the palette.
 
 ' Width the table's vertical scroll bar takes (twips).
 Private Const SCROLL_W As Long = 300
@@ -28,12 +29,22 @@ Private m_msgText As String
 Private m_msgStyle As Long
 Private m_msgTitle As String
 Private m_msgAnswer As Long
+' The splash screen BuildSplash builds (SplashStatus, CloseSplash).
+Private Const SPLASH_FORM As String = "frmSplash"
 ' The field showing the focus ring (FocusRing): the control, its form's
 ' window and its name, and the border color the ring covers.
 Private m_ringCtl As Control
 Private m_ringHwnd As Long
 Private m_ringName As String
 Private m_ringWas As Long
+' The question the input dialog (dlgInput) is asking (KitInputBox), and the
+' text typed (Null until OK is clicked).
+Private m_inOpen As Boolean
+Private m_inPrompt As String
+Private m_inTitle As String
+Private m_inDefault As String
+Private m_inMasked As Boolean
+Private m_inAnswer As Variant
 
 ' ---------------------------------------------------------------------------
 ' Tables
@@ -307,43 +318,78 @@ End Function
 ' saved first, and the empty-state control emptyCtl is hidden. The panel's
 ' form is only swapped when formName changes. Swapping a subform while one of
 ' its own events is running is unsafe, so call this from the list (GridClick)
-' or the page, never from inside the detail form.
-Public Sub ShowDetail(host As Form, ByVal detailCtl As String, ByVal formName As String, ByVal where As String, _
-                      Optional ByVal emptyCtl As String = "lblDetailEmpty")
+' or the page, never from inside the detail form. Returns False, and changes
+' nothing, when the panel's form refuses to save its changed record (its
+' BeforeUpdate cancels, for example CheckRequired found an empty field): the
+' panel keeps the record so the user can finish it.
+Public Function ShowDetail(host As Form, ByVal detailCtl As String, ByVal formName As String, ByVal where As String, _
+                      Optional ByVal emptyCtl As String = "lblDetailEmpty") As Boolean
     Dim sf As Control
     On Error GoTo Fail
     Set sf = host.Controls(detailCtl)
-    SaveDetail sf
+    If Not SaveDetailCtl(sf) Then Exit Function
     If sf.SourceObject <> formName And sf.SourceObject <> "Form." & formName Then sf.SourceObject = formName
     sf.Form.Filter = where
     sf.Form.FilterOn = True
     SetVisible sf, True
     If HasCtl(host, emptyCtl) Then SetVisible host.Controls(emptyCtl), False
-    Exit Sub
+    ShowDetail = True
+    Exit Function
 Fail:
     RaiseAgain "modKitUI.ShowDetail", formName & " where " & where
-End Sub
+End Function
 
 ' Empty the detail panel (saving a changed record first) and show the
-' empty-state control instead.
-Public Sub ClearDetail(host As Form, ByVal detailCtl As String, Optional ByVal emptyCtl As String = "lblDetailEmpty")
+' empty-state control instead. Returns False, and changes nothing, when the
+' panel's form refuses to save (as ShowDetail).
+Public Function ClearDetail(host As Form, ByVal detailCtl As String, Optional ByVal emptyCtl As String = "lblDetailEmpty") As Boolean
     Dim sf As Control
     On Error GoTo Fail
     Set sf = host.Controls(detailCtl)
-    SaveDetail sf
+    If Not SaveDetailCtl(sf) Then Exit Function
     SetVisible sf, False
     sf.SourceObject = ""
     If HasCtl(host, emptyCtl) Then SetVisible host.Controls(emptyCtl), True
-    Exit Sub
+    ClearDetail = True
+    Exit Function
 Fail:
     RaiseAgain "modKitUI.ClearDetail", detailCtl
-End Sub
+End Function
 
-' Save the record shown in a detail panel if it changed.
-Private Sub SaveDetail(sf As Control)
-    If Len(sf.SourceObject) = 0 Then Exit Sub
-    If sf.Form.Dirty Then sf.Form.Dirty = False
-End Sub
+' Save the changed record in the detail panel (subform control detailCtl on
+' host). Returns False when the panel's form refuses (as ShowDetail). Call
+' it before a page change that doesn't go through ShowDetail, such as
+' applying a filter chip, and stop when it returns False.
+Public Function SaveDetail(host As Form, ByVal detailCtl As String) As Boolean
+    On Error GoTo Fail
+    SaveDetail = SaveDetailCtl(host.Controls(detailCtl))
+    Exit Function
+Fail:
+    RaiseAgain "modKitUI.SaveDetail", detailCtl
+End Function
+
+' Save the record shown in a detail panel if it changed. False when the
+' form's BeforeUpdate cancelled the save. Which error Access raises for a
+' cancelled Dirty = False depends on what the BeforeUpdate did: 2101, 2115
+' (a control's own BeforeUpdate) or 2455 (it opened a message, as
+' CheckRequired does). Any other error, such as the database engine's own
+' validation, is raised again so the user still sees it.
+Private Function SaveDetailCtl(sf As Control) As Boolean
+    Dim errNo As Long, errDesc As String, errSrc As String
+    SaveDetailCtl = True
+    If Len(sf.SourceObject) = 0 Then Exit Function
+    If Not sf.Form.Dirty Then Exit Function
+    On Error Resume Next
+    sf.Form.Dirty = False
+    errNo = Err.Number: errDesc = Err.Description: errSrc = Err.Source
+    On Error GoTo 0
+    If errNo = 0 Then Exit Function
+    If errNo = 2101 Or errNo = 2115 Or errNo = 2455 Then
+        SaveDetailCtl = False
+    Else
+        Err.Raise errNo, errSrc, errDesc
+    End If
+End Function
 
 ' ---------------------------------------------------------------------------
 ' Date fields
@@ -609,6 +655,43 @@ Private Sub ClearRing()
 End Sub
 
 ' ---------------------------------------------------------------------------
+' Splash screen
+' ---------------------------------------------------------------------------
+
+' Show msg on the splash screen's status line (frmSplash, BuildSplash) while
+' the app starts, for example "Opening the data file...". Does nothing once
+' the splash has closed, so start-up code can call it either way.
+Public Sub SplashStatus(ByVal msg As String)
+    If Not SplashOpen() Then Exit Sub
+    Forms(SPLASH_FORM).Controls("lblSplashStatus").Caption = msg
+    Forms(SPLASH_FORM).Repaint
+End Sub
+
+' Close the splash screen if it is open. KitMsgBox calls it: the splash is a
+' pop-up, so a message opened during start-up could sit behind it. Access can
+' refuse (2585) while the splash's own Timer is still running; the splash then
+' closes itself when that event ends, so the refusal is ignored.
+Public Sub CloseSplash()
+    If Not SplashOpen() Then Exit Sub
+    On Error Resume Next
+    DoCmd.Close acForm, SPLASH_FORM, acSaveNo
+    On Error GoTo 0
+End Sub
+
+' True when the kit's splash is open in Form view: not one open in Design
+' view, and not an app's own form that happens to be called frmSplash (it
+' has no lblSplashStatus). A missing control is expected there, so its error
+' leaves the answer False.
+Private Function SplashOpen() As Boolean
+    Dim frm As Form
+    If Not IsFormOpen(SPLASH_FORM) Then Exit Function
+    On Error Resume Next
+    Set frm = Forms(SPLASH_FORM)
+    SplashOpen = (frm.CurrentView = 1) And (frm.Controls("lblSplashStatus").Name = "lblSplashStatus")
+    On Error GoTo 0
+End Function
+
+' ---------------------------------------------------------------------------
 ' Toggle switches
 ' ---------------------------------------------------------------------------
 
@@ -665,6 +748,7 @@ Public Function KitMsgBox(ByVal msg As String, Optional ByVal style As VbMsgBoxS
         Optional ByVal title As String = "") As VbMsgBoxResult
     Dim btns As Long
     btns = style And 7
+    CloseSplash                    ' a start-up message must not open behind the splash
     If m_msgOpen Then GoTo Plain
     If Not (btns = vbOKOnly Or btns = vbOKCancel Or btns = vbYesNo Or btns = vbYesNoCancel) Then GoTo Plain
     On Error GoTo Failed
@@ -710,6 +794,106 @@ Public Sub SetKitMsgAnswer(ByVal answer As Long)
     m_msgAnswer = answer
 End Sub
 
+' A message that doesn't interrupt: the toast (dlgToast, built by BuildToast)
+' shows msg in the bottom-right corner of frmMain for ms milliseconds, then
+' fades and closes. It never takes the focus, so use it to confirm something
+' the user just did ("Saved"); anything they must read or answer belongs in
+' KitMsgBox. vrnt picks the icon and accent color: "success", "info" (the
+' default), "warning" or "destructive". A toast while one is showing
+' replaces it. The toast shows up to 3 lines, so keep the message short.
+' If the toast can't open (not built yet), the message goes to the status
+' bar and the failure is logged, never shown.
+Public Function KitToast(ByVal msg As String, Optional ByVal vrnt As String = "info", Optional ByVal ms As Long = 3000)
+    On Error GoTo Fail
+    If ms <= 0 Then ms = 3000
+    If Not IsFormOpen("dlgToast") Then DoCmd.OpenForm "dlgToast", WindowMode:=acHidden
+    Forms("dlgToast").ShowToast msg, vrnt, ms
+    Exit Function
+Fail:
+    On Error Resume Next
+    LogError "modKitUI.KitToast", Left$(msg, 60)
+    SysCmd acSysCmdSetStatus, Left$(msg, 255)
+End Function
+
+' InputBox in the kit's look: opens the input dialog (dlgInput, built by
+' BuildInputDialog), centred over Access like dlgMessage, and waits. Returns
+' the text typed when OK is clicked (a String, "" if the box was left empty)
+' or Null on Cancel, Esc or any other close, so an empty answer and a cancel
+' can be told apart. masked:=True shows each typed character as * (the
+' SECRET_MASK input mask) for a PIN or password; the text returned is the real
+' one.
+' A question while one is already showing, or a dialog that can't open (not
+' built yet), uses InputBox itself, with Null for its Cancel. A masked
+' question never does: InputBox would show the secret, so it returns Null
+' instead (logged when the dialog failed to open).
+Public Function KitInputBox(ByVal prompt As String, Optional ByVal title As String = "", _
+        Optional ByVal defaultText As String = "", Optional ByVal masked As Boolean = False) As Variant
+    Dim s As String
+    If m_inOpen Then GoTo Plain
+    On Error GoTo Failed
+    m_inPrompt = prompt
+    m_inTitle = title
+    m_inDefault = defaultText
+    m_inMasked = masked
+    m_inAnswer = Null
+    m_inOpen = True
+    CloseSplash                    ' a start-up question must not open behind the splash
+    DimApp                          ' the app behind is dimmed, as for KitMsgBox
+    DoCmd.OpenForm "dlgInput", WindowMode:=acDialog
+    UndimApp
+    m_inOpen = False
+    KitInputBox = m_inAnswer
+    ClearInput                     ' don't keep a typed PIN or password in memory
+    Exit Function
+Failed:
+    ' Only this question's own dialog failed to open; a question already
+    ' showing (Plain from the first line) keeps m_inOpen set until it closes.
+    ' m_inOpen is set just before DimApp (which never raises), so it also says
+    ' this question's dim is still on. Log first: UndimApp may clear Err.
+    If masked Then LogError "modKitUI.KitInputBox", "masked input dialog did not open"
+    If m_inOpen Then UndimApp
+    m_inOpen = False
+    ClearInput
+    If masked Then
+        KitInputBox = Null
+        Exit Function
+    End If
+Plain:
+    If masked Then          ' asked while another question is open: no error to log
+        KitInputBox = Null
+        Exit Function
+    End If
+    s = InputBox(prompt, IIf(Len(title) > 0, title, APP_NAME), defaultText)
+    If StrPtr(s) = 0 Then KitInputBox = Null Else KitInputBox = s   ' StrPtr 0: Cancel
+End Function
+
+' What the open input dialog asks, and its answer (dlgInput calls these).
+Public Function KitInputPrompt() As String
+    KitInputPrompt = m_inPrompt
+End Function
+
+Public Function KitInputTitle() As String
+    KitInputTitle = m_inTitle
+End Function
+
+Public Function KitInputDefault() As String
+    KitInputDefault = m_inDefault
+End Function
+
+Public Function KitInputMasked() As Boolean
+    KitInputMasked = m_inMasked
+End Function
+
+Public Sub SetKitInputAnswer(ByVal answer As Variant)
+    m_inAnswer = answer
+End Sub
+
+' Forget the last question and its answer once KitInputBox has returned it.
+Private Sub ClearInput()
+    m_inPrompt = "": m_inTitle = "": m_inDefault = "": m_inMasked = False
+    m_inAnswer = Null
+End Sub
+
 ' ---------------------------------------------------------------------------
 ' Required fields
 ' ---------------------------------------------------------------------------
@@ -721,6 +905,9 @@ End Sub
 ' "txtName=Item;txtOwner=Owner". Returns True when all are filled. Call it at
 ' the top of the Save button's handler and stop when it returns False:
 '     If Not CheckRequired(Me, "txtName=Item;txtOwner=Owner") Then Exit Sub
+' and in the form's Form_BeforeUpdate, so every other save is checked too:
+'     Cancel = Not CheckRequired(Me, "txtName=Item;txtOwner=Owner")
+' (during an update the focus can't move, so it stays where it is).
 Public Function CheckRequired(frm As Form, ByVal fields As String) As Boolean
     Dim missing As String, first As String
     On Error GoTo Fail

@@ -100,8 +100,9 @@ End Function
 
 ' The grid's visible columns, left to right: Array(source, caption, width,
 ' format, text align), read from the columns BuildGrid made (txtCol0, ...).
+' Ordered by position, since the column chooser (modGridCols) can move them.
 Private Function GridColumns(gridForm As Form) As Collection
-    Dim out As New Collection, c As Control, i As Long, t() As String, src As String
+    Dim out As New Collection, lefts As New Collection, c As Control, i As Long, k As Long, t() As String, src As String
     Do
         Set c = Nothing
         On Error Resume Next
@@ -114,7 +115,16 @@ Private Function GridColumns(gridForm As Form) As Collection
             ' A search column (BuildGrid option "s") shows the marked text of
             ' hidden txtSrc<i>: use that control's field instead.
             If Left$(src, 10) = "=GridMark(" Then src = gridForm.Controls("txtSrc" & i).ControlSource
-            out.Add Array(src, IIf(Len(t(0)) > 0, t(0), src), c.Width + px(8), c.Format, c.TextAlign)
+            For k = 1 To lefts.Count
+                If lefts(k) > c.Left Then Exit For
+            Next
+            If k > lefts.Count Then
+                out.Add Array(src, IIf(Len(t(0)) > 0, t(0), src), c.Width + px(8), c.Format, c.TextAlign)
+                lefts.Add c.Left
+            Else
+                out.Add Array(src, IIf(Len(t(0)) > 0, t(0), src), c.Width + px(8), c.Format, c.TextAlign), , k
+                lefts.Add c.Left, , k
+            End If
         End If
         i = i + 1
     Loop

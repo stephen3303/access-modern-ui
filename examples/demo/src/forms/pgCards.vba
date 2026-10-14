@@ -24,10 +24,45 @@ Err_Handler:
     HandleError "pgCards.btnRoundA_Click"
 End Sub
 
+' Each click shows the next toast variant, so all four can be checked.
 Private Sub btnRoundB_Click()
+    Static n As Long
+    Dim vrnt As String
     On Error GoTo Err_Handler
-    Notify "Outline button clicked.", vbInformation
+    vrnt = Array("success", "info", "warning", "destructive")(n Mod 4)
+    n = n + 1
+    KitToast "Outline button clicked: a " & vrnt & " toast.", vrnt
     Exit Sub
 Err_Handler:
     HandleError "pgCards.btnRoundB_Click"
+End Sub
+
+' KitInputBox: the answer, or that it was cancelled (Null).
+Private Sub btnSquareA_Click()
+    On Error GoTo Err_Handler
+    Dim v As Variant
+    v = KitInputBox("What name should the demo use? Leave it empty to see an empty answer.", APP_NAME, "Sailor")
+    If IsNull(v) Then
+        Notify "Cancelled.", vbInformation
+    Else
+        Notify "You typed """ & v & """.", vbInformation
+    End If
+    Exit Sub
+Err_Handler:
+    HandleError "pgCards.btnSquareA_Click"
+End Sub
+
+' Masked KitInputBox: only the answer's length is shown, never the text.
+Private Sub btnSquareB_Click()
+    On Error GoTo Err_Handler
+    Dim v As Variant
+    v = KitInputBox("Enter a PIN. Each character shows as * while you type.", APP_NAME, masked:=True)
+    If IsNull(v) Then
+        Notify "Cancelled.", vbInformation
+    Else
+        Notify "You typed " & Len(v) & " character(s).", vbInformation
+    End If
+    Exit Sub
+Err_Handler:
+    HandleError "pgCards.btnSquareB_Click"
 End Sub
