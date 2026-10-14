@@ -254,7 +254,7 @@ public class KitReviewKeeper {
     }
 
     void Loop() {
-        proc = (hook, ev, h, idObject, idChild, t, time) => {
+        proc = (hk, ev, h, idObject, idChild, t, time) => {
             if (idObject != 0 || idChild != 0 || h == IntPtr.Zero) return;   // the window itself, not a part of it
             if (GetAncestor(h, 2) != h) return;                               // top-level windows only
             try { Check(h); } catch { }
