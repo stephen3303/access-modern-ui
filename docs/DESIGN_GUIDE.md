@@ -42,8 +42,10 @@ access/
   build.ps1                  drives Access via COM; loads modules, calls BuildAll
   kit/
     modules/*.bas            reusable: modUIKit, modKitUI, modDarkMode, modPng, modGridOut,
-                             modCsv, modCrypto, modKitUtil, modBackdrop (copied unchanged from the kit)
-    forms/*.vba              kit code-behind: subGrid, dlgAppearance, dlgDatePick
+                             modGridCols, modCsv, modCrypto, modKitUtil, modBackdrop,
+                             modTrust (copied unchanged from the kit)
+    forms/*.vba              kit code-behind: subGrid, dlgAppearance, dlgDatePick,
+                             dlgMessage, dlgColumns
   src/
     modules/*.bas            the app's own standard modules (incl. generated modPalette)
     themes/light/modTheme.bas   build palette constants (generated)
@@ -81,9 +83,21 @@ access/
 - Runs named steps, setting `m_step = "..."` before each so a failure names the step:
   create back end, link, local tables, seed, assets, user interface, help, startup.
 - Startup options it sets:
-  - StartUpForm = the login form or `frmMain`, or the kit's optional splash screen
-    `frmSplash` (`BuildSplash`), which opens it. `HideAccessSplash`, called last, hides
-    Access's own splash.
+  - The first form (the login form or `frmMain`, or the kit's optional splash screen
+    `frmSplash` from `BuildSplash`, which opens it) through the kit's
+    `BuildTrustCheck "<form>"`, not StartUpForm. Call it after anything that sets
+    StartUpForm, since it removes it. It adds an `AutoExec` macro (replacing any the app
+    had) that opens the form when the code is on, and opens `dlgTrust` instead when Access
+    has turned the code off. When Access would still ask next time (not a Trusted
+    Location, not a remembered trusted document), `dlgTrust` also opens over the form.
+    `dlgTrust` has no code module or Open hook, so it works with the code off; it explains
+    how to add the folder in the Trust Center. Code never changes Trust Center settings.
+    The check reads the user's (HKCU) settings and policies only, not machine-wide (HKLM)
+    policy locations, so on such a PC the page can show when it isn't needed.
+    With the code off, Access first shows its own "active content is blocked" notice;
+    `dlgTrust` follows it. Its Close macro keeps Save at Prompt, the only setting Access
+    allows then.
+  - `HideAccessSplash`, called just before `BuildTrustCheck`, hides Access's own splash.
   - Hidden: the DB window, document tabs and datasheet schema.
   - Name AutoCorrect off.
   - AppTitle.
@@ -125,8 +139,10 @@ them, and the shell (`frmMain`) last.
 | modBuildUI, modBuildPages, modBuildPages2 | `Build_<form>` procedures, one per form, grouped by area |
 | modUI | Run-time UI helpers: `NavTo`, badges/pills painting, `ShowTip`, the app's hooks (`BadgeColors`, `StatusVariant`) |
 | modUIKit (kit) | Build-time control builders (section 6) |
-| modKitUI (kit) | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSwitch`, `ToggleFocus`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `KitToast`, `CheckRequired`, `SetCount`, `StyleChip` |
+| modKitUI (kit) | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSwitch`, `ToggleFocus`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `KitToast`, `KitInputBox`, `CheckRequired`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
+| modGridCols (kit) | Column chooser: `ChooseGridColumns`, `RestoreGridColumns`, `SetGridColumns`, and `BuildColumnsDialog` for `dlgColumns` |
+| modTrust (kit) | `BuildTrustCheck` startup, `TrustNeeded`, `InTrustedLocation`, `ShowTrustHelp` (the `dlgTrust` page on trusting the folder) |
 | modKitUtil (kit) | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `CenterOnApp`, `SetVisible`, `SetEnabled` |
 | modBackdrop (kit) | `DimApp`, `UndimApp`: the dimmed backdrop behind modal dialogs |
 | modDarkMode (kit), modPalette (gen), modTheme (gen) | Palette engine (section 7) |
@@ -166,7 +182,8 @@ prints to the debug window, raises on warnings and answers Yes to questions, and
 `HandleError` raises the error again, so nothing can block the invisible Access.
 Otherwise both show their message with the kit's `KitMsgBox`, never `MsgBox`: Windows
 centres a `MsgBox` on the monitor, so on a large or second screen it opens outside
-Access and Access waits behind it.
+Access and Access waits behind it. For the same reason a question the user types an
+answer to uses `KitInputBox`, never `InputBox`, with `masked:=True` for a PIN or password.
 
 **Toasts for confirmations.** When the user only needs to know an action worked
 ("Saved", "Exported 24 rows"), show `KitToast msg, variant` instead of a message box:
@@ -466,6 +483,22 @@ End Sub
       with the same value keep id order. Sort a table in code through `GridSort` so its
       arrow stays right. A paginated table (`GridFooter`) goes back to page 1 in the new
       order (`RestartTablePages`).
+  - **Column chooser** (modGridCols), for `fit:=True` tables only: in any other table
+    the last column stretches with the window, so it can't move.
+    - A Columns button (outline, top right of the page or card, next to Print and
+      Export) calls `ChooseGridColumns Me.sfList, "hdrList"`. It opens `dlgColumns`,
+      where the user hides, shows (button or double-click) and moves columns up and
+      down, or resets to the design. At least one column stays shown.
+    - Columns keep their design widths and `GridFit` scales them, so hiding one widens
+      the rest. The captions move and hide with their columns. `PrintGrid` and
+      `ExportGrid` print the columns in the order shown and leave out hidden ones.
+    - The choice is saved per Windows user and table (registry, `<APP_NAME>\Columns`,
+      named after the table's form). The host calls `RestoreGridColumns Me.sfList,
+      "hdrList"` once the table's record source is set, and again after anything that
+      shows every caption (such as a tab switch calling `SetVisible` on them). A saved
+      layout that no longer matches the table's columns (a rebuild added or removed
+      one) is ignored.
+    - Build `dlgColumns` with `BuildColumnsDialog` alongside the app's other dialogs.
   - `PrintGrid gridForm, title, [subtitle]` and `ExportGrid gridForm, path` (modGridOut)
     print or export a table as the user sees it: its visible columns with their
     captions, and the rows its filter and sort show. `PrintGrid` builds a report
@@ -526,6 +559,10 @@ Write app-specific helpers next to the builds that use them. Examples:
 - Dialog buttons sit bottom-right in the order **Cancel (outline)** then **primary or
   destructive** action. Cancel sets `.Cancel = True` and the primary action sets
   `.Default = True`. The inline error label sits bottom-left.
+- The exception is the kit's stand-ins for Windows dialogs: the message box, the input
+  box and the date picker (`dlgMessage`, `dlgInput`, `dlgDatePick`). They use 30px
+  buttons, and the message and input boxes keep the Windows order (OK, then Cancel), so
+  they read like the dialogs they replace.
 - Header actions sit top-right, anchored right: the primary action rightmost, then
   outline, then destructive.
 
@@ -548,6 +585,11 @@ Write app-specific helpers next to the builds that use them. Examples:
     `TimerInterval = 10`, and `Form_Timer` swaps `sfPage.SourceObject`. Swapping a
     subform while its own event is still running is unsafe.
   - `ShowPage` redirects keys that aren't allowed in the current state.
+  - Before it swaps or closes the page (`QueueNav`, Appearance, `Form_Unload`), the shell
+    asks `frmMain.CanLeavePage`. A page with unsaved work defines a public `CanLeave`
+    (pgList: `CanLeave = SaveDetail(Me, "sfDetail")`), and the page stays when it returns
+    False. Sidebar items are labels, so clicking one never takes the focus out of the
+    page: without this, Access would drop the page's unsaved record.
   - `RefreshNav` restacks the visible items without gaps and highlights the current one.
 - **Reopen**: `frmMain.Reopen pageKey` closes and reopens the shell on the same page,
   which is how a palette switch repaints everything. An `m_reopen` flag keeps `Form_Close`
@@ -556,8 +598,9 @@ Write app-specific helpers next to the builds that use them. Examples:
   - `RunDialog(name, openArgs)` opens the form with `acDialog` and returns True when the
     dialog set `TempVars("DialogResult") = "ok"`.
   - While a dialog is open the app behind it is dimmed, like a web modal: a see-through
-    layer of `CLR_SIDEBAR` (45%) over the Access window. `RunDialog` and `KitMsgBox` do
-    this themselves and remove the dim when the dialog closes, or fails to open.
+    layer of `CLR_SIDEBAR` (45%) over the Access window. `RunDialog`, `KitMsgBox` and
+    `KitInputBox` do this themselves and remove the dim when the dialog closes, or fails
+    to open.
     `RunDialog name, openArgs, False` opens one undimmed. A modal form opened any other way
     calls `DimApp` before it and `UndimApp` after, on the error path too. The date picker
     is a small drop-down, so it isn't dimmed.
@@ -741,6 +784,12 @@ A page that lists records and shows the selected one beside the list:
   when it changes, filters it, and hides the empty state. Call it from the list or the
   page, never from inside the detail form: swapping a subform while one of its own events
   runs is unsafe (the same reason navigation is deferred, section 6.5).
+- The detail form checks its required fields in `Form_BeforeUpdate` (`Cancel = Not
+  CheckRequired(Me, ...)`) as well as on Save, so no save path skips them. A refused
+  save keeps the record in the panel: `ShowDetail` and `ClearDetail` return False and
+  change nothing, `GridClick` then puts the list's selection back on the panel's record,
+  and a filter chip calls `SaveDetail Me, "sfDetail"` first and stops when it is False.
+  The page's `CanLeave` does the same for the shell (section 6.5).
 - Whenever the list changes (load, a chip, the search box), call `SelectFirstRow
   Me.sfList`. It selects the first row and calls `GridClick` as a click would; when the
   list is empty it returns Null, and the page calls `ClearDetail Me, "sfDetail"` to show
@@ -921,7 +970,7 @@ The Appearance dialog grows by itself, because it is built from `PALETTE_COUNT`.
    - Set `g_SrcRoot`.
    - Run named steps.
    - Build subforms, then pages, then dialogs, then the shell.
-   - Set startup options.
+   - Set startup options, opening the first form through `BuildTrustCheck`.
    - Return `"OK"` or the step that failed.
 5. Build the shell: collapsible sidebar with `NavItem`s, `sfPage` host, deferred
    `QueueNav`/`ShowPage`/`RefreshNav`, and `PageKey`/`Reopen`.
@@ -929,9 +978,10 @@ The Appearance dialog grows by itself, because it is built from `PALETTE_COUNT`.
    and a `src/forms/pg<Name>.vba` where every handler uses the standard error handler.
 7. Copy the dialogs: `dlgAppearance`, `BuildMessageDialog` (for `Notify` and `HandleError`),
    `BuildToast` (for `KitToast`),
+   `BuildInputDialog` (for `KitInputBox`),
    `BuildDatePicker` (for date fields), and a non-modal `dlgHelp` with `help.txt` and the F1
    `AutoKeys` macro. Optionally add the splash screen with `BuildSplash` and
-   `HideAccessSplash`, and make `frmSplash` the startup form.
+   `HideAccessSplash`, and pass `frmSplash` to `BuildTrustCheck` as the startup form.
 8. Write `README.md` and `DEVELOPING.md` using the structure in section 4, linking to the
    kit's README for the builder catalog.
 9. Check every page in a light palette and a dark palette. There is no automated UI test,

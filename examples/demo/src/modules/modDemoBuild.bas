@@ -3,8 +3,9 @@ Option Explicit
 
 ' Kit Demo - BuildAll and the Build_<form> procedures. Each page shows a
 ' group of kit features: pgCards (Card, Progress), pgTables (BuildGrid
-' options, GridFit, tabs and chips with counts) and pgList (the list/detail
-' pattern, PrintGrid and ExportGrid). frmMain is the shell.
+' options, GridFit, the column chooser, tabs and chips with counts) and
+' pgList (the list/detail pattern, PrintGrid and ExportGrid). frmMain is the
+' shell.
 
 Public Const PAGE_W As Long = 15840             ' 1056 px
 Public Const PAGE_H As Long = 8400              ' 560 px
@@ -101,8 +102,10 @@ Private Sub BuildUserInterface()
     Build_pgList
     Build_dlgAppearance
     BuildMessageDialog             ' the kit's dlgMessage, for KitMsgBox
+    BuildInputDialog               ' the kit's dlgInput, for KitInputBox
     BuildDatePicker                ' the kit's dlgDatePick, for DateBox
     BuildToast                     ' the kit's dlgToast, for KitToast
+    BuildColumnsDialog             ' the kit's dlgColumns, for ChooseGridColumns
     BuildSplash "frmMain", "access-modern-ui demo"   ' the kit's frmSplash, the startup form
     Build_frmMain
 End Sub
@@ -166,6 +169,7 @@ Private Sub Build_subItem()
     Ev F, "OnCurrent", "AfterUpdate"
     F.Section(acDetail).BackColor = CLR_SURFACE
     F.Section(acDetail).AlternateBackColor = CLR_SURFACE
+    Ev F, "BeforeUpdate"
     hw = px(156): x2 = px(172)
     FieldLbl "lblName", "ITEM", 0, 0, px(328)
     Txt "txtName", "name", 0, px(18), px(328), px(30)
@@ -221,8 +225,10 @@ Private Sub Build_pgCards()
 
     x = CX + 2 * (w + px(16))
     Card "Square", "Square card", x, y, w, h, square:=True
-    Lbl "lblSquareBody", "Square corners: the fallback for a card where a subform or a control that repaints often covers a corner.", _
-        x + px(14), y + px(38), w - px(28), px(54), 9, False, CLR_MUTED_FG
+    Lbl "lblSquareBody", "Square corners: the fallback for a card where a subform or a control that repaints often covers a corner. " & _
+        "Its buttons ask a question (KitInputBox).", x + px(14), y + px(38), w - px(28), px(54), 9, False, CLR_MUTED_FG
+    Btn "btnSquareA", "Ask", x + px(14), y + h - px(42), px(96), px(28)
+    Btn "btnSquareB", "Ask masked", x + px(118), y + h - px(42), px(96), px(28), "outline"
 
     y = px(250): h = PAGE_H - y - px(16)
     Card "Items", "Items in a rounded card", CX, y, CW(), h, , 2, 2
@@ -234,13 +240,15 @@ End Sub
 ' Tables: one table with every BuildGrid option (header band, zebra rows,
 ' status pills, 38px rows, proportional fit) and one built the default way,
 ' switched by a tab strip with counts; status chips with counts and a search
-' box and category filter to their right.
+' box and category filter to their right. Columns, top right, opens the
+' column chooser for the first table.
 Private Sub Build_pgTables()
     Dim c As Control, x As Long, y As Long
     NewForm "", 0, PAGE_W, PAGE_H
     Ev F, "OnLoad", "OnResize"
     PageHeader "Tables", "The first tab shows every table option; the second shows a table built the default way. " & _
-        "Resize the window: the first table's columns grow in proportion.", CX
+        "Resize the window: the first table's columns grow in proportion. Columns hides and reorders them.", CX
+    Set c = Btn("btnColumns", "Columns", PAGE_W - CX - px(96), px(24), px(96), px(32), "outline"): Anchor c, 1, 0
     TabStrip CX, px(84), CW(), "TabClick", "options|Table options|0", "plain|Default table|0"
     y = px(128)
     x = Chips(CX, y + px(1))
@@ -288,11 +296,12 @@ Private Sub Build_pgList()
     SaveForm "pgList"
 End Sub
 
-' Shell: sidebar with the pages and Appearance, and the page host sfPage.
+' Shell: sidebar with the pages, Folder trust (the kit's trust page) and
+' Appearance, and the page host sfPage.
 Private Sub Build_frmMain()
     Dim c As Control, i As Long, pages As Variant, y As Long
     NewForm "", 0, px(200) + PAGE_W, PAGE_H
-    Ev F, "OnLoad", "OnTimer", "OnResize"
+    Ev F, "OnLoad", "OnTimer", "OnResize", "OnUnload"
     F.Caption = APP_NAME
     Set c = Box("boxSide", 0, 0, px(200), PAGE_H, CLR_SIDEBAR): Anchor c, 0, 2
     Lbl "lblBrand", APP_NAME, px(20), px(20), px(160), px(26), 13, True, CLR_WHITE
@@ -308,7 +317,11 @@ Private Sub Build_frmMain()
         VCenter c, px(34), 10, True
         y = y + px(38)
     Next
-    Set c = Link("lnkAppearance", "Appearance", px(12), PAGE_H - px(52), px(176), px(34), "=ShowAppearance()", 10, CLR_NAV_FG)
+    Set c = Link("lnkTrust", "Folder trust", px(12), PAGE_H - px(90), px(176), px(34), "=ShowTrustHelp()", 10, CLR_NAV_FG)
+    c.LeftMargin = px(12)
+    VCenter c, px(34), 10, True
+    Anchor c, 0, 1
+    Set c = Link("lnkAppearance", "Appearance", px(12), PAGE_H - px(52), px(176), px(34), "=DemoAppearance()", 10, CLR_NAV_FG)
     c.LeftMargin = px(12)
     VCenter c, px(34), 10, True
     Anchor c, 0, 1
@@ -333,14 +346,16 @@ End Sub
 
 ' Open on the splash screen, which opens frmMain, without Access's own
 ' splash, the navigation pane or document tabs, and record when this front
-' end was built (error-log entries and the splash show it).
+' end was built (error-log entries and the splash show it). The kit's
+' BuildTrustCheck opens the splash at startup (in place of StartUpForm) and
+' shows its trust page when Access would ask to enable content.
 Private Sub SetStartupOptions()
     SetProp "AppTitle", dbText, APP_NAME
-    SetProp "StartUpForm", dbText, "frmSplash"
     SetProp "StartUpShowDBWindow", dbBoolean, False
     SetProp "ShowDocumentTabs", dbBoolean, False
     SetProp "Perform Name AutoCorrect", dbLong, 0
     SetProp "Track Name AutoCorrect Info", dbLong, 0
     SetProp "AppBuild", dbText, Format$(Now(), "yyyy-mm-dd hh:nn")
-    HideAccessSplash                ' last: it writes a file, so a failure leaves the settings above in place
+    HideAccessSplash                ' it writes a file, so a failure leaves the settings above in place
+    BuildTrustCheck "frmSplash"     ' after any StartUpForm setting: it removes StartUpForm
 End Sub
