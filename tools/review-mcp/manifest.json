@@ -51,6 +51,7 @@
     { "name": "review_lock", "description": "Take shared reviewer lock files on a machine several reviewers use." },
     { "name": "review_unlock", "description": "Release the lock files this reviewer took." }
   ],
+  "license": "MIT",
   "keywords": ["microsoft-access", "access", "vba", "visual-review", "screenshots", "windows", "com"],
   "compatibility": {
     "platforms": ["win32"]
