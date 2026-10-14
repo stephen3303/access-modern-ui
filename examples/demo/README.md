@@ -12,6 +12,8 @@ test changes to it. It has one local table of fictional items and three pages:
 Appearance in the sidebar switches palettes. The demo opens on the kit's splash screen
 (`BuildSplash`), which opens the main window and closes; `HideAccessSplash` replaces
 Access's own splash with `KitDemo.bmp`.
+Folder trust in the sidebar opens the kit's trust page (`dlgTrust`), which also opens by
+itself at startup when the demo's folder isn't a Trusted Location.
 
 ## Build and open
 
@@ -57,6 +59,10 @@ watching for Visual Basic error dialogs as well as the error log:
 - List and detail: the first row opens on load and after each filter; a click shows that
   row; editing and saving updates the list; a search with no match shows both empty
   states; Print previews and Export writes exactly the rows shown, with the captions.
+- Folder trust: the page shows this folder's path and the steps, nothing is cut off, and
+  Close (or Esc) closes it. Opened from a folder that isn't a Trusted Location, with the
+  code turned off, the demo shows the page on its own. After Enable Content, Access
+  remembers the file as trusted, so the page doesn't open over the main window.
 - Date picker (Due's calendar button): October 2026 shows Columbus Day (12th) underlined in
   the danger color and item due dates (1st, 4th, 7th...) in the warning color, with
   tooltips naming them; July 2026 marks Friday the 3rd as Independence Day (observed).

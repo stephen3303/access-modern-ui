@@ -447,10 +447,11 @@ End Sub
 ' Splash screen frmSplash, shown while the app starts: the app's icon glyph,
 ' APP_NAME, a subtitle, its version (database property AppVersion, else the
 ' AppBuild stamp) and a status line (SplashStatus), on the sidebar color of
-' the user's palette (ThemeForm repaints it). Make it the StartUpForm. Its
-' code-behind (kit\forms\frmSplash.vba) opens nextForm, whose Load does the
-' app's start-up work under the splash, then closes. Call it once with the
-' app's dialogs, and HideAccessSplash for Access's own splash.
+' the user's palette (ThemeForm repaints it). Pass it to BuildTrustCheck as
+' the startup form. Its code-behind (kit\forms\frmSplash.vba) opens
+' nextForm, whose Load does the app's start-up work under the splash, then
+' closes. Call it once with the app's dialogs, and HideAccessSplash for
+' Access's own splash.
 ' glyph: a Segoe MDL2 Assets character; default ChrW(&HE80F), home.
 Public Sub BuildSplash(Optional ByVal nextForm As String = "frmMain", Optional ByVal subtitle As String = "", _
         Optional ByVal glyph As String = "")

@@ -42,8 +42,8 @@ access/
   build.ps1                  drives Access via COM; loads modules, calls BuildAll
   kit/
     modules/*.bas            reusable: modUIKit, modKitUI, modDarkMode, modPng, modGridOut,
-                             modGridCols, modCsv, modCrypto, modKitUtil, modBackdrop
-                             (copied unchanged from the kit)
+                             modGridCols, modCsv, modCrypto, modKitUtil, modBackdrop,
+                             modTrust (copied unchanged from the kit)
     forms/*.vba              kit code-behind: subGrid, dlgAppearance, dlgDatePick,
                              dlgMessage, dlgColumns
   src/
@@ -83,9 +83,21 @@ access/
 - Runs named steps, setting `m_step = "..."` before each so a failure names the step:
   create back end, link, local tables, seed, assets, user interface, help, startup.
 - Startup options it sets:
-  - StartUpForm = the login form or `frmMain`, or the kit's optional splash screen
-    `frmSplash` (`BuildSplash`), which opens it. `HideAccessSplash`, called last, hides
-    Access's own splash.
+  - The first form (the login form or `frmMain`, or the kit's optional splash screen
+    `frmSplash` from `BuildSplash`, which opens it) through the kit's
+    `BuildTrustCheck "<form>"`, not StartUpForm. Call it after anything that sets
+    StartUpForm, since it removes it. It adds an `AutoExec` macro (replacing any the app
+    had) that opens the form when the code is on, and opens `dlgTrust` instead when Access
+    has turned the code off. When Access would still ask next time (not a Trusted
+    Location, not a remembered trusted document), `dlgTrust` also opens over the form.
+    `dlgTrust` has no code module or Open hook, so it works with the code off; it explains
+    how to add the folder in the Trust Center. Code never changes Trust Center settings.
+    The check reads the user's (HKCU) settings and policies only, not machine-wide (HKLM)
+    policy locations, so on such a PC the page can show when it isn't needed.
+    With the code off, Access first shows its own "active content is blocked" notice;
+    `dlgTrust` follows it. Its Close macro keeps Save at Prompt, the only setting Access
+    allows then.
+  - `HideAccessSplash`, called just before `BuildTrustCheck`, hides Access's own splash.
   - Hidden: the DB window, document tabs and datasheet schema.
   - Name AutoCorrect off.
   - AppTitle.
@@ -130,6 +142,7 @@ them, and the shell (`frmMain`) last.
 | modKitUI (kit) | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSwitch`, `ToggleFocus`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `KitInputBox`, `CheckRequired`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
 | modGridCols (kit) | Column chooser: `ChooseGridColumns`, `RestoreGridColumns`, `SetGridColumns`, and `BuildColumnsDialog` for `dlgColumns` |
+| modTrust (kit) | `BuildTrustCheck` startup, `TrustNeeded`, `InTrustedLocation`, `ShowTrustHelp` (the `dlgTrust` page on trusting the folder) |
 | modKitUtil (kit) | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `CenterOnApp`, `SetVisible`, `SetEnabled` |
 | modBackdrop (kit) | `DimApp`, `UndimApp`: the dimmed backdrop behind modal dialogs |
 | modDarkMode (kit), modPalette (gen), modTheme (gen) | Palette engine (section 7) |
@@ -944,7 +957,7 @@ The Appearance dialog grows by itself, because it is built from `PALETTE_COUNT`.
    - Set `g_SrcRoot`.
    - Run named steps.
    - Build subforms, then pages, then dialogs, then the shell.
-   - Set startup options.
+   - Set startup options, opening the first form through `BuildTrustCheck`.
    - Return `"OK"` or the step that failed.
 5. Build the shell: collapsible sidebar with `NavItem`s, `sfPage` host, deferred
    `QueueNav`/`ShowPage`/`RefreshNav`, and `PageKey`/`Reopen`.
@@ -954,7 +967,7 @@ The Appearance dialog grows by itself, because it is built from `PALETTE_COUNT`.
    `BuildInputDialog` (for `KitInputBox`),
    `BuildDatePicker` (for date fields), and a non-modal `dlgHelp` with `help.txt` and the F1
    `AutoKeys` macro. Optionally add the splash screen with `BuildSplash` and
-   `HideAccessSplash`, and make `frmSplash` the startup form.
+   `HideAccessSplash`, and pass `frmSplash` to `BuildTrustCheck` as the startup form.
 8. Write `README.md` and `DEVELOPING.md` using the structure in section 4, linking to the
    kit's README for the builder catalog.
 9. Check every page in a light palette and a dark palette. There is no automated UI test,

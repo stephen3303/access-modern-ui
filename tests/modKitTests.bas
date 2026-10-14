@@ -288,6 +288,28 @@ Public Function TestKit(ByVal root As String) As String
     Check Not ShowDetail(host, "sfRefuse", "subRefuse", "id=2"), "ShowDetail moved on after a refused save"
     host.sfRefuse.Form.Undo
     DoCmd.Close acForm, "frmTest", acSaveNo
+    ' Trust check: matching Trusted Locations, a codeless dlgTrust, and the AutoExec
+    ' macro that opens it with the code off.
+    Check PathCovers("C:\Apps\", False, "c:\apps") And Not PathCovers("C:\Apps", False, "C:\Apps\Sub"), "Trusted Location matching differs"
+    Check PathCovers("C:\", True, "C:\Apps\Sub") And Not PathCovers("C:\Apps", True, "C:\AppsOld"), "Trusted Location subfolder matching differs"
+    Check RecordPath("%USERPROFILE%/My%20Apps/App.accdb") = LCase$(Environ$("USERPROFILE") & "\my apps\app.accdb"), "Trusted document name not decoded"
+    BuildTrustCheck "frmTest"
+    DoCmd.OpenForm "dlgTrust", acDesign
+    Check Not Forms("dlgTrust").HasModule And Len(Forms("dlgTrust").OnOpen) = 0 And Len(Forms("dlgTrust").OnClose) = 0, _
+        "dlgTrust needs code to open or close"
+    Check Forms("dlgTrust").btnClose.OnClick = "mcrTrustClose", "dlgTrust Close doesn't run its macro"
+    DoCmd.Close acForm, "dlgTrust", acSaveNo
+    text = CurrentProject.Path & "\autoexec_test.txt"
+    Application.SaveAsText acMacro, "AutoExec", text
+    fitted = Replace(ReadTextFile(text), vbNullChar, "")   ' SaveAsText may write UTF-16
+    Kill text
+    Check InStr(fitted, "IsTrusted") > 0 And InStr(fitted, "dlgTrust") > 0 And InStr(fitted, "TrustStartup") > 0, "AutoExec lost its trust rows"
+    Application.SaveAsText acMacro, "mcrTrustClose", text
+    fitted = Replace(Replace(Replace(Replace(ReadTextFile(text), vbNullChar, ""), " ", ""), vbCr, ""), vbLf, "")
+    Kill text
+    ' With the code off Access only runs Close with Save at Prompt, so No (2) or Yes (1) breaks it
+    Check InStr(fitted, "dlgTrust") > 0 And InStr(fitted, "Argument=""dlgTrust""Argument=""1""") = 0 And _
+        InStr(fitted, "Argument=""dlgTrust""Argument=""2""") = 0, "mcrTrustClose doesn't close with Save at Prompt"
     BuildMessageDialog
     DoCmd.OpenForm "dlgMessage"
     Set host = Forms("dlgMessage")

@@ -293,7 +293,8 @@ Private Sub Build_pgList()
     SaveForm "pgList"
 End Sub
 
-' Shell: sidebar with the pages and Appearance, and the page host sfPage.
+' Shell: sidebar with the pages, Folder trust (the kit's trust page) and
+' Appearance, and the page host sfPage.
 Private Sub Build_frmMain()
     Dim c As Control, i As Long, pages As Variant, y As Long
     NewForm "", 0, px(200) + PAGE_W, PAGE_H
@@ -313,6 +314,10 @@ Private Sub Build_frmMain()
         VCenter c, px(34), 10, True
         y = y + px(38)
     Next
+    Set c = Link("lnkTrust", "Folder trust", px(12), PAGE_H - px(90), px(176), px(34), "=ShowTrustHelp()", 10, CLR_NAV_FG)
+    c.LeftMargin = px(12)
+    VCenter c, px(34), 10, True
+    Anchor c, 0, 1
     Set c = Link("lnkAppearance", "Appearance", px(12), PAGE_H - px(52), px(176), px(34), "=DemoAppearance()", 10, CLR_NAV_FG)
     c.LeftMargin = px(12)
     VCenter c, px(34), 10, True
@@ -338,14 +343,16 @@ End Sub
 
 ' Open on the splash screen, which opens frmMain, without Access's own
 ' splash, the navigation pane or document tabs, and record when this front
-' end was built (error-log entries and the splash show it).
+' end was built (error-log entries and the splash show it). The kit's
+' BuildTrustCheck opens the splash at startup (in place of StartUpForm) and
+' shows its trust page when Access would ask to enable content.
 Private Sub SetStartupOptions()
     SetProp "AppTitle", dbText, APP_NAME
-    SetProp "StartUpForm", dbText, "frmSplash"
     SetProp "StartUpShowDBWindow", dbBoolean, False
     SetProp "ShowDocumentTabs", dbBoolean, False
     SetProp "Perform Name AutoCorrect", dbLong, 0
     SetProp "Track Name AutoCorrect Info", dbLong, 0
     SetProp "AppBuild", dbText, Format$(Now(), "yyyy-mm-dd hh:nn")
-    HideAccessSplash                ' last: it writes a file, so a failure leaves the settings above in place
+    HideAccessSplash                ' it writes a file, so a failure leaves the settings above in place
+    BuildTrustCheck "frmSplash"     ' after any StartUpForm setting: it removes StartUpForm
 End Sub
