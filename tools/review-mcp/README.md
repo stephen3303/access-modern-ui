@@ -24,7 +24,9 @@ AccessReviewMcp.ps1   the MCP server (stdio) that exposes them as tools
 | `dialogs` | Lists and captures open message boxes and popups; `close=true` closes them. Also lists dialogs seen during earlier calls. |
 | `close_app` | Resets the palette to Navy, quits without saving design changes and confirms the process is gone. |
 
-Every Access call runs under a guard. A window that appears during a call is parked off-screen, captured and described. VBA and Office message boxes are closed so the call returns. Another window (a kit dialog opened modally) is closed if it is still blocking the call after 4 s. A call that runs past its timeout ends Access. The tool's result lists what the guard saw.
+Every Access call runs under a guard. A window that appears during a call is parked off-screen, captured and described. VBA and Office message boxes are closed so the call returns. A Yes/No box ignores Close, so the guard presses No, or the default button when there is no No. Another window (a kit dialog opened modally) is closed if it is still blocking the call after 4 s, except while `open_app` starts the front end, so a splash or sign-in form stays open. A call that runs past its timeout ends Access. The tool's result lists what the guard saw.
+
+PowerShell can't read Access form, control and section properties directly (their type information fails, so `$form.Hwnd` comes back empty). The tools read them with `Application.Eval("Forms![name]...")` and set the form's inside size late-bound.
 
 ## Setup
 

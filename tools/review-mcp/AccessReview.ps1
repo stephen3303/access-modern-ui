@@ -118,6 +118,35 @@ public static class KitReviewWin {
 
     public static bool Close(IntPtr h) { return PostMessage(h, 0x10, IntPtr.Zero, IntPtr.Zero); }   // WM_CLOSE
 
+    [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr h, uint msg, IntPtr w, IntPtr l);
+    [DllImport("user32.dll")] static extern bool IsWindow(IntPtr h);
+    [DllImport("user32.dll")] static extern IntPtr GetDlgItem(IntPtr h, int id);
+
+    static bool Gone(IntPtr h, int ms) {
+        for (int i = 0; i < ms / 100; i++) { Thread.Sleep(100); if (!IsWindow(h) || !IsWindowVisible(h)) return true; }
+        return false;
+    }
+
+    // Closes a message box. WM_CLOSE acts as Cancel; a Yes/No box has no Cancel and
+    // ignores it, so then press No (the safer answer in a review), else the default button.
+    public static string Dismiss(IntPtr h) {
+        PostMessage(h, 0x10, IntPtr.Zero, IntPtr.Zero);
+        if (Gone(h, 1000)) return "closed";
+        if (Cls(h) == "#32770") {
+            int id = 0; string what = "";
+            if (GetDlgItem(h, 7) != IntPtr.Zero) { id = 7; what = "pressed No"; }   // IDNO
+            else {
+                long r = SendMessage(h, 0x400, IntPtr.Zero, IntPtr.Zero).ToInt64();   // DM_GETDEFID
+                if (((r >> 16) & 0xFFFF) == 0x534B) { id = (int)(r & 0xFFFF); what = "pressed the default button"; }
+            }
+            if (id != 0) {
+                PostMessage(h, 0x111, new IntPtr(id), IntPtr.Zero);   // WM_COMMAND
+                if (Gone(h, 1000)) return what;
+            }
+        }
+        return "still open";
+    }
+
     // Visible top-level windows of a process, skipping tooltips and empty windows.
     public static List<IntPtr> TopWindows(uint pid) {
         var r = new List<IntPtr>();
@@ -178,8 +207,9 @@ public static class KitReviewWin {
 // Watches one Access process while a COM call runs. Each new top-level window is parked
 // off the desktop (in off-screen mode), captured and described. VBA and Office message
 // boxes are closed at once so the blocked call returns; any other window (a kit dialog
-// form opened modally) is closed if the call is still blocked a few seconds later. If
-// the call outlasts the timeout, Access is ended.
+// form opened modally) is closed if the call is still blocked a few seconds later
+// (never, with modalSec 0, as while a front end starts up). If the call outlasts the
+// timeout, Access is ended.
 public class KitReviewGuard {
     readonly uint pid; readonly string dir; readonly bool park; readonly int timeoutMs, modalMs;
     readonly HashSet<IntPtr> known = new HashSet<IntPtr>();
@@ -211,9 +241,10 @@ public class KitReviewGuard {
                 string shot = System.IO.Path.Combine(dir, "dialog-" + DateTime.Now.ToString("HHmmss") + "-" + (++n) + ".png");
                 try { KitReviewWin.Save(h, shot, 0, 0, 0, 0, 1); } catch (Exception e) { shot = "(not captured: " + e.Message + ")"; }
                 bool msgBox = cls == "#32770" || cls == "NUIDialog";
-                Note((msgBox ? "[message box] " : "[window " + cls + "] ") + KitReviewWin.Describe(h) + " | capture " + shot +
-                     (msgBox ? " | closed" : ""));
-                if (msgBox) KitReviewWin.Close(h); else pending[h] = sw.ElapsedMilliseconds;
+                string line = (msgBox ? "[message box] " : "[window " + cls + "] ") + KitReviewWin.Describe(h) + " | capture " + shot;
+                if (msgBox) line += " | " + KitReviewWin.Dismiss(h);
+                else if (modalMs > 0) pending[h] = sw.ElapsedMilliseconds;
+                Note(line);
             }
             foreach (var kv in new List<KeyValuePair<IntPtr, long>>(pending)) {
                 if (sw.ElapsedMilliseconds - kv.Value < modalMs) continue;
@@ -272,13 +303,53 @@ function Invoke-ReviewGuarded {
     [pscustomobject]@{ Value = $value; Dialogs = $events }
 }
 
-function Get-ReviewForm([string]$Name) {
-    Assert-ReviewOpen
-    try { $script:Review.Acc.Forms.Item($Name) } catch { throw "Form '$Name' is not open." }
+# PowerShell's COM adapter can't read Access Form, Control and Section objects (their
+# type information fails, so $form.Hwnd comes back empty and InsideWidth "cannot be
+# found"). Everything on a form is read with Application.Eval and set late-bound with
+# InvokeMember.
+function Get-FormValue([string]$Name, [string]$Expr) {
+    $script:Review.Acc.Eval("Forms![$Name]$Expr")
 }
 
-function Get-FormSection($Form, [int]$Index) {
-    try { $Form.Section($Index) } catch { $null }
+function Find-FormValue([string]$Name, [string]$Expr) {
+    try { Get-FormValue $Name $Expr } catch { $null }
+}
+
+function Assert-FormOpen([string]$Name) {
+    Assert-ReviewOpen
+    if ($Name -match '[\[\]!"]') { throw "Unsupported form name '$Name'." }
+    try { $null = Get-FormValue $Name '.Name' } catch { throw "Form '$Name' is not open." }
+}
+
+function Get-FormHwnd([string]$Name) { [IntPtr][long](Get-FormValue $Name '.Hwnd') }
+
+# Heights of the sections form view shows (header, detail, footer), in twips.
+function Get-FormDesignHeight([string]$Name) {
+    $h = 0
+    foreach ($i in 1, 0, 2) {
+        if (Find-FormValue $Name ".Section($i).Visible") { $h += [int](Get-FormValue $Name ".Section($i).Height") }
+    }
+    $h
+}
+
+function Release-Com($o) {
+    if ($o -is [__ComObject]) { while ([Runtime.InteropServices.Marshal]::ReleaseComObject($o) -gt 0) {} }
+}
+
+# Sets InsideWidth/InsideHeight (twips) through InvokeMember; if that fails too, sizes
+# the form window with DoCmd.MoveSize plus its frame (window size minus inside size).
+function Set-FormInsideSize([string]$Name, [int]$Width, [int]$Height) {
+    $f = $null
+    try {
+        $f = $script:Review.Acc.Forms.Item($Name)
+        $set = [Reflection.BindingFlags]::SetProperty
+        [void][__ComObject].InvokeMember('InsideWidth', $set, $null, $f, @($Width))
+        [void][__ComObject].InvokeMember('InsideHeight', $set, $null, $f, @($Height))
+    } catch {
+        $fw = [int](Get-FormValue $Name '.WindowWidth') - [int](Get-FormValue $Name '.InsideWidth')
+        $fh = [int](Get-FormValue $Name '.WindowHeight') - [int](Get-FormValue $Name '.InsideHeight')
+        $script:Review.Acc.DoCmd.MoveSize([Type]::Missing, [Type]::Missing, $Width + $fw, $Height + $fh)
+    } finally { Release-Com $f }
 }
 
 # Lock files shared by reviewers on one machine (ACCESS_REVIEW_LOCKS: full paths,
@@ -294,7 +365,11 @@ function Enter-ReviewLock {
     foreach ($p in $Paths) { Set-Content -LiteralPath $p -Value $stamp -Encoding ASCII }
     Start-Sleep -Seconds 3
     $lost = @($Paths | Where-Object { -not (Test-Path -LiteralPath $_) -or ((Get-Content -LiteralPath $_ -Raw).Trim() -ne $stamp) })
-    if ($lost.Count) { return [pscustomobject]@{ Held = $false; Note = 'Another reviewer took the lock at the same moment: ' + ($lost -join '; ') + '. Wait and try again.' } }
+    if ($lost.Count) {
+        # Lost the race: take back the stamps that are still ours so no stale lock is left.
+        foreach ($p in $Paths) { if ((Test-Path -LiteralPath $p) -and ((Get-Content -LiteralPath $p -Raw).Trim() -eq $stamp)) { Remove-Item -LiteralPath $p } }
+        return [pscustomobject]@{ Held = $false; Note = 'Another reviewer took the lock at the same moment: ' + ($lost -join '; ') + '. Wait and try again.' }
+    }
     [pscustomobject]@{ Held = $true; Note = "Holding: $($Paths -join '; ')" }
 }
 
@@ -340,13 +415,20 @@ function Open-ReviewApp {
         Palette = 'Navy'; Dialogs = @(); LogMark = $null; FileMark = $null
     }
     try {
-        $open = Invoke-ReviewGuarded { $acc.OpenCurrentDatabase($Path, $false) } -TimeoutSec 180
+        # ModalSec 0: a splash or sign-in form shown at startup is left open.
+        $open = Invoke-ReviewGuarded { $acc.OpenCurrentDatabase($Path, $false) } -TimeoutSec 180 -ModalSec 0
     } catch { Close-ReviewApp | Out-Null; throw }
     & $place
     [pscustomobject]@{
         Path = $Path; Pid = $proc.Id; Mode = $Mode; Output = $OutputDirectory; AccessWindow = "$($w)x$($h)"
-        OpenForms = @(foreach ($f in $acc.Forms) { $f.Name }); Dialogs = $open.Dialogs
+        OpenForms = @(Get-ReviewOpenForms); Dialogs = $open.Dialogs
     }
+}
+
+function Get-ReviewOpenForms {
+    $acc = $script:Review.Acc
+    $n = [int]$acc.Eval('Forms.Count')
+    for ($i = 0; $i -lt $n; $i++) { [string]$acc.Eval("Forms($i).Name") }
 }
 
 # Closes the database without saving design changes, quits, and makes sure the process
@@ -360,8 +442,12 @@ function Close-ReviewApp {
         try { $r.Acc.CloseCurrentDatabase() } catch {}
         try { $r.Acc.Quit(2) } catch {}   # acQuitSaveNone
     }
-    try { [Runtime.InteropServices.Marshal]::ReleaseComObject($r.Acc) | Out-Null } catch {}
-    if (-not $r.Process.WaitForExit(10000)) { $r.Process.Kill(); $notes += 'Access did not quit within 10s; ended it.' }
+    # Access stays alive while this process holds any reference to it, including
+    # temporaries PowerShell made along the way, so release them all before waiting.
+    try { Release-Com $r.Acc } catch {}
+    $r.Acc = $null
+    [GC]::Collect(); [GC]::WaitForPendingFinalizers(); [GC]::Collect()
+    if (-not $r.Process.WaitForExit(15000)) { $r.Process.Kill(); $notes += 'Access did not quit within 15s; ended it.' }
     $script:Review = $null
     [pscustomobject]@{ Closed = $true; Note = ($notes -join ' ') }
 }
@@ -408,21 +494,17 @@ function Set-ReviewPalette {
 # Size and position facts for one open form, in pixels at 96 dpi (twips / 15) unless
 # named Phys (physical screen pixels).
 function Get-ReviewFormSize([string]$Name) {
-    $f = Get-ReviewForm $Name
-    $designH = 0
-    foreach ($i in 1, 0, 2) {   # header, detail, footer: the sections form view shows
-        $s = Get-FormSection $f $i
-        if ($s -and $s.Visible) { $designH += $s.Height }
-    }
-    $hwnd = [IntPtr][long]$f.Hwnd
+    Assert-FormOpen $Name
+    $px = { param($twips) [int]([int]$twips / $script:TwipsPerPx) }
+    $hwnd = Get-FormHwnd $Name
     $root = [KitReviewWin]::Root($hwnd)
     $fr = [KitReviewWin]::Rect($hwnd); $ar = [KitReviewWin]::Rect($script:Review.Hwnd)
     $popup = $root -ne $script:Review.Hwnd
     $clipped = (-not $popup) -and ($fr[0] -lt $ar[0] -or $fr[1] -lt $ar[1] -or ($fr[0] + $fr[2]) -gt ($ar[0] + $ar[2]) -or ($fr[1] + $fr[3]) -gt ($ar[1] + $ar[3]))
     [pscustomobject]@{
         Form = $Name
-        DesignPx = "$([int]($f.Width / $script:TwipsPerPx))x$([int]($designH / $script:TwipsPerPx))"
-        InsidePx = "$([int]($f.InsideWidth / $script:TwipsPerPx))x$([int]($f.InsideHeight / $script:TwipsPerPx))"
+        DesignPx = "$(& $px (Get-FormValue $Name '.Width'))x$(& $px (Get-FormDesignHeight $Name))"
+        InsidePx = "$(& $px (Get-FormValue $Name '.InsideWidth'))x$(& $px (Get-FormValue $Name '.InsideHeight'))"
         WindowPhys = "$($fr[2])x$($fr[3])"
         Popup = $popup
         ClippedByAccessWindow = $clipped
@@ -434,6 +516,7 @@ function Get-ReviewFormSize([string]$Name) {
 # dpi pixels) for forms whose design size is set in code, e.g. SPM frmMain 1256x620.
 function Open-ReviewForm {
     param([Parameter(Mandatory)][string]$Name, [string]$OpenArgs, [int]$WidthPx, [int]$HeightPx, [switch]$Maximize)
+    if ($Name -match '[\[\]!"]') { throw "Unsupported form name '$Name'." }
     $missing = [Type]::Missing
     $r = Invoke-ReviewGuarded {
         $acc = $script:Review.Acc
@@ -448,22 +531,18 @@ function Open-ReviewForm {
 # maximized inside the Access window. Used for the small and maximized checks too.
 function Set-ReviewFormSize {
     param([Parameter(Mandatory)][string]$Name, [int]$WidthPx, [int]$HeightPx, [switch]$Maximize)
-    $f = Get-ReviewForm $Name
+    Assert-FormOpen $Name
     $r = Invoke-ReviewGuarded {
         $acc = $script:Review.Acc
         $acc.DoCmd.SelectObject(2, $Name, $false)   # acForm
         if ($Maximize) { $acc.DoCmd.Maximize() } else {
             $acc.DoCmd.Restore()
-            if ($WidthPx -gt 0) { $w = $WidthPx * $script:TwipsPerPx } else { $w = $f.Width }
-            if ($HeightPx -gt 0) { $h = $HeightPx * $script:TwipsPerPx } else {
-                $h = 0
-                foreach ($i in 1, 0, 2) { $s = Get-FormSection $f $i; if ($s -and $s.Visible) { $h += $s.Height } }
-            }
-            $f.InsideWidth = $w
-            $f.InsideHeight = $h
+            $w = if ($WidthPx -gt 0) { $WidthPx * $script:TwipsPerPx } else { [int](Get-FormValue $Name '.Width') }
+            $h = if ($HeightPx -gt 0) { $HeightPx * $script:TwipsPerPx } else { Get-FormDesignHeight $Name }
+            Set-FormInsideSize $Name $w $h
         }
     }
-    $root = [KitReviewWin]::Root([IntPtr][long]$f.Hwnd)
+    $root = [KitReviewWin]::Root((Get-FormHwnd $Name))
     if ($script:Review.Mode -eq 'offscreen' -and $root -ne $script:Review.Hwnd) { [void][KitReviewWin]::Park($root) }
     $size = Get-ReviewFormSize $Name
     $size | Add-Member -NotePropertyName Requested -NotePropertyValue $(if ($Maximize) { 'maximized' } elseif ($WidthPx -or $HeightPx) { "${WidthPx}x${HeightPx} px" } else { 'design size' })
@@ -475,8 +554,9 @@ function Set-ReviewFormSize {
 # window, enlarged by Zoom). The file name carries form, palette and label.
 function Save-ReviewCapture {
     param([Parameter(Mandatory)][string]$Name, [string]$Label, [int[]]$Crop, [int]$Zoom = 1)
-    $f = Get-ReviewForm $Name
-    $hwnd = [IntPtr][long]$f.Hwnd
+    Assert-FormOpen $Name
+    $hwnd = Get-FormHwnd $Name
+    if ($hwnd -eq [IntPtr]::Zero) { throw "Form '$Name' has no window handle." }
     $tag = ($script:Review.Palette -replace ' ', '').ToLower()
     $file = ($Name, $tag, $Label | Where-Object { $_ }) -join '-'
     if ($Crop) { $file += '-crop' }
@@ -495,24 +575,34 @@ function Save-ReviewCapture {
 # colours that matter for the kit, so gaps and the 16 px card inset can be computed.
 function Get-ReviewControls {
     param([Parameter(Mandatory)][string]$Name)
-    $f = Get-ReviewForm $Name
-    $names = 'Header', 'Detail', 'Footer'
-    $list = foreach ($c in $f.Controls) {
-        $o = [ordered]@{ Name = $c.Name; Type = [int]$c.ControlType; Section = $null
-                         Left = [int]($c.Left / 15); Top = [int]($c.Top / 15); Width = [int]($c.Width / 15); Height = [int]($c.Height / 15)
-                         Visible = [bool]$c.Visible }
-        try { $o.Section = @{ 0 = 'Detail'; 1 = 'Header'; 2 = 'Footer' }[[int]$c.Section] } catch {}
-        foreach ($p in 'Caption', 'BackColor', 'ForeColor', 'BorderColor', 'BorderStyle', 'BackStyle', 'FontName', 'FontSize', 'TextAlign') {
-            try { $o[$p] = $c.$p } catch {}
+    Assert-FormOpen $Name
+    $sectionNames = @{ 0 = 'Detail'; 1 = 'Header'; 2 = 'Footer' }
+    $n = [int](Get-FormValue $Name '.Controls.Count')
+    $list = for ($i = 0; $i -lt $n; $i++) {
+        $at = ".Controls($i)"
+        $type = [int](Get-FormValue $Name "$at.ControlType")
+        $o = [ordered]@{
+            Name = [string](Get-FormValue $Name "$at.Name"); Type = $type
+            Section = $sectionNames[[int](Find-FormValue $Name "$at.Section")]
+            Left = [int]([int](Get-FormValue $Name "$at.Left") / 15); Top = [int]([int](Get-FormValue $Name "$at.Top") / 15)
+            Width = [int]([int](Get-FormValue $Name "$at.Width") / 15); Height = [int]([int](Get-FormValue $Name "$at.Height") / 15)
+            Visible = [bool](Get-FormValue $Name "$at.Visible")
         }
-        try { if ($c.ControlType -in 109, 111, 110) { $o['Value'] = [string]$c.Value } } catch {}   # text box, combo, list
+        foreach ($p in 'Caption', 'BackColor', 'ForeColor', 'BorderColor', 'BorderStyle', 'BackStyle', 'FontName', 'FontSize', 'TextAlign') {
+            $v = Find-FormValue $Name "$at.$p"   # not every control type has every property
+            if ($null -ne $v) { $o[$p] = $v }
+        }
+        if ($type -in 109, 110, 111) { $o['Value'] = [string](Find-FormValue $Name "$at.Value") }   # text box, list, combo
         [pscustomobject]$o
     }
     $sections = foreach ($i in 1, 0, 2) {
-        $s = Get-FormSection $f $i
-        if ($s) { [pscustomobject]@{ Section = $names[@(1, 0, 2).IndexOf($i)]; Height = [int]($s.Height / 15); Visible = [bool]$s.Visible; BackColor = $s.BackColor } }
+        $vis = Find-FormValue $Name ".Section($i).Visible"
+        if ($null -ne $vis) {
+            [pscustomobject]@{ Section = $sectionNames[$i]; Height = [int]([int](Get-FormValue $Name ".Section($i).Height") / 15)
+                               Visible = [bool]$vis; BackColor = (Find-FormValue $Name ".Section($i).BackColor") }
+        }
     }
-    [pscustomobject]@{ Form = $Name; WidthPx = [int]($f.Width / 15); Sections = @($sections); Controls = @($list) }
+    [pscustomobject]@{ Form = $Name; WidthPx = [int]([int](Get-FormValue $Name '.Width') / 15); Sections = @($sections); Controls = @($list) }
 }
 
 # Open windows of the Access instance other than its main window: message boxes and
@@ -525,8 +615,8 @@ function Get-ReviewDialogs {
         if ($h -eq $r.Hwnd) { continue }
         $shot = Join-Path $r.Out ('window-' + (Get-Date -Format 'HHmmss') + "-$([long]$h).png")
         try { [void][KitReviewWin]::Save($h, $shot, 0, 0, 0, 0, 1) } catch { $shot = "(not captured: $($_.Exception.Message))" }
-        $item = [pscustomobject]@{ Class = [KitReviewWin]::Cls($h); Text = [KitReviewWin]::Describe($h); Capture = $shot; Closed = $false }
-        if ($Close) { $item.Closed = [KitReviewWin]::Close($h) }
+        $item = [pscustomobject]@{ Class = [KitReviewWin]::Cls($h); Text = [KitReviewWin]::Describe($h); Capture = $shot; Closed = $null }
+        if ($Close) { $item.Closed = [KitReviewWin]::Dismiss($h) }
         $item
     }
     [pscustomobject]@{ Open = @($found); SeenDuringCalls = @($r.Dialogs) }
