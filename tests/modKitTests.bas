@@ -467,7 +467,8 @@ Public Function TestKit(ByVal root As String) As String
     CurrentDb.Execute "INSERT INTO test_filter VALUES (4,NULL,7)"
     CurrentDb.Execute "INSERT INTO test_filter VALUES (5,'',9)"
     CurrentDb.Execute "INSERT INTO test_filter VALUES (6,'O''Brien',9)"
-    cols = Array("category|Category|160|", "qty|Qty|80|r", "=[qty]*2|Double|80|r")
+    ' Qty has a sort field (a fifth part); Category has none.
+    cols = Array("category|Category|160|", "qty|Qty|80|r|id", "=[qty]*2|Double|80|r")
     BuildGrid "subTestFilter", cols, px(500), fit:=True
     NewForm "", 0, px(640), px(300)
     GridHeaders "flt", cols, px(24), px(20), sortSf:="sfFlt", filterSf:="sfFlt"
@@ -491,7 +492,7 @@ Public Function TestKit(ByVal root As String) As String
     Check GridColumnFiltered(sf, 0) And Not GridColumnFiltered(sf, 1), "Filtered columns reported wrongly"
     Check host.fltFilter0.ForeColor = Th(CLR_PRIMARY) And host.fltFilter1.ForeColor = Th(CLR_MUTED_FG), "Funnels don't show which column is filtered"
     vals = GridColumnValues(sf, "flt", 1)
-    Check UBound(vals) = 1 And vals(0) = 5 And vals(1) = 7, "Column values ignore the other filters"
+    Check UBound(vals) = 1 And vals(0) = 5 And vals(1) = 7, "Column values ignore the other filters, or not in sort-field order"
     vals = GridColumnValues(sf, "flt", 0)
     Check UBound(vals) = 2, "Column values narrowed by the column's own filter"
     SetGridFilter sf, ""
