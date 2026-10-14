@@ -452,8 +452,7 @@ End Sub
       - `fit:=True` keeps the last column at its own width so `GridFit` can scale
         every column in proportion. Call `GridFit Me.sfList, "hdrList"` from the
         host's `Form_Resize`; it also moves the captions `GridHeaders` drew with that
-        prefix. Columns never get narrower than designed. Draw those captions with
-        `GridHeaders ..., fit:=True`, so moving them never widens the page.
+        prefix. Columns never get narrower than designed.
     - **Search matches are marked.** On a page with a search box, give every column
       the search looks in the `s` option, and call `GridHighlight Me.sfList, term` with
       the box's text whenever it changes (with the filter). Each match shows in
@@ -470,7 +469,7 @@ End Sub
       `GridClick(grid, dbl)`.
     - Each column's `Tag` holds its caption and design position, which `GridFit` and
       modGridOut read.
-  - `GridHeaders prefix, cols, x, y, [parentCtl], [band], [w], [sortSf], [fit]` puts the
+  - `GridHeaders prefix, cols, x, y, [parentCtl], [band], [w], [sortSf]` puts the
     captions above the grid in 8pt bold muted uppercase. `band:=True` draws them on a 22px `CLR_INSET`
     strip, `w` wide (default: the columns' widths), that stretches with the window.
     - **Click to sort.** `sortSf:="sfList"` (the table's subform control) makes each
@@ -752,9 +751,10 @@ Write app-specific helpers next to the builds that use them. Examples:
 - **Anchored widths**: an anchored control's `Width` still returns the design value. Use
   `form.InsideWidth - form.Width` to get the extra width.
 - **Form width only grows**: moving a control past a form's right edge at run time widens
-  the form, and Access never narrows it again, nor the controls anchored to it. Move
-  controls on a stretching page only when they are anchored right, whose `Left` is a
-  design value Access adds the extra width to (`GridHeaders ..., fit:=True`).
+  the form, and the anchored controls' design sizes grow with it. Access never narrows
+  them again. To narrow, move that control back, take the same amount off each anchored
+  control (`Width` if anchored both sides, `Left` if anchored right), then set the form's
+  `Width` (GridFit does this for its captions' host).
 - Set late-bound properties such as an image's `ControlSource` through
   `c.Properties("Name")`. Setting them directly can fail silently.
 - An unset conditional ForeColor falls back to black, so always carry the control's own
