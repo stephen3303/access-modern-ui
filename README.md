@@ -22,6 +22,7 @@ kit/forms/subGrid.vba         code-behind for BuildGrid tables
 tools/make_themes.py          generates the build palette and the palette modules, checks contrast
 tools/AccessWatch.ps1         makes a build script report Visual Basic and Access dialogs instead of hanging
 tools/VbaLineNumbers.ps1      numbers the build copy of the code so the error log names the failing line
+tools/review-mcp/             MCP server for visual review: opens, sizes and captures forms without the screen or mouse
 examples/build.ps1            build script that loads the kit, then the app, then calls BuildAll
 examples/modules/             modErrors (error handler and log), Build_dlgAppearance
 examples/palette/             make_themes.py output for the 8 shipped palettes
