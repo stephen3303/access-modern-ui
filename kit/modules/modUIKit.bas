@@ -945,13 +945,22 @@ End Sub
 ' field" (e.g. the date behind a formatted text column; the record source must
 ' return it). A column whose field is an expression ("=...") and has no sort
 ' field doesn't sort. Each caption's Tag holds "x|offset|width|sort field"
-' for GridFit and GridSort.
+' for GridFit and GridSort, and last a named part "fw=<form width>": the
+' form's design width, which lets GridFit put the form back after a caption
+' has widened it. Named, so parts added before it keep their places.
+' filterSf names the table's subform control too: then a funnel at the right
+' end of each caption whose column shows a field (not "=...") opens the
+' column's value filter (GridFilter, modGridFilter), and the caption's text
+' stops short of it. After the user changes a filter, the form's Public Sub
+' onFilter (if given) is called with the subform control's name. Each funnel,
+' prefix & "Filter" & i, has the Tag "x|offset|width|field|sort field|onFilter".
 Public Sub GridHeaders(ByVal prefix As String, ByVal cols As Variant, ByVal x As Long, ByVal y As Long, _
                        Optional ByVal parentCtl As String = "", Optional ByVal band As Boolean = False, _
                        Optional ByVal w As Long = 0, Optional ByVal sortSf As String = "", _
+                       Optional ByVal filterSf As String = "", Optional ByVal onFilter As String = "", _
                        Optional ByVal fit As Boolean = False)
     Dim c As Control, i As Long, p() As String, cx As Long, cy As Long, cw As Long, opts As String, key As String
-    Dim fill As Boolean
+    Dim funnel As Boolean, srt As String, fill As Boolean
     ' The last column's cells stretch to the table's right edge (BuildGrid),
     ' unless the table is fit; only a given w says where that edge is.
     fill = w > 0 And Not fit
@@ -970,6 +979,7 @@ Public Sub GridHeaders(ByVal prefix As String, ByVal cols As Variant, ByVal x As
         p = Split(cols(i), "|")
         opts = ""
         If UBound(p) >= 3 Then opts = p(3)
+        funnel = Len(filterSf) > 0 And Left$(p(0), 1) <> "="
         ' As wide as the column's cells: BuildGrid's cell is its column less
         ' 8px, and a filling last column ends 8px inside the table.
         cw = px(Val(p(2))) - px(8)
@@ -977,14 +987,16 @@ Public Sub GridHeaders(ByVal prefix As String, ByVal cols As Variant, ByVal x As
             If fill Then
                 cw = x + w - cx - px(16)
                 If InStr(opts, "p") > 0 Then cw = cw - px(8)   ' BuildGrid's pill clears the scrollbar
-            ElseIf Not fit And InStr(opts, "r") = 0 And InStr(opts, "c") = 0 And InStr(opts, "p") = 0 Then
+            ElseIf Not fit And Not funnel And InStr(opts, "r") = 0 And InStr(opts, "c") = 0 And InStr(opts, "p") = 0 Then
                 ' Left-aligned, so the width doesn't move the text: room for a
-                ' caption longer than the column, as before w was given.
+                ' caption longer than the column, as before w was given. (A
+                ' funnel keeps the column's width, so it sits over the column.)
                 If cw < px(200) Then cw = px(200)
             End If
         End If
         If cw < px(8) Then cw = px(8)           ' a 0px column, or a w narrower than the columns
-        Set c = Lbl(prefix & i, UCase$(p(1)), cx, cy, cw, px(16), 8, True, CLR_MUTED_FG, acDetail, parentCtl)
+        Set c = Lbl(prefix & i, UCase$(p(1)), cx, cy, cw - IIf(funnel, FILTER_W + FILTER_GAP, 0), px(16), 8, True, _
+            CLR_MUTED_FG, acDetail, parentCtl)
         If i = UBound(cols) And fill Then Anchor c, 2, 0
         If InStr(opts, "r") > 0 Then c.TextAlign = 3
         If InStr(opts, "c") > 0 Or InStr(opts, "p") > 0 Then c.TextAlign = 2
@@ -994,7 +1006,20 @@ Public Sub GridHeaders(ByVal prefix As String, ByVal cols As Variant, ByVal x As
             If Len(key) = 0 And Left$(p(0), 1) <> "=" Then key = p(0)
             If Len(key) > 0 Then c.OnClick = "=GridSort([Form],""" & sortSf & """,""" & prefix & """," & i & ")"
         End If
-        c.Tag = x & "|" & (cx - x) & "|" & cw & "|" & key
+        c.Tag = x & "|" & (cx - x) & "|" & cw & "|" & key & "|fw=" & F.Width
+        If funnel Then
+            Set c = Lbl(prefix & "Filter" & i, ChrW(FILTER_GLYPH), cx + cw - FILTER_W, cy, FILTER_W, px(16), 9, False, _
+                CLR_MUTED_FG, acDetail, parentCtl)
+            c.FontName = "Segoe MDL2 Assets"
+            c.TextAlign = 2
+            c.ControlTipText = "Filter"
+            If i = UBound(cols) And fill Then Anchor c, 1, 0     ' stays at the stretching caption's right end
+            c.OnClick = "=GridFilter([Form],""" & filterSf & """,""" & prefix & """," & i & ")"
+            ' IIf would evaluate p(4) even for a four-part column: error 9.
+            srt = ""
+            If UBound(p) >= 4 Then srt = p(4)
+            c.Tag = x & "|" & (cx - x) & "|" & cw & "|" & p(0) & "|" & srt & "|" & onFilter
+        End If
         cx = cx + px(Val(p(2)))
     Next
 End Sub

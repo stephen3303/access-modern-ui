@@ -106,6 +106,7 @@ Private Sub BuildUserInterface()
     BuildDatePicker                ' the kit's dlgDatePick, for DateBox
     BuildToast                     ' the kit's dlgToast, for KitToast
     BuildColumnsDialog             ' the kit's dlgColumns, for ChooseGridColumns
+    BuildFilterDialog              ' the kit's dlgFilter, for the header funnels (GridFilter)
     BuildSplash "frmMain", "access-modern-ui demo"   ' the kit's frmSplash, the startup form
     Build_frmMain
 End Sub
@@ -238,7 +239,7 @@ Private Sub Build_pgCards()
 End Sub
 
 ' Tables: one table with every BuildGrid option (header band, zebra rows,
-' status pills, 38px rows, proportional fit) and one built the default way,
+' status pills, 38px rows, proportional fit, filter funnels) and one built the default way,
 ' switched by a tab strip with counts; status chips with counts and a search
 ' box and category filter to their right. Columns, top right, opens the
 ' column chooser for the first table.
@@ -247,7 +248,8 @@ Private Sub Build_pgTables()
     NewForm "", 0, PAGE_W, PAGE_H
     Ev F, "OnLoad", "OnResize"
     PageHeader "Tables", "The first tab shows every table option; the second shows a table built the default way. " & _
-        "Resize the window: the first table's columns grow in proportion. Columns hides and reorders them.", CX
+        "Resize the window: the first table's columns grow in proportion. Columns hides and reorders them; " & _
+        "a caption's funnel filters by its values.", CX
     Set c = Btn("btnColumns", "Columns", PAGE_W - CX - px(96), px(24), px(96), px(32), "outline"): Anchor c, 1, 0
     TabStrip CX, px(84), CW(), "TabClick", "options|Table options|0", "plain|Default table|0"
     y = px(128)
@@ -256,7 +258,7 @@ Private Sub Build_pgTables()
     Set c = Cbo("cboCategory", "", "(All categories);Engineering;Weapons;Supply;Navigation;Medical", x + px(240), y, px(170), px(28))
     Ev c, "AfterUpdate"
     y = px(170)
-    GridHeaders "hdrOpt", OptionCols(), CX, y, "", True, CW(), "sfOptions", True
+    GridHeaders "hdrOpt", OptionCols(), CX, y, "", True, CW(), "sfOptions", "sfOptions", "HeaderFiltered", True
     Set c = SubF("sfOptions", "subGridOptions", CX, y + px(22), CW(), PAGE_H - y - px(38)): Anchor c, 2, 2
     GridHeaders "hdrPlain", PlainCols(), CX, y, w:=CW(), sortSf:="sfPlain"
     Set c = SubF("sfPlain", "subGridPlain", CX, y + px(22), CW(), PAGE_H - y - px(38)): Anchor c, 2, 2

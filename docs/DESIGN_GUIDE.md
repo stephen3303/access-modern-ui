@@ -42,10 +42,10 @@ access/
   build.ps1                  drives Access via COM; loads modules, calls BuildAll
   kit/
     modules/*.bas            reusable: modUIKit, modKitUI, modDarkMode, modPng, modGridOut,
-                             modGridCols, modCsv, modCrypto, modKitUtil, modBackdrop,
+                             modGridCols, modGridFilter, modCsv, modCrypto, modKitUtil, modBackdrop,
                              modTrust (copied unchanged from the kit)
     forms/*.vba              kit code-behind: subGrid, dlgAppearance, dlgDatePick,
-                             dlgMessage, dlgColumns
+                             dlgMessage, dlgColumns, dlgFilter
   src/
     modules/*.bas            the app's own standard modules (incl. generated modPalette)
     themes/light/modTheme.bas   build palette constants (generated)
@@ -142,6 +142,7 @@ them, and the shell (`frmMain`) last.
 | modKitUI (kit) | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSwitch`, `ToggleFocus`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `KitToast`, `KitInputBox`, `CheckRequired`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
 | modGridCols (kit) | Column chooser: `ChooseGridColumns`, `RestoreGridColumns`, `SetGridColumns`, and `BuildColumnsDialog` for `dlgColumns` |
+| modGridFilter (kit) | Header filters: `GridFilter`, `SetGridFilter`, `SetColumnFilter`, `ClearGridFilters`, `GridFilterWhere`, and `BuildFilterDialog` for `dlgFilter` |
 | modTrust (kit) | `BuildTrustCheck` startup, `TrustNeeded`, `InTrustedLocation`, `ShowTrustHelp` (the `dlgTrust` page on trusting the folder) |
 | modKitUtil (kit) | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `CenterOnApp`, `SetVisible`, `SetEnabled` |
 | modBackdrop (kit) | `DimApp`, `UndimApp`: the dimmed backdrop behind modal dialogs |
@@ -469,8 +470,8 @@ End Sub
       `GridClick(grid, dbl)`.
     - Each column's `Tag` holds its caption and design position, which `GridFit` and
       modGridOut read.
-  - `GridHeaders prefix, cols, x, y, [parentCtl], [band], [w], [sortSf], [fit]` puts the
-    captions above the grid in 8pt bold muted uppercase. `band:=True` draws them on a 22px `CLR_INSET`
+  - `GridHeaders prefix, cols, x, y, [parentCtl], [band], [w], [sortSf], [filterSf], [onFilter], [fit]`
+    puts the captions above the grid in 8pt bold muted uppercase. `band:=True` draws them on a 22px `CLR_INSET`
     strip, `w` wide (default: the columns' widths), that stretches with the window.
     - Each caption is exactly as wide as its column's cells, so right-aligned and
       centred captions sit over their values. Pass the table's width as `w`: the last
@@ -489,6 +490,31 @@ End Sub
       with the same value keep id order. Sort a table in code through `GridSort` so its
       arrow stays right. A paginated table (`GridFooter`) goes back to page 1 in the new
       order (`RestartTablePages`).
+    - **Click to filter.** `filterSf:="sfList"` (the same subform control) puts a funnel
+      (Segoe MDL2 Assets Filter, 20px, muted) at the right end of each caption whose
+      column shows a field; the caption's text stops 2px short of it, and the last
+      caption takes its column's width. Clicking the funnel opens `dlgFilter`: the
+      column's values (those the page's filter and the other columns' filters leave, in
+      the column's sort order, `(Blanks)` last for Null and empty text), ten rows at a
+      time, each with a check box glyph: ticked (`CLR_PRIMARY`) values show. The rows
+      are kit-drawn labels, not a list box, because a list box shows its selection in
+      Access's own colors whatever the palette. A click ticks or clears a value; the
+      arrows and the mouse wheel scroll; Up, Down, Page Up, Page Down, Home and End move
+      a `CLR_PRIMARY_SOFT` cursor row and Space ticks it. Select all ticks every value,
+      or clears them, without scrolling; OK needs one ticked; Cancel changes nothing.
+      Ticking every value removes the filter. While a column is filtered its funnel is
+      white on a `CLR_PRIMARY` chip, like a selected filter chip, so it stands out by
+      more than hue, and its tip says how many values show.
+    - The table's `Filter` is the page's filter AND each column's (`[status] IN (...)`),
+      so sorting, pagination, `PrintGrid` and `ExportGrid` follow it. A page that filters
+      the table itself (search, chips) calls `SetGridFilter Me.sfList, where` instead of
+      setting `Filter`; setting `Filter` directly replaces the header filters, and the
+      funnels go back to muted at the next header call. `onFilter:="HeaderFiltered"`
+      names a Public Sub on the form, called with the subform control's name after the
+      user changes a filter, to update counts and the empty state; count with
+      `GridFilterWhere`. Filters last while the page is open. Memo, OLE and attachment
+      columns can't be filtered. The column chooser hides a hidden column's funnel too.
+    - Build `dlgFilter` with `BuildFilterDialog` alongside the app's other dialogs.
   - **Column chooser** (modGridCols), for `fit:=True` tables only: in any other table
     the last column stretches with the window, so it can't move.
     - A Columns button (outline, top right of the page or card, next to Print and
@@ -756,6 +782,11 @@ Write app-specific helpers next to the builds that use them. Examples:
   they must stay themed.
 - **Anchored widths**: an anchored control's `Width` still returns the design value. Use
   `form.InsideWidth - form.Width` to get the extra width.
+- **Form width only grows**: moving a control past a form's right edge at run time widens
+  the form, and the anchored controls' design sizes grow with it. Access never narrows
+  them again. To narrow, move that control back, take the same amount off each anchored
+  control (`Width` if anchored both sides, `Left` if anchored right), then set the form's
+  `Width` (GridFit does this for its captions' host).
 - Set late-bound properties such as an image's `ControlSource` through
   `c.Properties("Name")`. Setting them directly can fail silently.
 - An unset conditional ForeColor falls back to black, so always carry the control's own

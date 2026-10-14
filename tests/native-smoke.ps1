@@ -6,9 +6,12 @@ New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 $database=Join-Path $OutputDirectory 'kit-test.accdb'
 if(Test-Path $database){throw 'Use an empty output directory; test database already exists.'}
 . (Join-Path $repo 'tools/VbaLineNumbers.ps1')   # test the numbered build copy, as the apps run it
+. (Join-Path $repo 'tools/AccessWatch.ps1')      # a dialog fails the run instead of stalling it
 $access=New-Object -ComObject Access.Application
+$access.Visible=$false
+$watch=Start-AccessWatch $access -TimeoutSec 600
+$dialogs=@()
 try {
- $access.Visible=$false
  $access.NewCurrentDatabase($database)
  $modules=@(Get-ChildItem (Join-Path $repo 'kit/modules') -Filter *.bas)+@(Get-ChildItem (Join-Path $repo 'examples/palette') -Filter *.bas)+@(Get-Item (Join-Path $repo 'examples/modules/modErrors.bas'))+@(Get-ChildItem $PSScriptRoot -Filter *.bas)
  if($UseGdiMeasurement){$modules += Get-Item (Join-Path $repo 'kit/adapters/modTextMeasure.bas')}
@@ -46,7 +49,13 @@ try {
  $_.Exception.Message|Set-Content (Join-Path $OutputDirectory 'result.txt')
  throw
 }finally{
- try{$access.CloseCurrentDatabase()}catch{}
- $access.Quit(2)
- [Runtime.InteropServices.Marshal]::ReleaseComObject($access)|Out-Null
+ if(-not $watch.Killed){
+  try{$access.CloseCurrentDatabase()}catch{}
+  try{$access.Quit(2)}catch{}
+ }
+ try{[Runtime.InteropServices.Marshal]::ReleaseComObject($access)|Out-Null}catch{}
+ $dialogs=@(Stop-AccessWatch $watch)
+ if($dialogs.Count){('Access showed a dialog: '+($dialogs -join ' / '))|Add-Content (Join-Path $OutputDirectory 'result.txt')}
 }
+# Any dialog fails the run, even when every check passed: unattended, it would have hung.
+if($dialogs.Count){throw ('Access showed a dialog: '+($dialogs -join ' / '))}

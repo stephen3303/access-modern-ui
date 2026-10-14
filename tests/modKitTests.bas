@@ -10,6 +10,10 @@ Public Function TestKit(ByVal root As String) As String
     Dim rows As DAO.Recordset, ids As Object, height As Long
     Dim text As String, fitted As String, measured As Long
     Dim db As DAO.Database, badName As Long, badScale As Long, badView As Long
+    ' A kit error message (HandleError) would sit unseen behind the hidden Access
+    ' and stall the run while it reports success; g_Silent raises it instead, so
+    ' the run fails and names it.
+    g_Silent = True
     g_SrcRoot = root & "\kit": UseBuildPalette
     CurrentDb.Execute "CREATE TABLE test_rows (id LONG PRIMARY KEY, category TEXT(60), description TEXT(255))"
     For i = 1 To 23
@@ -149,7 +153,7 @@ Public Function TestKit(ByVal root As String) As String
     Check host.secret.InputMask = SECRET_MASK And host.eye_secret.ControlTipText = "Show", "HideSecrets left the secret shown"
     grid.RecordSource = "SELECT * FROM test_rows ORDER BY id"
     ' Click-to-sort captions: ascending with an up arrow, then reversed; the arrow moves with the column.
-    Check host.head1.OnClick = "" And Right$(host.head1.Tag, 1) = "|", "Unsortable caption has a sort click"
+    Check host.head1.OnClick = "" And Split(host.head1.Tag, "|")(3) = "", "Unsortable caption has a sort click"
     Check host.sortHead1.OnClick = "=GridSort([Form],""sfRows"",""sortHead"",1)", "Sortable caption has no sort click"
     GridSort host, "sfRows", "sortHead", 1
     Check grid.OrderByOn And grid.OrderBy Like "*description], [[]id]", "First caption click did not sort ascending"
@@ -422,7 +426,7 @@ Public Function TestKit(ByVal root As String) As String
     BackdropOnClose
     Check Not AppDimmed(), "A dialog closing with no dim waiting changed the count"
     ' Column chooser on a fit table: order, hiding, captions, bad layouts.
-    Dim order() As Long, shown() As Boolean, sf As Control
+    Dim order() As Long, shown() As Boolean, sf As Control, capTag() As String
     Check ParseLayout("2,0,1h", 3, order, shown), "Valid column layout rejected"
     Check order(0) = 2 And Not shown(2), "Column layout parsed wrongly"
     Check Not ParseLayout("0,0,1", 3, order, shown), "Repeated column accepted"
@@ -440,7 +444,9 @@ Public Function TestKit(ByVal root As String) As String
     SetGridColumns sf, "fit", DefaultLayout(3)
     Set grid = sf.Form
     height = grid.txtCol2.Left + grid.txtCol2.Width          ' right edge of all the columns
-    host.fit2.Tag = host.fit2.Tag & "|id"                     ' as a sortable caption's
+    capTag = Split(host.fit2.Tag, "|")
+    capTag(3) = "id"                                          ' as a sortable caption's
+    host.fit2.Tag = Join(capTag, "|")
     SetGridColumns sf, "fit", "2,0,1h"
     Set grid = sf.Form
     Check Abs(grid.txtCol0.Left + grid.txtCol0.Width - height) <= px(2), "Shown columns did not fill the table as far as all of them"
@@ -449,7 +455,8 @@ Public Function TestKit(ByVal root As String) As String
     Check Abs(host.fit2.Left - (sf.Left + grid.txtCol2.Left)) <= 15, "Caption did not follow its column"
     Check grid.txtCol0.Width > px(160), "Shown columns did not widen into the hidden one's space"
     Check grid.txtCol1.Width <= 15, "Hidden column kept its width (can push the form past its limit)"
-    Check Right$(host.fit2.Tag, 3) = "|id", "Caption lost a later Tag part (sort field)"
+    Check Split(host.fit2.Tag, "|")(3) = "id", "Caption lost a later Tag part (sort field)"
+    Check host.fit2.Tag Like "*|fw=" & px(700), "Caption lost its form's design width"
     On Error Resume Next
     SetGridColumns sf, "fit", "0,1"
     Check Err.Number = 5, "Bad column layout was applied"
@@ -458,5 +465,100 @@ Public Function TestKit(ByVal root As String) As String
     Check grid.txtCol0.Left < grid.txtCol1.Left And grid.txtCol1.Left < grid.txtCol2.Left, "Default layout lost design order"
     Check grid.txtCol1.Visible And host.fit1.Visible, "Default layout left a column hidden"
     DoCmd.Close acForm, "frmTestFit", acSaveNo
+    ' Header filters (modGridFilter): funnels, value lists, and filters kept
+    ' alongside the page's filter, sorting and the column chooser.
+    Dim vals As Variant, more As Boolean
+    CurrentDb.Execute "CREATE TABLE test_filter (id LONG PRIMARY KEY, category TEXT(60), qty LONG)"
+    Set db = CurrentDb                     ' held: a field reached through a bare CurrentDb raises 3420
+    db.TableDefs("test_filter").Fields("category").AllowZeroLength = True
+    CurrentDb.Execute "INSERT INTO test_filter VALUES (1,'Alpha',5)"
+    CurrentDb.Execute "INSERT INTO test_filter VALUES (2,'Beta',5)"
+    CurrentDb.Execute "INSERT INTO test_filter VALUES (3,'Alpha',7)"
+    CurrentDb.Execute "INSERT INTO test_filter VALUES (4,NULL,7)"
+    CurrentDb.Execute "INSERT INTO test_filter VALUES (5,'',9)"
+    CurrentDb.Execute "INSERT INTO test_filter VALUES (6,'O''Brien',9)"
+    ' Qty has a sort field (a fifth part); Category has none.
+    cols = Array("category|Category|160|", "qty|Qty|80|r|id", "=[qty]*2|Double|80|r")
+    BuildGrid "subTestFilter", cols, px(500), fit:=True
+    NewForm "", 0, px(640), px(300)
+    GridHeaders "flt", cols, px(24), px(20), sortSf:="sfFlt", filterSf:="sfFlt"
+    SubF "sfFlt", "Form.subTestFilter", px(24), px(42), px(500), px(180)
+    SaveForm "frmTestFilter", "testHost"
+    DoCmd.OpenForm "frmTestFilter"
+    Set host = Forms("frmTestFilter"): Set sf = host.sfFlt
+    sf.Form.RecordSource = "SELECT * FROM test_filter ORDER BY id"
+    Check HasControl(host, "fltFilter0") And HasControl(host, "fltFilter1"), "Field column has no funnel"
+    Check Not HasControl(host, "fltFilter2"), "Computed column got a funnel"
+    Check host.flt0.Left + host.flt0.Width <= host.fltFilter0.Left, "Caption runs under its funnel"
+    Check host.fltFilter0.Left + host.fltFilter0.Width <= host.flt1.Left, "Funnel overlaps the next caption"
+    Check host.fltFilter0.ForeColor = Th(CLR_MUTED_FG), "Unfiltered funnel not muted"
+    vals = GridColumnValues(sf, "flt", 0, more)
+    Check UBound(vals) = 3 And Not more, "Column values not distinct, or blanks not merged"
+    Check vals(0) = "Alpha" And vals(1) = "Beta" And vals(2) = "O'Brien" And IsNull(vals(3)), "Column values not sorted with blanks last"
+    SetGridFilter sf, "qty < 9"
+    Check RowCount(sf.Form) = 4, "Page filter not applied"
+    SetColumnFilter sf, "flt", 0, Array("Alpha", Null)
+    Check RowCount(sf.Form) = 3, "Header filter not combined with the page filter"
+    Check GridColumnFiltered(sf, 0) And Not GridColumnFiltered(sf, 1), "Filtered columns reported wrongly"
+    Check host.fltFilter0.BackStyle = 1 And host.fltFilter0.BackColor = Th(CLR_PRIMARY) And host.fltFilter0.ForeColor = Th(CLR_WHITE), "Filtered column's funnel not shown on a chip"
+    Check host.fltFilter1.BackStyle = 0 And host.fltFilter1.ForeColor = Th(CLR_MUTED_FG), "Unfiltered column's funnel not muted"
+    vals = GridColumnValues(sf, "flt", 1)
+    Check UBound(vals) = 1 And vals(0) = 5 And vals(1) = 7, "Column values ignore the other filters, or not in sort-field order"
+    vals = GridColumnValues(sf, "flt", 0)
+    Check UBound(vals) = 2, "Column values narrowed by the column's own filter"
+    SetGridFilter sf, ""
+    Check RowCount(sf.Form) = 4, "Changing the page filter dropped the header filter, or blanks missed an empty value"
+    SetColumnFilter sf, "flt", 1, Array(9)
+    Check RowCount(sf.Form) = 1 And InStr(GridFilterWhere(sf), "[qty] IN (9)") > 0, "Second header filter not combined"
+    GridSort host, "sfFlt", "flt", 1
+    Check RowCount(sf.Form) = 1, "Sorting dropped the header filters"
+    ' A Filter the page sets itself replaces the header filters: the next
+    ' header call notices, and drops them and their funnels' color.
+    sf.Form.Filter = "id = 2"
+    sf.Form.FilterOn = True
+    Check Not GridColumnFiltered(sf, 0), "Header filter kept after the page set Filter itself"
+    Check host.fltFilter0.BackStyle = 0 And host.fltFilter0.ForeColor = Th(CLR_MUTED_FG), "Funnel still highlighted after its filter was replaced"
+    SetColumnFilter sf, "flt", 0, Array("Alpha")
+    Check RowCount(sf.Form) = 0, "Page's own Filter not kept as the page filter"
+    ClearGridFilters sf
+    SetGridFilter sf, ""
+    Check RowCount(sf.Form) = 6 And Len(GridFilterWhere(sf)) = 0, "Clearing every filter left rows hidden"
+    SetColumnFilter sf, "flt", 0, Array("O'Brien")
+    Check RowCount(sf.Form) = 1, "Value with a quote not matched"
+    SetColumnFilter sf, "flt", 0, Empty
+    Check RowCount(sf.Form) = 6 And Not GridColumnFiltered(sf, 0), "Removing a column's filter left it on"
+    On Error Resume Next
+    SetColumnFilter sf, "flt", 2, Array(1)
+    Check Err.Number = 5, "Filtered a column with no funnel"
+    On Error GoTo 0
+    ' The funnels follow their captions when the table widens or columns hide.
+    sf.Width = px(600)
+    GridFit sf, "flt"
+    Set grid = sf.Form
+    Check host.fltFilter0.Left > host.flt0.Left And host.flt0.Left + host.flt0.Width <= host.fltFilter0.Left, "Funnel not kept right of its caption"
+    Check host.fltFilter0.Left + host.fltFilter0.Width <= sf.Left + grid.txtCol1.Left + px(2), "Funnel not over its column after GridFit"
+    SetGridColumns sf, "flt", "1,0h,2"
+    Check Not host.fltFilter0.Visible And host.fltFilter1.Visible, "Hidden column's funnel still shows"
+    SetGridColumns sf, "flt", DefaultLayout(3)
+    Check host.fltFilter0.Visible, "Shown column's funnel stays hidden"
+    DoCmd.Close acForm, "frmTestFilter", acSaveNo
+    g_Silent = False
     TestKit = checks & " kit checks passed"
+End Function
+
+' Rows a form shows (its recordset clone read to the end).
+Private Function RowCount(g As Form) As Long
+    With g.RecordsetClone
+        If .BOF And .EOF Then Exit Function
+        .MoveLast
+        RowCount = .RecordCount
+    End With
+End Function
+
+' True when frm has a control named nm.
+Private Function HasControl(frm As Form, ByVal nm As String) As Boolean
+    Dim c As Control
+    On Error Resume Next
+    Set c = frm.Controls(nm)
+    HasControl = Not c Is Nothing
 End Function
