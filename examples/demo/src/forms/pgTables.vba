@@ -143,6 +143,9 @@ Private Sub RefreshPage()
     SetCount Me.tab_options, nOpt
     SetCount Me.tab_plain, nPlain
     SetVisible Me.lblEmpty, IIf(m_tab = "options", nOpt, nPlain) = 0
+    ' The empty state shows in place of the table: a subform always covers a
+    ' label, so the table shown is hidden while nothing matches.
+    SetVisible Me(IIf(m_tab = "options", "sfOptions", "sfPlain")), Not Me.lblEmpty.Visible
 End Sub
 
 ' Items matching where, counted over the tables' record source (the header

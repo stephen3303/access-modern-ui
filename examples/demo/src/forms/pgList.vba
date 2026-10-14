@@ -128,6 +128,9 @@ Private Sub RefreshCounts()
     Next
     n = ItemCount(Status(m_chip), m_search)
     SetVisible Me.lblEmpty, n = 0
+    ' The empty state shows in place of the list: a subform always covers a
+    ' label.
+    SetVisible Me.sfList, n > 0
 End Sub
 
 ' Status a chip filters on ("" for All).
