@@ -494,8 +494,8 @@ End Sub
       (Segoe MDL2 Assets Filter, 20px, muted) at the right end of each caption whose
       column shows a field; the caption's text stops 2px short of it, and the last
       caption takes its column's width. Clicking the funnel opens `dlgFilter`: the
-      column's values (those the page's filter and the other columns' filters leave, in
-      the column's sort order, `(Blanks)` last for Null and empty text), ten rows at a
+      column's values (those the page's filter and the other columns' filters leave, plus
+      those the column's own filter keeps even when no row shows them, in the column's sort order, `(Blanks)` last for Null and empty text), ten rows at a
       time, each with a check box glyph: ticked (`CLR_PRIMARY`) values show. The rows
       are kit-drawn labels, not a list box, because a list box shows its selection in
       Access's own colors whatever the palette. A click ticks or clears a value; the

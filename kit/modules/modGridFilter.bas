@@ -73,9 +73,10 @@ Private m_choice As String
 ' Selecting every listed value removes the column's filter; Cancel changes
 ' nothing.
 ' The values listed are those the other filters (the page's and the other
-' columns') leave, in the column's sort order. Afterwards the host's onFilter
-' sub (GridHeaders), if any, is called with sfName, so it can update counts or
-' its empty state. A failure is shown (HandleError), as for any click.
+' columns') leave, and those the column's own filter keeps, in the column's
+' sort order. Afterwards the host's onFilter sub (GridHeaders), if any, is
+' called with sfName, so it can update counts or its empty state. A failure
+' is shown (HandleError), as for any click.
 Public Function GridFilter(host As Form, ByVal sfName As String, ByVal prefix As String, ByVal col As Long)
     Dim sf As Control, vals As Variant, st As Object, kept As Object, i As Long, keep() As Variant, n As Long
     Dim shown() As String, checked() As Boolean, more As Boolean, t() As String, entry As Variant
@@ -245,19 +246,27 @@ Public Function GridColumnFiltered(sf As Control, ByVal col As Long) As Boolean
 End Function
 
 ' The distinct values of column col (caption prefix & col) among the rows the
-' page's filter and the other columns' filters leave, in the column's sort
-' order (its sort field when GridHeaders has one), blanks (Null or "") last
-' as one Null. At most MAX_VALUES; more is set True when there were others.
+' page's filter and the other columns' filters leave, plus those the column's
+' own filter keeps (even when the other filters hide them), in the column's
+' sort order (its sort field when GridHeaders has one), blanks (Null or "")
+' last as one Null. At most MAX_VALUES; more is set True when there were others.
 Public Function GridColumnValues(sf As Control, ByVal prefix As String, ByVal col As Long, Optional ByRef more As Boolean) As Variant
     Dim db As DAO.Database, rs As DAO.Recordset, t() As String, fld As String, srt As String, where As String
     Dim src As String, sel As String, vals() As Variant, n As Long, seen As Object, v As Variant, k As String
-    Dim blank As Boolean
+    Dim blank As Boolean, st As Object, entry As Variant
     On Error GoTo Fail
     more = False
     t = FunnelTag(sf.Parent, prefix, col)
     fld = "q." & Bracket(t(3))
     If Len(t(4)) > 0 Then srt = "q." & Bracket(t(4))
-    where = Combined(TableState(sf, prefix), CLng(col), True)
+    Set st = TableState(sf, prefix)
+    where = Combined(st, CLng(col), True)
+    ' The column's own kept values are listed too, even where the other
+    ' filters hide their rows (an empty table), so they can be seen and cleared.
+    If Len(where) > 0 And st("Cols").Exists(col) Then
+        entry = st("Cols")(col)
+        where = "(" & where & ") OR (" & entry(0) & ")"
+    End If
     src = SourceSql(sf.Form)
     sel = "SELECT DISTINCT " & fld
     Set db = CurrentDb
