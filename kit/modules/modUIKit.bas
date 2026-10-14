@@ -937,8 +937,9 @@ End Sub
 ' sorts by its field, or by a fifth part "field|caption|width|options|sort
 ' field" (e.g. the date behind a formatted text column; the record source must
 ' return it). A column whose field is an expression ("=...") and has no sort
-' field doesn't sort. Each caption's Tag holds "x|offset|width|sort field"
-' for GridFit and GridSort.
+' field doesn't sort. Each caption's Tag holds "x|offset|width|sort field|
+' form width" for GridFit and GridSort; the form's design width lets GridFit
+' put the form back after a caption has widened it.
 Public Sub GridHeaders(ByVal prefix As String, ByVal cols As Variant, ByVal x As Long, ByVal y As Long, _
                        Optional ByVal parentCtl As String = "", Optional ByVal band As Boolean = False, _
                        Optional ByVal w As Long = 0, Optional ByVal sortSf As String = "")
@@ -968,7 +969,7 @@ Public Sub GridHeaders(ByVal prefix As String, ByVal cols As Variant, ByVal x As
             If Len(key) = 0 And Left$(p(0), 1) <> "=" Then key = p(0)
             If Len(key) > 0 Then c.OnClick = "=GridSort([Form],""" & sortSf & """,""" & prefix & """," & i & ")"
         End If
-        c.Tag = x & "|" & (cx - x) & "|" & cw & "|" & key
+        c.Tag = x & "|" & (cx - x) & "|" & cw & "|" & key & "|" & F.Width
         cx = cx + px(Val(p(2)))
     Next
 End Sub

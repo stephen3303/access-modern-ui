@@ -155,7 +155,7 @@ End Sub
 ' before the host's Width; otherwise Access refuses the narrower Width.
 Private Sub ShrinkHost(host As Form, ByVal prefix As String)
     Dim hostW As Long, c As Control, i As Long, t() As String, k As String, v() As String
-    hostW = HostDesignW(host)
+    hostW = HostDesignW(host, prefix)
     If host.Width <= hostW Then Exit Sub
     If Len(prefix) > 0 Then
         Do While HasCtl(host, prefix & i)
@@ -189,13 +189,15 @@ Private Function HostKey(host As Form) As String
     HostKey = host.Hwnd & "|" & host.Name
 End Function
 
-' Design width of GridFit's host: its Width on the first fit of any of its
-' tables, kept per window (and name, in case a window handle is reused) so a
-' reopened page starts again. The first fit also records each anchored
-' control's design "Left|Width" (ShrinkHost), under the host's key, "|" and
-' the control's name.
-Private Function HostDesignW(host As Form) As Long
-    Dim k As String, c As Control, found As Boolean
+' Design width of GridFit's host: the form width GridHeaders saved in the
+' first caption's Tag (fifth part). Captions drawn before that part existed
+' fall back to the host's Width on its first fit, which can be short of the
+' design width while the page is still opening. Kept per window (and name,
+' in case a window handle is reused) so a reopened page starts again. The
+' first fit also records each anchored control's design "Left|Width"
+' (ShrinkHost), under the host's key, "|" and the control's name.
+Private Function HostDesignW(host As Form, ByVal prefix As String) As Long
+    Dim k As String, c As Control, found As Boolean, t() As String
     If m_hostW Is Nothing Then Set m_hostW = New Collection
     k = HostKey(host)
     On Error Resume Next
@@ -205,6 +207,10 @@ Private Function HostDesignW(host As Form) As Long
     On Error GoTo 0
     If found Then Exit Function
     HostDesignW = host.Width
+    If Len(prefix) > 0 And HasCtl(host, prefix & "0") Then
+        t = Split(host.Controls(prefix & "0").Tag & "||||", "|")
+        If Val(t(4)) > 0 Then HostDesignW = CLng(Val(t(4)))
+    End If
     m_hostW.Add HostDesignW, k
     For Each c In host.Controls
         If Anchored(c) Then m_hostW.Add c.Left & "|" & c.Width, k & "|" & c.Name
