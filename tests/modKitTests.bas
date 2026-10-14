@@ -22,12 +22,17 @@ Public Function TestKit(ByVal root As String) As String
     Txt "ringC", "", 0, 0, px(100), px(30)
     Btn "ringSave", "Save", px(110), 0, px(80), px(30)
     SaveForm "subRing"
+    NewForm "test_rows", 0, px(300), px(40)
+    Ev F, "BeforeUpdate"
+    Txt "txtDesc", "description", 0, 0, px(280), px(30)
+    SaveForm "subRefuse", "testRefuse"
     NewForm "", 0, px(700), px(700)
     GridHeaders "head", cols, px(24), px(60)
     GridHeaders "sortHead", cols, px(24), px(40), sortSf:="sfRows"
     SubF "sfRows", "Form.subTest", px(24), px(82), px(600), px(180)
     SubF "sfReuse", "Form.subTest", px(24), px(320), px(600), px(180)
     SubF "sfName", "Form.subTestName", px(24), px(700), px(300), px(50)
+    SubF "sfRefuse", "Form.subRefuse", px(340), px(700), px(300), px(40)
     GridFooter "sfRows", "pager", "id"
     Lbl "filter0", "All (23)", 0, 0, px(100), px(30)
     Lbl "filter1", "Retirement (2)", 0, 0, px(100), px(30)
@@ -276,6 +281,12 @@ Public Function TestKit(ByVal root As String) As String
     host.reqA = "x"
     Check RequiredMissing(host, "reqA=First", fitted) = "" And fitted = "", "Filled required field reported"
     Check host.reqA.BorderColor = Th(CLR_INPUT_BORDER), "Filled required field kept its outline"
+    Check SaveDetail(host, "sfRows"), "Unchanged detail panel reported a refused save"
+    host.sfRefuse.Form.txtDesc = "Changed"
+    Check Not SaveDetail(host, "sfRefuse"), "Refused detail save reported as saved"
+    Check host.sfRefuse.Form.Dirty, "Refused detail save dropped the change"
+    Check Not ShowDetail(host, "sfRefuse", "subRefuse", "id=2"), "ShowDetail moved on after a refused save"
+    host.sfRefuse.Form.Undo
     DoCmd.Close acForm, "frmTest", acSaveNo
     ' Trust check: matching Trusted Locations, a codeless dlgTrust, and the AutoExec
     ' macro that opens it with the code off.
@@ -306,6 +317,15 @@ Public Function TestKit(ByVal root As String) As String
     Check Not host.btn2.Visible And Not host.btn3.Visible, "Message dialog shows unused buttons"
     Check host.btn1.Left + host.btn1.Width = host.btn3.Left + host.btn3.Width, "Message OK button is not right-aligned"
     DoCmd.Close acForm, "dlgMessage", acSaveNo
+    BuildInputDialog
+    DoCmd.OpenForm "dlgInput"
+    Set host = Forms("dlgInput")
+    Check host.btnOK.Default And host.btnCancel.Cancel, "Input dialog lacks its Enter and Esc buttons"
+    Check host.btnCancel.Left + host.btnCancel.Width = px(400), "Input Cancel button is not right-aligned"
+    Check host.btnOK.Left + host.btnOK.Width + px(8) = host.btnCancel.Left, "Input OK button is not 8px left of Cancel"
+    Check Not host.txtPrompt.Visible And host.txtValue.Top = px(22), "Input dialog without a prompt keeps the prompt's space"
+    Check Len(host.txtValue.InputMask) = 0, "Unmasked input dialog masks its text"
+    DoCmd.Close acForm, "dlgInput", acSaveNo
     ' SecretBox refuses a continuous form: one eye would show every row.
     NewForm "", 1, px(300), px(100)
     On Error Resume Next
@@ -386,5 +406,42 @@ Public Function TestKit(ByVal root As String) As String
     Check Not AppDimmed(), "Dim left on after a dialog failed to open"
     BackdropOnClose
     Check Not AppDimmed(), "A dialog closing with no dim waiting changed the count"
+    ' Column chooser on a fit table: order, hiding, captions, bad layouts.
+    Dim order() As Long, shown() As Boolean, sf As Control
+    Check ParseLayout("2,0,1h", 3, order, shown), "Valid column layout rejected"
+    Check order(0) = 2 And Not shown(2), "Column layout parsed wrongly"
+    Check Not ParseLayout("0,0,1", 3, order, shown), "Repeated column accepted"
+    Check Not ParseLayout("0,1", 3, order, shown), "Short column layout accepted"
+    Check Not ParseLayout("0h,1h,2h", 3, order, shown), "Layout with no shown column accepted"
+    cols = Array("category|Category|160|", "description|Description|200|", "id|Id|80|r")
+    BuildGrid "subTestFit", cols, px(600), fit:=True
+    NewForm "", 0, px(700), px(300)
+    GridHeaders "fit", cols, px(24), px(20)
+    SubF "sfFit", "Form.subTestFit", px(24), px(42), px(600), px(180)
+    SaveForm "frmTestFit", "testHost"
+    DoCmd.OpenForm "frmTestFit"
+    Set host = Forms("frmTestFit"): Set sf = host.sfFit
+    sf.Form.RecordSource = "SELECT * FROM test_rows ORDER BY id"
+    SetGridColumns sf, "fit", DefaultLayout(3)
+    Set grid = sf.Form
+    height = grid.txtCol2.Left + grid.txtCol2.Width          ' right edge of all the columns
+    host.fit2.Tag = host.fit2.Tag & "|id"                     ' as a sortable caption's
+    SetGridColumns sf, "fit", "2,0,1h"
+    Set grid = sf.Form
+    Check Abs(grid.txtCol0.Left + grid.txtCol0.Width - height) <= px(2), "Shown columns did not fill the table as far as all of them"
+    Check grid.txtCol2.Left < grid.txtCol0.Left, "Moved column did not move"
+    Check Not grid.txtCol1.Visible And Not host.fit1.Visible, "Hidden column or caption still shows"
+    Check Abs(host.fit2.Left - (sf.Left + grid.txtCol2.Left)) <= 15, "Caption did not follow its column"
+    Check grid.txtCol0.Width > px(160), "Shown columns did not widen into the hidden one's space"
+    Check grid.txtCol1.Width <= 15, "Hidden column kept its width (can push the form past its limit)"
+    Check Right$(host.fit2.Tag, 3) = "|id", "Caption lost a later Tag part (sort field)"
+    On Error Resume Next
+    SetGridColumns sf, "fit", "0,1"
+    Check Err.Number = 5, "Bad column layout was applied"
+    On Error GoTo 0
+    SetGridColumns sf, "fit", DefaultLayout(3)
+    Check grid.txtCol0.Left < grid.txtCol1.Left And grid.txtCol1.Left < grid.txtCol2.Left, "Default layout lost design order"
+    Check grid.txtCol1.Visible And host.fit1.Visible, "Default layout left a column hidden"
+    DoCmd.Close acForm, "frmTestFit", acSaveNo
     TestKit = checks & " kit checks passed"
 End Function

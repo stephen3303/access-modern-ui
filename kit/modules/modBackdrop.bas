@@ -3,8 +3,8 @@ Option Explicit
 
 ' Access UI kit - a dimmed backdrop behind modal dialogs, like a web modal.
 ' DimApp lays a see-through layer of the palette's CLR_SIDEBAR color over the
-' Access window and UndimApp takes it away. RunDialog and KitMsgBox call both
-' around their dialog, so apps rarely call them directly.
+' Access window and UndimApp takes it away. RunDialog, KitMsgBox and KitInputBox
+' call both around their dialog, so apps rarely call them directly.
 '
 ' The layer is a plain Windows window, not an Access form, so there is
 ' nothing to build: a "Static" window that is layered, never takes the focus,
