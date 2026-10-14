@@ -19,15 +19,25 @@ Err_Handler:
     HandleError "pgList.Form_Load"
 End Sub
 
-' Row click in the list (subGrid): show that item.
+' Row click in the list (subGrid): show that item. When the open item can't
+' be saved (a required field is empty) it stays, and so does its row.
 Public Sub GridClick(ByVal grid As String, ByVal dbl As Boolean)
     On Error GoTo Err_Handler
     If IsNull(Me.sfList.Form.txtSel) Then Exit Sub
-    ShowDetail Me, "sfDetail", "subItem", "id=" & Me.sfList.Form.txtSel
+    If Not ShowDetail(Me, "sfDetail", "subItem", "id=" & Me.sfList.Form.txtSel) Then
+        Me.sfList.Form.txtSel = Me.sfDetail.Form!id
+        Me.sfList.Form.Recalc
+    End If
     Exit Sub
 Err_Handler:
     HandleError "pgList.GridClick"
 End Sub
+
+' frmMain asks before it swaps or closes this page: save the open item, or
+' keep the page while a required field is empty (CheckRequired says which).
+Public Function CanLeave() As Boolean
+    CanLeave = SaveDetail(Me, "sfDetail")
+End Function
 
 ' The detail panel saved an item: show the change in the list.
 Public Sub ItemSaved(ByVal id As Long)
@@ -39,6 +49,7 @@ End Sub
 ' Status chip click: 0 is All.
 Public Function Chip(ByVal i As Long)
     On Error GoTo Err_Handler
+    If Not SaveDetail(Me, "sfDetail") Then Exit Function    ' open item can't be saved yet
     m_chip = i
     RefreshPage
     Exit Function
@@ -104,6 +115,9 @@ Private Sub RefreshPage()
     FilterGrid Me.sfList, ItemFilter(Status(m_chip), m_search)
     GridHighlight Me.sfList, m_search
     RefreshCounts
+    ' ClearDetail's result isn't needed: every caller (Chip, Form_Load, and
+    ' txtSearch_Change, which only runs once the focus has left the panel)
+    ' has already saved the open item.
     If IsNull(SelectFirstRow(Me.sfList)) Then ClearDetail Me, "sfDetail"
 End Sub
 

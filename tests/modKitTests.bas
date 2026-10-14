@@ -22,12 +22,17 @@ Public Function TestKit(ByVal root As String) As String
     Txt "ringC", "", 0, 0, px(100), px(30)
     Btn "ringSave", "Save", px(110), 0, px(80), px(30)
     SaveForm "subRing"
+    NewForm "test_rows", 0, px(300), px(40)
+    Ev F, "BeforeUpdate"
+    Txt "txtDesc", "description", 0, 0, px(280), px(30)
+    SaveForm "subRefuse", "testRefuse"
     NewForm "", 0, px(700), px(700)
     GridHeaders "head", cols, px(24), px(60)
     GridHeaders "sortHead", cols, px(24), px(40), sortSf:="sfRows"
     SubF "sfRows", "Form.subTest", px(24), px(82), px(600), px(180)
     SubF "sfReuse", "Form.subTest", px(24), px(320), px(600), px(180)
     SubF "sfName", "Form.subTestName", px(24), px(700), px(300), px(50)
+    SubF "sfRefuse", "Form.subRefuse", px(340), px(700), px(300), px(40)
     GridFooter "sfRows", "pager", "id"
     Lbl "filter0", "All (23)", 0, 0, px(100), px(30)
     Lbl "filter1", "Retirement (2)", 0, 0, px(100), px(30)
@@ -276,6 +281,12 @@ Public Function TestKit(ByVal root As String) As String
     host.reqA = "x"
     Check RequiredMissing(host, "reqA=First", fitted) = "" And fitted = "", "Filled required field reported"
     Check host.reqA.BorderColor = Th(CLR_INPUT_BORDER), "Filled required field kept its outline"
+    Check SaveDetail(host, "sfRows"), "Unchanged detail panel reported a refused save"
+    host.sfRefuse.Form.txtDesc = "Changed"
+    Check Not SaveDetail(host, "sfRefuse"), "Refused detail save reported as saved"
+    Check host.sfRefuse.Form.Dirty, "Refused detail save dropped the change"
+    Check Not ShowDetail(host, "sfRefuse", "subRefuse", "id=2"), "ShowDetail moved on after a refused save"
+    host.sfRefuse.Form.Undo
     DoCmd.Close acForm, "frmTest", acSaveNo
     BuildMessageDialog
     DoCmd.OpenForm "dlgMessage"

@@ -168,6 +168,7 @@ Private Sub Build_subItem()
     Ev F, "OnCurrent", "AfterUpdate"
     F.Section(acDetail).BackColor = CLR_SURFACE
     F.Section(acDetail).AlternateBackColor = CLR_SURFACE
+    Ev F, "BeforeUpdate"
     hw = px(156): x2 = px(172)
     FieldLbl "lblName", "ITEM", 0, 0, px(328)
     Txt "txtName", "name", 0, px(18), px(328), px(30)
@@ -296,7 +297,7 @@ End Sub
 Private Sub Build_frmMain()
     Dim c As Control, i As Long, pages As Variant, y As Long
     NewForm "", 0, px(200) + PAGE_W, PAGE_H
-    Ev F, "OnLoad", "OnTimer", "OnResize"
+    Ev F, "OnLoad", "OnTimer", "OnResize", "OnUnload"
     F.Caption = APP_NAME
     Set c = Box("boxSide", 0, 0, px(200), PAGE_H, CLR_SIDEBAR): Anchor c, 0, 2
     Lbl "lblBrand", APP_NAME, px(20), px(20), px(160), px(26), 13, True, CLR_WHITE
@@ -312,7 +313,7 @@ Private Sub Build_frmMain()
         VCenter c, px(34), 10, True
         y = y + px(38)
     Next
-    Set c = Link("lnkAppearance", "Appearance", px(12), PAGE_H - px(52), px(176), px(34), "=ShowAppearance()", 10, CLR_NAV_FG)
+    Set c = Link("lnkAppearance", "Appearance", px(12), PAGE_H - px(52), px(176), px(34), "=DemoAppearance()", 10, CLR_NAV_FG)
     c.LeftMargin = px(12)
     VCenter c, px(34), 10, True
     Anchor c, 0, 1

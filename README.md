@@ -186,8 +186,9 @@ Control heights and font sizes never scale. `TabStrip` and `LayoutFilterRow` alr
 | `GridScrollAll frm` | `GridScroll` for every table on a window and the forms in it. Call it from the window's `Form_Resize`. |
 | `GridSort host, sfName, prefix, col` | A sortable `GridHeaders` caption's click (set by `GridHeaders ..., sortSf`): sort the table by that column (ties in id order), or reverse it, and move the arrow; a paginated table goes back to page 1. Call it to sort in code so the arrow matches. |
 | `SelectFirstRow sf` | Select a table's first row and call the host's `GridClick`, as a click would. Returns the id, or Null for an empty table. |
-| `ShowDetail host, detailCtl, formName, where [, emptyCtl]` | List/detail pages: show the matching record in the detail subform, saving a changed one first, and hide the empty state |
-| `ClearDetail host, detailCtl [, emptyCtl]` | Empty the detail subform and show the empty state |
+| `ShowDetail host, detailCtl, formName, where [, emptyCtl]` | List/detail pages: show the matching record in the detail subform, saving a changed one first, and hide the empty state. Returns False, changing nothing, when the detail form refuses the save (its `BeforeUpdate` cancels, e.g. `CheckRequired`). |
+| `ClearDetail host, detailCtl [, emptyCtl]` | Empty the detail subform and show the empty state. Returns False like `ShowDetail`. |
+| `SaveDetail host, detailCtl` | Save the detail subform's changed record before a page change that doesn't go through `ShowDetail` (a filter chip). Returns False when the detail form refuses. |
 | `PickDate frm, nm` | A `DateBox` calendar button's click: open the kit's date picker (`dlgDatePick`) for box `nm` and write the chosen date into it (not while the box is disabled or locked, or its form is read-only) |
 | `SplashStatus msg` | Show what start-up is doing on the splash screen's status line, "Opening the data file...". Does nothing once the splash has closed. |
 | `CloseSplash` | Close the splash screen now. `KitMsgBox` calls it, so a start-up message never opens behind the splash; call it yourself before a plain `MsgBox` or a file dialog at start-up. |
