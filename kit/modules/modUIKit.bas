@@ -140,7 +140,7 @@ Public Sub NewForm(ByVal recSrc As String, ByVal view As Integer, ByVal w As Lon
         .Section(acDetail).AlternateBackColor = CLR_BG
         .AutoResize = False
         .HasModule = True
-        .OnOpen = "=ThemeForm([Form])"     ' color palette (modDarkMode)
+        .OnOpen = THEME_HOOK               ' color palette (modDarkMode)
     End With
     ' Focus sink: takes the initial focus so Access does not highlight the
     ' first text control (which hides its text, most visibly in the dark theme).

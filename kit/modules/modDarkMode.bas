@@ -15,6 +15,8 @@ Option Explicit
 
 Private Const PROPS As String = "BackColor,ForeColor,BorderColor,HoverColor,PressedColor,HoverForeColor,PressedForeColor"
 Private m_pal As Long               ' 0 = not read yet, else the palette index (1 = light)
+' The OnOpen every kit form is built with (modUIKit.NewForm).
+Public Const THEME_HOOK As String = "=ThemeForm([Form])"
 
 ' Windows 11 lets an app color a window's title bar and border (DWM). Pop-up
 ' forms are real top-level windows, so dialogs can take the palette instead
@@ -103,6 +105,12 @@ End Sub
 ' Form Open hook (each form's OnOpen is =ThemeForm([Form])).
 ' A theming problem is logged but not shown: the form still opens, just with
 ' some light colors.
+' A form must be themed only once: Pal maps light colors, and some palette
+' colors are also light colors (Midnight's CLR_FG is the light CLR_ROW1), so a
+' second pass turns them into other colors. Access can run a form's OnOpen
+' again on the colors it already has: a table widened by GridFit opens again
+' with its text dark on Midnight's dark rows. So once the form is themed its
+' hook is taken off; a form opened afresh from its design still has it.
 Public Function ThemeForm(frm As Object)
     Dim c As Control, i As Long
     On Error GoTo Fail
@@ -117,6 +125,7 @@ Public Function ThemeForm(frm As Object)
     For Each c In frm.Controls
         ThemeControl c
     Next
+    If frm.OnOpen = THEME_HOOK Then frm.OnOpen = ""
     Exit Function
 Fail:
     LogError "modDarkMode.ThemeForm", "form " & frm.Name
