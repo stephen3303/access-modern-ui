@@ -420,11 +420,14 @@ Public Sub BuildToast()
     Ev c, "OnClick"
     Set c = Lbl("lblMsg", "Message", px(48), px(14), w - px(48) - px(16), msgH, 10, False, CLR_FG)
     Ev c, "OnClick"
-    ' Edges are hairlines: a filled 1px Box paints 2px.
-    Rule "ruleTop", 0, 0, w, 0, CLR_INPUT_BORDER
-    Rule "ruleBottom", 0, h - 15, w, 0, CLR_INPUT_BORDER
-    Rule "ruleLeft", 0, 0, 0, h, CLR_INPUT_BORDER
-    Rule "ruleRight", w - 15, 0, 0, h, CLR_INPUT_BORDER
+    ' Edges are hairlines: a filled 1px Box paints 2px. A line paints 1px up
+    ' and left of where it is placed, so each edge sits 1px (15 twips) down
+    ' and right of the pixel it should cover: at 0 the top edge would fall
+    ' off the window, at h - 15 the bottom edge would leave a strip below it.
+    Rule "ruleTop", 0, 15, w, 0, CLR_INPUT_BORDER
+    Rule "ruleBottom", 0, h, w, 0, CLR_INPUT_BORDER
+    Rule "ruleLeft", 15, 0, 0, h, CLR_INPUT_BORDER
+    Rule "ruleRight", w, 0, 0, h, CLR_INPUT_BORDER
     SaveForm "dlgToast"
 End Sub
 

@@ -103,7 +103,7 @@ Private Sub FitHeight(ByVal msg As String)
     Me.boxAccent.Height = h
     Me.ruleLeft.Height = h
     Me.ruleRight.Height = h
-    Me.ruleBottom.Top = h - 15
+    Me.ruleBottom.Top = h               ' paints the last row (BuildToast)
     Me.Section(acDetail).Height = h
     Me.InsideHeight = h
 End Sub
