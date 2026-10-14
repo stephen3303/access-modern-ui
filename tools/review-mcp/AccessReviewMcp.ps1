@@ -12,7 +12,7 @@ $utf8 = New-Object Text.UTF8Encoding($false)
 
 . (Join-Path $PSScriptRoot 'AccessReview.ps1')
 
-$ServerVersion = '0.2.0'
+$ServerVersion = '0.3.0'
 
 function Send-Message($obj) {
     [Console]::Out.WriteLine(($obj | ConvertTo-Json -Depth 20 -Compress))
@@ -72,6 +72,12 @@ $Tools = @(
        image = $true }
     @{ name = 'controls'; description = 'Every control on an open form with Left/Top/Width/Height in 96 dpi pixels, section, visibility, caption and colours, plus section heights, for measuring gaps, the 16 px card inset and overlaps.'
        schema = (Schema @{ form = $formProp } @('form')); run = { param($a) Get-ReviewControls -Name (Arg $a 'form') } }
+    @{ name = 'snapshot'; description = 'Save the definition of forms in the open front end (Application.SaveAsText) as a snapshot under a label, e.g. main for a build of the base branch and pr for the PR build. Without forms, every form, replacing that label''s earlier snapshot. Snapshots outlive close_app, so build and open one side, snapshot, then rebuild and snapshot the other. Reads the saved design only; changes nothing.'
+       schema = (Schema @{ label = @{ type = 'string'; description = 'Letters, digits, ., _ or -, e.g. main or pr-45.' }; forms = @{ type = 'array'; items = $str; description = 'Form names; default all.' } } @('label'))
+       run = { param($a) $f = Arg $a 'forms'; Save-ReviewSnapshot -Label (Arg $a 'label') -Forms $(if ($f) { [string[]]@($f) } else { $null }) } }
+    @{ name = 'compare_snapshots'; description = 'Compare two snapshots property by property (Access need not be open): forms and controls added or removed, and every changed property with before and after values, positions in 96 dpi px and colours as #RRGGBB. Properties Access rewrites on every save (checksums, GUIDs, printer data, cached layout) are ignored; pictures compare by hash; code behind the form is left to the PR diff. Saves the full report as a text file.'
+       schema = (Schema @{ before = $str; after = $str; forms = @{ type = 'array'; items = $str; description = 'Only these forms; default all.' } } @('before', 'after'))
+       run = { param($a) $f = Arg $a 'forms'; Compare-ReviewSnapshot -Before (Arg $a 'before') -After (Arg $a 'after') -Forms $(if ($f) { [string[]]@($f) } else { $null }) } }
     @{ name = 'dialogs'; description = 'List (and capture) open message boxes and popup windows of this Access instance, plus dialogs seen during earlier calls. close=true closes the open ones.'
        schema = (Schema @{ close = @{ type = 'boolean' } }); run = { param($a) Get-ReviewDialogs -Close:([bool](Arg $a 'close' $false)) } }
 )
@@ -109,7 +115,7 @@ try {
             'initialize' {
                 $pv = Arg $msg.params 'protocolVersion' '2025-06-18'
                 $reply = @{ protocolVersion = $pv; capabilities = @{ tools = @{} }; serverInfo = @{ name = 'access-review'; version = $ServerVersion }
-                            instructions = 'Drives Microsoft Access over COM for visual review without using the desktop. Typical run: review_lock, open_app, error_log mark=true, open_form, capture, controls, dialogs, error_log, close_app, review_unlock.' + $(if ($PaletteWarning) { " Settings problem: $PaletteWarning" }) }
+                            instructions = 'Drives Microsoft Access over COM for visual review without using the desktop. Typical run: review_lock, open_app, error_log mark=true, open_form, capture, controls, dialogs, error_log, close_app, review_unlock. To see exactly what a PR changed on its forms: snapshot label=main on a base build and label=pr on the PR build, then compare_snapshots.' + $(if ($PaletteWarning) { " Settings problem: $PaletteWarning" }) }
             }
             'ping' { $reply = @{} }
             'tools/list' { $reply = @{ tools = (Get-ToolList) } }

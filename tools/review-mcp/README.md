@@ -7,6 +7,8 @@ It was built for visual review of apps made with [access-modern-ui](../../README
 ```
 AccessReview.ps1      the review functions (usable from plain PowerShell too)
 AccessReviewMcp.ps1   the MCP server (stdio) that exposes them as tools
+FormSnapshot.ps1      reads and compares form snapshots (no Access needed)
+FormSnapshot.Tests.ps1  checks for FormSnapshot.ps1
 manifest.json         desktop extension manifest (for the .mcpb package)
 ```
 
@@ -84,6 +86,8 @@ Example `env` for a config file:
 | `resize_form` | Design size, a given size or maximized (Access window at the main display's work area, as a real maximized window gets). A shell form that fills the Access window is sized by resizing the Access window until its inside size matches; `SizeMatches` reports whether it did. |
 | `capture` | PNG of a form, or a zoomed crop, taken once two frames in a row match (so a form still drawing isn't caught mid-draw; `Stable` reports it). Returned as an image and saved in the capture folder, named form-palette-label. |
 | `controls` | Each control's Left/Top/Width/Height (96 dpi px), section, caption and colours, for measuring gaps and alignment. |
+| `snapshot` | Saves the definition of each form (`SaveAsText`) under a label, in `snapshots\<label>` in the capture folder's base. Without `forms`, every form, replacing that label's earlier snapshot. Changes nothing in the front end. |
+| `compare_snapshots` | Compares two labels property by property, without Access: forms and controls added or removed, and each changed property before and after. See [Comparing two builds](#comparing-two-builds). |
 | `dialogs` | Lists and captures open message boxes and popups; `close=true` closes them. Also lists dialogs seen during earlier calls. |
 | `error_log` | `mark=true` before testing, then `mark=false` to list new rows in an `error_log` table and new text in the file a public `LogFilePath()` function returns. Says so when the front end has neither. |
 | `compile` | Compiles and saves all modules. |
@@ -110,6 +114,24 @@ In off-screen mode a watcher keeps every Access window, including popups the app
 5. `resize_form` small (about 1100x700) and maximized, `capture`.
 6. `error_log` (new entries are findings unless explained), `close_app`, `review_unlock`.
 
+## Comparing two builds
+
+A capture shows that something moved; a snapshot comparison says which control, which property and by how much, including changes a capture can't show, such as a hidden control, a removed event handler or a new record source.
+
+1. Build the base branch into the review front end, `open_app`, `snapshot` with `label=main`, `close_app`.
+2. Rebuild the same front end from the PR, `open_app`, `snapshot` with `label=pr`.
+3. `compare_snapshots` with `before=main`, `after=pr`.
+
+The report lists, per form, `+` for controls added and `-` for controls removed (with their position), and `~ control.Property: before -> after` for each change. Positions and sizes are in 96 dpi px, the kit's `px()` units, and colours are `#RRGGBB`. It is also saved as `snapshots\compare-main-pr.txt`.
+
+- Properties Access rewrites on every save are ignored: `Checksum`, `GUID`, `NameMap`, `RecSrcDt`, printer settings (`PrtMip`, `PrtDevMode`, `PrtDevNames`), `LayoutCached*`, `OverlapFlags`, and the form's own `Left`, `Top`, `Right` and `Bottom` (where its design window last sat; controls keep theirs).
+- Pictures and other binary values compare by a hash, so a redrawn pill shows as changed without the bytes.
+- The code behind each form is not compared; it is in the PR's own diff.
+- A snapshot is the saved design. Colours and positions a form's code sets when it opens (the kit themes forms on load) are not in it; check those with `capture` and `controls`.
+- Two snapshots of the same build should compare equal. If they don't, the property that differs is one more Access rewrites on save: add it to `$SnapshotIgnored` in `FormSnapshot.ps1`.
+
+`FormSnapshot.Tests.ps1` checks the reading and comparing against a sample form: `powershell -NoProfile -File tools\review-mcp\FormSnapshot.Tests.ps1`.
+
 ## Limits
 
 - Hover effects, cursor changes and flicker during a real click can't be seen without a real pointer. Check those by hand.
@@ -128,7 +150,9 @@ Get-ReviewErrorLog -Mark
 Open-ReviewForm frmMain
 Save-ReviewCapture frmMain -Label before
 Get-ReviewErrorLog
+Save-ReviewSnapshot -Label pr
 Close-ReviewApp
+Compare-ReviewSnapshot -Before main -After pr
 ```
 
 ## Build the package

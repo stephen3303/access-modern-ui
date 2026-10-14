@@ -15,7 +15,9 @@
 #   Open-ReviewForm frmMain -WidthPx 1256 -HeightPx 620
 #   Save-ReviewCapture frmMain -Label before
 #   Get-ReviewErrorLog
+#   Save-ReviewSnapshot -Label pr
 #   Close-ReviewApp
+#   Compare-ReviewSnapshot -Before main -After pr
 #
 # Rules it keeps: it only opens an existing file (a new file path brings back the
 # Enable Content prompt), it never sends input to the desktop, and it leaves the
@@ -28,6 +30,8 @@
 #   ACCESS_REVIEW_PALETTE_PROCEDURE  public VBA procedure that switches palettes
 
 $ErrorActionPreference = 'Stop'
+
+. (Join-Path $PSScriptRoot 'FormSnapshot.ps1')
 
 if (-not ('KitReviewWin' -as [type])) {
     Add-Type @'
@@ -902,6 +906,78 @@ function Get-ReviewControls {
         }
     }
     [pscustomobject]@{ Form = $Name; WidthPx = [int]([int](Get-FormValue $Name '.Width') / 15); Sections = @($sections); Controls = @($list) }
+}
+
+# Snapshots live outside the per-session capture folders, because the two sides of a
+# comparison come from two sessions: the base build and the PR build, usually the same
+# front-end file rebuilt in between.
+function Get-ReviewSnapshotRoot {
+    $base = Get-ReviewSetting 'ACCESS_REVIEW_OUTPUT'
+    if (-not $base) { $base = Join-Path $env:LOCALAPPDATA 'AccessReview' }
+    Join-Path $base 'snapshots'
+}
+
+function Get-ReviewSnapshotDir([string]$Label) {
+    if ($Label -notmatch '^[A-Za-z0-9][A-Za-z0-9_.-]*$') { throw "Snapshot label '$Label' must be letters, digits, '.', '_' or '-'." }
+    Join-Path (Get-ReviewSnapshotRoot) $Label
+}
+
+# Names of every form in the open front end.
+function Get-ReviewFormNames {
+    $acc = $script:Review.Acc
+    try {
+        $all = $acc.CurrentProject.AllForms
+        $names = for ($i = 0; $i -lt $all.Count; $i++) { [string]$all.Item($i).Name }
+    } catch {
+        # Fallback when the COM adapter can't read AllForms: forms are type -32768.
+        $rs = $acc.CurrentDb().OpenRecordset('SELECT Name FROM MSysObjects WHERE Type = -32768')
+        $names = while (-not $rs.EOF) { [string]$rs.Fields.Item('Name').Value; $rs.MoveNext() }
+        $rs.Close()
+    }
+    @($names | Sort-Object)
+}
+
+# Saves each form's definition (SaveAsText) under snapshots\<Label>\<form>.txt. Without
+# -Forms, every form, and the label's folder is cleared first so a form the build no
+# longer makes doesn't linger. Reads the saved design only: nothing in the file changes,
+# and changes code makes while a form is open (colours set on load) are not included.
+function Save-ReviewSnapshot {
+    param([Parameter(Mandatory)][string]$Label, [string[]]$Forms)
+    Assert-ReviewOpen
+    $dir = Get-ReviewSnapshotDir $Label
+    $names = if ($Forms) { $Forms } else { Get-ReviewFormNames }
+    foreach ($n in $names) { if ($n -match '[\\/:*?"<>|]') { throw "Unsupported form name '$n'." } }
+    New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    if (-not $Forms) { Get-ChildItem -LiteralPath $dir -Filter *.txt | Remove-Item }
+    $dialogs = @(); $saved = @(); $failed = @()
+    foreach ($n in $names) {
+        $path = Join-Path $dir "$n.txt"
+        try {
+            $r = Invoke-ReviewGuarded { $script:Review.Acc.SaveAsText(2, $n, $path) }   # 2 = acForm
+            $dialogs += $r.Dialogs
+            $saved += [pscustomobject]@{ Form = $n; Objects = (Read-FormSnapshot $path).Count }
+        } catch { $failed += [pscustomobject]@{ Form = $n; Error = $_.Exception.Message } }
+    }
+    [pscustomobject]@{ Label = $Label; Folder = $dir; Saved = $saved; Failed = $failed; Dialogs = $dialogs }
+}
+
+# Compares two snapshots by label (Access need not be open). Saves the full report as
+# snapshots\compare-<before>-<after>.txt and returns it, with the differences per form.
+function Compare-ReviewSnapshot {
+    param([Parameter(Mandatory)][string]$Before, [Parameter(Mandatory)][string]$After, [string[]]$Forms, [int]$MaxLines = 400)
+    $cmp = Compare-FormSnapshotFolder -BeforeDir (Get-ReviewSnapshotDir $Before) -AfterDir (Get-ReviewSnapshotDir $After) -Forms $Forms
+    $text = Format-FormSnapshotReport $cmp "Form snapshots: $Before -> $After"
+    $path = Join-Path (Get-ReviewSnapshotRoot) "compare-$Before-$After.txt"
+    [IO.File]::WriteAllText($path, $text, (New-Object Text.UTF8Encoding($false)))
+    $lines = $text -split "`r?`n"
+    $shown = if ($lines.Count -gt $MaxLines) { (($lines[0..($MaxLines - 1)]) -join "`n") + "`n... $($lines.Count - $MaxLines) more lines in $path" } else { $text }
+    [pscustomobject]@{
+        Report = $path
+        FormsAdded = $cmp.FormsAdded; FormsRemoved = $cmp.FormsRemoved
+        FormsChanged = @($cmp.Forms | Where-Object { $_.Differences -gt 0 } | ForEach-Object { "$($_.Form) ($($_.Differences))" })
+        FormsUnchanged = @($cmp.Forms | Where-Object { $_.Differences -eq 0 }).Count
+        Text = $shown
+    }
 }
 
 # Open windows of the Access instance other than its main window: message boxes and
