@@ -102,6 +102,8 @@ Private Sub SetCaption(host As Form, ByVal prefix As String, ByVal i As Long, By
     Set c = host.Controls(prefix & i)
     c.Tag = SetTagParts(c.Tag, 1, offset, w - px(8))   ' later parts (a sort field) stay
     SetVisible c, visible
+    ' Its filter funnel (GridHeaders filterSf) goes with it; GridFit places it.
+    If CtlExists(host, prefix & "Filter" & i) Then SetVisible host.Controls(prefix & "Filter" & i), visible
 End Sub
 
 ' tag with its "|"-separated parts from index first on replaced by vals; the
