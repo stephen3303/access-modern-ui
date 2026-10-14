@@ -5,9 +5,9 @@ test changes to it. It has one local table of fictional items and three pages:
 
 | Page | Shows |
 |---|---|
-| Cards and progress | `Card` (rounded and square), `Progress` at 0, 37 and 100 percent, a table inside a rounded card; the square card's buttons open `KitInputBox`, plain and masked |
+| Cards and progress | `Card` (rounded and square), `Progress` at 0, 37 and 100 percent, a table inside a rounded card; the square card's buttons open `KitInputBox`, plain and masked; the rounded card's Primary button shows `KitMsgBox` and Outline shows `KitToast` |
 | Tables | `BuildGrid` with every option (header band, zebra rows, status pills, 38px rows, proportional fit through `GridFit`) next to a default table, both sorted by clicking a column caption; the column chooser (Columns, top right) for the first table; `TabStrip` and chips with counts; search and a category filter to the right of the chips |
-| List and detail | The list/detail pattern (`SelectFirstRow`, `ShowDetail`, `ClearDetail`), click-to-sort captions, `PrintGrid` and `ExportGrid` in the list's sort; the Due field is a `DateBox` whose date picker marks federal holidays and every item's due date (`MarkDate`); a compact `Toggle` switch (Flagged for review) on the detail panel's Save row; a `SecretBox` (the item's access code) |
+| List and detail | The list/detail pattern (`SelectFirstRow`, `ShowDetail`, `ClearDetail`), click-to-sort captions, `PrintGrid` and `ExportGrid` in the list's sort; the Due field is a `DateBox` whose date picker marks federal holidays and every item's due date (`MarkDate`); a compact `Toggle` switch (Flagged for review) on the detail panel's Save row; a `SecretBox` (the item's access code); Save confirms with a toast |
 
 Appearance in the sidebar switches palettes. The demo opens on the kit's splash screen
 (`BuildSplash`), which opens the main window and closes; `HideAccessSplash` replaces
@@ -41,6 +41,11 @@ watching for Visual Basic error dialogs as well as the error log:
   the file.
 - Cards: corners are round in every palette; hovering the buttons and cards doesn't flicker.
 - Progress: 0 shows only the track, 37 is a third full, 100 is full.
+- Toasts: each click on Outline shows the next variant (success, info, warning,
+  destructive) 16px in from the window's bottom-right corner; it fades after 3 seconds;
+  a click on any part of it closes it; a toast while one shows replaces it. On List and
+  detail, click into Notes, then Save, then press Shift+Tab while "Item saved." shows:
+  the focus moves to Notes, so the keyboard never went to the toast.
 - Input box (square card): Ask opens with "Sailor" selected, OK reports the text (an
   empty box reports ""), Cancel and Esc report Cancelled; Ask masked shows * for each
   character and reports only the length.

@@ -139,7 +139,7 @@ them, and the shell (`frmMain`) last.
 | modBuildUI, modBuildPages, modBuildPages2 | `Build_<form>` procedures, one per form, grouped by area |
 | modUI | Run-time UI helpers: `NavTo`, badges/pills painting, `ShowTip`, the app's hooks (`BadgeColors`, `StatusVariant`) |
 | modUIKit (kit) | Build-time control builders (section 6) |
-| modKitUI (kit) | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSwitch`, `ToggleFocus`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `KitInputBox`, `CheckRequired`, `SetCount`, `StyleChip` |
+| modKitUI (kit) | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSwitch`, `ToggleFocus`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `KitToast`, `KitInputBox`, `CheckRequired`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
 | modGridCols (kit) | Column chooser: `ChooseGridColumns`, `RestoreGridColumns`, `SetGridColumns`, and `BuildColumnsDialog` for `dlgColumns` |
 | modTrust (kit) | `BuildTrustCheck` startup, `TrustNeeded`, `InTrustedLocation`, `ShowTrustHelp` (the `dlgTrust` page on trusting the folder) |
@@ -184,6 +184,13 @@ Otherwise both show their message with the kit's `KitMsgBox`, never `MsgBox`: Wi
 centres a `MsgBox` on the monitor, so on a large or second screen it opens outside
 Access and Access waits behind it. For the same reason a question the user types an
 answer to uses `KitInputBox`, never `InputBox`, with `masked:=True` for a PIN or password.
+
+**Toasts for confirmations.** When the user only needs to know an action worked
+("Saved", "Exported 24 rows"), show `KitToast msg, variant` instead of a message box:
+a small toast in the bottom-right corner of `frmMain` that fades after a few seconds
+and never takes the focus, so the user keeps typing. Variants are `success`, `info`,
+`warning` and `destructive`. Anything the user must read, decide or fix stays a
+`KitMsgBox` or an inline `lblMsg`; a toast disappears before some users read it.
 
 ---
 
@@ -698,6 +705,12 @@ Write app-specific helpers next to the builds that use them. Examples:
   stops clicks and the Tab stop but doesn't dim the track. Use it on single forms only:
   in a continuous form the ring shows on every row.
 - **Empty states**: a centered muted 10pt label shown in place of an empty list.
+- **Toasts** (`KitToast`, `dlgToast`): a 360px borderless pop-up on `CLR_SURFACE` with
+  a 1px `CLR_INPUT_BORDER` edge, a 4px accent bar on the left and a Segoe MDL2 icon in
+  the variant's color (success `CLR_GREEN_600`, info `CLR_PRIMARY`, warning
+  `CLR_WARN_TEXT`, destructive `CLR_ERROR`), then the message in 10pt `CLR_FG`, up to
+  3 lines. It sits 16px in from `frmMain`'s bottom-right corner, holds for 3 seconds,
+  fades over about a third of a second and closes; a click closes it at once.
 - **Search box placeholder**: `Format = "@;""Search by ..."""`.
 - **Hierarchical trees and wrapped rows**:
   - A continuous form gives every row the same height, so build rows tall enough for
@@ -964,6 +977,7 @@ The Appearance dialog grows by itself, because it is built from `PALETTE_COUNT`.
 6. For each page, write a `Build_pg<Name>` using `PageHeader`, cards, grids and buttons,
    and a `src/forms/pg<Name>.vba` where every handler uses the standard error handler.
 7. Copy the dialogs: `dlgAppearance`, `BuildMessageDialog` (for `Notify` and `HandleError`),
+   `BuildToast` (for `KitToast`),
    `BuildInputDialog` (for `KitInputBox`),
    `BuildDatePicker` (for date fields), and a non-modal `dlgHelp` with `help.txt` and the F1
    `AutoKeys` macro. Optionally add the splash screen with `BuildSplash` and

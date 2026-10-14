@@ -22,6 +22,7 @@ Public Function TestKit(ByVal root As String) As String
     Txt "ringC", "", 0, 0, px(100), px(30)
     Btn "ringSave", "Save", px(110), 0, px(80), px(30)
     SaveForm "subRing"
+    BuildToast
     NewForm "test_rows", 0, px(300), px(40)
     Ev F, "BeforeUpdate"
     Txt "txtDesc", "description", 0, 0, px(280), px(30)
@@ -281,6 +282,13 @@ Public Function TestKit(ByVal root As String) As String
     host.reqA = "x"
     Check RequiredMissing(host, "reqA=First", fitted) = "" And fitted = "", "Filled required field reported"
     Check host.reqA.BorderColor = Th(CLR_INPUT_BORDER), "Filled required field kept its outline"
+    DoCmd.OpenForm "dlgToast", WindowMode:=acHidden     ' as KitToast does, but errors raise here
+    Forms("dlgToast").ShowToast "Saved R&D", "success", 3000
+    Check Forms("dlgToast").lblMsg.Caption = "Saved R&&D", "Toast took & as an access key"
+    KitToast "Saved", "success"
+    Check Forms("dlgToast").lblMsg.Caption = "Saved", "Toast lost its message"
+    Check Screen.ActiveForm.Name = "frmTest", "Toast took the focus"
+    DoCmd.Close acForm, "dlgToast", acSaveNo
     Check SaveDetail(host, "sfRows"), "Unchanged detail panel reported a refused save"
     host.sfRefuse.Form.txtDesc = "Changed"
     Check Not SaveDetail(host, "sfRefuse"), "Refused detail save reported as saved"

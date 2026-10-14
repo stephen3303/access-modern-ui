@@ -415,6 +415,53 @@ Public Sub BuildMessageDialog()
     SaveForm "dlgMessage"
 End Sub
 
+' The toast KitToast shows (dlgToast, code in forms\dlgToast.vba): a 360px
+' borderless pop-up on CLR_SURFACE with a 1px CLR_INPUT_BORDER edge, a 4px
+' accent bar down its left side, an icon and the message in 10pt text (room
+' for 3 lines). It is not modal and has no title bar. dlgToast colors the
+' icon and bar for each message, shrinks to the lines it takes, and places
+' itself in frmMain's bottom-right corner. Build it with the app's other
+' dialogs.
+Public Sub BuildToast()
+    Dim c As Control, w As Long, h As Long, msgH As Long
+    w = px(360)
+    msgH = 3 * CLng(10 * 20 * 1.36)                 ' 3 lines of 10pt text
+    h = px(14) + msgH + px(14)
+    NewForm "", 0, w, h
+    With F
+        .Caption = "Toast"
+        .PopUp = True
+        .Modal = False
+        .BorderStyle = 0
+        .AutoCenter = False
+        .AutoResize = True
+        .ControlBox = False
+        .MinMaxButtons = 0
+        .CloseButton = False
+        .ShortcutMenu = False
+        .Section(acDetail).BackColor = CLR_SURFACE
+        .Section(acDetail).AlternateBackColor = CLR_SURFACE
+    End With
+    Ev F, "OnTimer"
+    F.Section(acDetail).OnClick = "[Event Procedure]"   ' a click closes it
+    Set c = Box("boxAccent", 0, 0, px(4), h, CLR_PRIMARY)
+    Ev c, "OnClick"
+    Set c = Lbl("lblIcon", ChrW(&HE946), px(16), px(12), px(22), px(22), 12, False, CLR_PRIMARY)
+    c.FontName = "Segoe MDL2 Assets": c.FontWeight = 400: c.TextAlign = 2
+    Ev c, "OnClick"
+    Set c = Lbl("lblMsg", "Message", px(48), px(14), w - px(48) - px(16), msgH, 10, False, CLR_FG)
+    Ev c, "OnClick"
+    ' Edges are hairlines: a filled 1px Box paints 2px. A line paints 1px up
+    ' and left of where it is placed, so each edge sits 1px (15 twips) down
+    ' and right of the pixel it should cover: at 0 the top edge would fall
+    ' off the window, at h - 15 the bottom edge would leave a strip below it.
+    Rule "ruleTop", 0, 15, w, 0, CLR_INPUT_BORDER
+    Rule "ruleBottom", 0, h, w, 0, CLR_INPUT_BORDER
+    Rule "ruleLeft", 15, 0, 0, h, CLR_INPUT_BORDER
+    Rule "ruleRight", w, 0, 0, h, CLR_INPUT_BORDER
+    SaveForm "dlgToast"
+End Sub
+
 ' The input dialog KitInputBox opens (dlgInput, code in forms\dlgInput.vba):
 ' dlgMessage's look without the icon. The prompt in 10pt text wraps across a
 ' 380px column (room for 6 lines, scrolling for more), a 30px input sits 12px
