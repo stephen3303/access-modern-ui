@@ -78,6 +78,8 @@ Public Sub GridFit(sf As Control, Optional ByVal prefix As String = "")
     ' wide after the window is narrowed. So start each fit from the host's
     ' design width (ShrinkHost).
     ShrinkHost host, prefix
+    ' Resizing the host can leave the reference to the table's form dead.
+    Set g = sf.Form
     ' An anchored control's Width keeps its design value, so add how much
     ' wider than designed the host is.
     avail = sf.Width
