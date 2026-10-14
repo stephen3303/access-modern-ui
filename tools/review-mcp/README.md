@@ -1,6 +1,6 @@
 # Access Review MCP server
 
-Lets a Claude Code session do visual review of an Access front end without using the desktop. It starts its own Access instance over COM, parks its windows past the edge of the screen, and captures forms with `PrintWindow`, which asks Access to draw a window into a bitmap. Nothing comes to the front, nothing takes focus, and no mouse or keyboard input is sent, so someone can keep working on the same machine. In off-screen mode a watcher keeps every Access window, including popups the app opens or re-centres on its own, past the desktop edge for the whole session; a newly shown popup can appear for a few milliseconds before it is moved.
+Lets a Claude Code session do visual review of an Access front end without using the desktop. It starts its own Access instance over COM, parks its windows past the edge of the screen, and captures forms with `PrintWindow`, which asks Access to draw a window into a bitmap. Nothing comes to the front, nothing takes focus, and no mouse or keyboard input is sent, so someone can keep working on the same machine. In off-screen mode a watcher keeps every Access window, including popups the app opens or re-centres on its own, past the desktop edge for the whole session; a newly shown popup can still appear for up to about 50 ms before it is moved.
 
 ```
 AccessReview.ps1      the review functions (usable from plain PowerShell too)
@@ -16,7 +16,7 @@ AccessReviewMcp.ps1   the MCP server (stdio) that exposes them as tools
 | `error_log` | `mark=true` before testing, then `mark=false` to list new `error_log` rows and new `errors.log` text. |
 | `compile` | Compiles and saves all modules. |
 | `run` | Runs a public procedure with `Application.Run`, e.g. SABER `Login`. Whole numbers are passed as Long (Double when too large) and output arguments come back. |
-| `set_palette` | Navy, Midnight or Teal Navy (`SetPalette` 1, 2, 6), then closes and reopens the open forms at their last size, as the app's Appearance switch does. A form left open keeps part of the old drawing (pills and progress bars went missing in Midnight). |
+| `set_palette` | Navy, Midnight or Teal Navy (`SetPalette` 1, 2, 6), then reopens the open forms at their last size, as the app's Appearance switch does: a shell form with a public `Reopen` method (SABER frmMain) reopens itself on its current page, so the user stays signed in; dialogs are closed and reopened with their OpenArgs. A form left open keeps part of the old drawing (pills and progress bars went missing in Midnight). |
 | `open_form` | Opens a form and sizes it to its design size (form width, visible section heights), or to `width_px` x `height_px` at 96 dpi. Reports whether the Access window clips it. |
 | `resize_form` | Design size, a given size (small check about 1100x700) or maximized (Access window at the main display's work area, as a real maximized window gets). A shell form that fills the Access window, such as kit frmMain, is sized by resizing the Access window until its inside size matches; `SizeMatches` reports whether it did. |
 | `capture` | PNG of a form, or a zoomed crop, taken once two frames in a row match (so a form still drawing isn't caught mid-draw; `Stable` reports it). Returned as an image and saved in the output folder, named form-palette-label. |

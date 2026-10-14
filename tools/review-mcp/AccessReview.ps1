@@ -579,9 +579,48 @@ function Wait-ReviewFormIdle([string]$Name) {
     Start-Sleep -Milliseconds 300
 }
 
-# Switches the palette, then closes and reopens every open form (with its OpenArgs and
-# the size last asked for), as the app's own Appearance switch does: a form left open
-# keeps part of the old drawing (in Midnight, pills and progress bars went missing).
+# Calls a form's own public Reopen method (SABER and kit shell forms have one; it
+# reopens the form on a timer without running its sign-out on close), passing the
+# current page when the form exposes PageKey. Returns $false if the form has none.
+function Invoke-FormReopen([string]$Name) {
+    $f = $null
+    try {
+        $f = $script:Review.Acc.Forms.Item($Name)
+        $page = Find-FormValue $Name '.PageKey'
+        if ($null -eq $page) { try { $page = $script:Review.Acc.Eval('TempVars!StartPage') } catch {} }   # SABER keeps its page here too
+        $callArgs = if ($null -ne $page -and "$page" -ne '') { @([string]$page) } else { @() }
+        [void][__ComObject].InvokeMember('Reopen', [Reflection.BindingFlags]::InvokeMethod, $null, $f, $callArgs)
+        $true
+    } catch { $false } finally { Release-Com $f }
+}
+
+# Waits (up to 6 s) for a form that is closing and reopening on a timer to be open
+# again with its timer stopped.
+function Wait-ReviewFormReopened([string]$Name) {
+    Start-Sleep -Milliseconds 300
+    for ($k = 0; $k -lt 30; $k++) {
+        $t = Find-FormValue $Name '.TimerInterval'
+        if ($null -ne $t -and [int]$t -eq 0) { break }
+        Start-Sleep -Milliseconds 200
+    }
+    Start-Sleep -Milliseconds 300
+    if ($null -eq (Find-FormValue $Name '.Name')) { throw "Form '$Name' did not reopen after the palette switch." }
+}
+
+function Restore-ReviewFormSize([string]$Name) {
+    $want = $script:Review.Sizes[$Name]
+    $p = @{ Name = $Name }
+    if ($want) { $p.WidthPx = $want.W; $p.HeightPx = $want.H; $p.Maximize = [bool]$want.Max }
+    Set-ReviewFormSize @p
+}
+
+# Switches the palette, then reopens every open form, as the app's own Appearance switch
+# does: a form left open keeps part of the old drawing (in Midnight, pills and progress
+# bars went missing). A form with a public Reopen method (a shell such as SABER's
+# frmMain) reopens itself, which keeps the user signed in and on the same page; closing
+# it instead would run its sign-out. Other forms (dialogs) are closed first and reopened
+# last with their OpenArgs, so they come back on top of the reopened shell. Each form
+# returns to the size last asked for.
 function Set-ReviewPalette {
     param([Parameter(Mandatory)][ValidateSet('Navy', 'Midnight', 'Teal Navy')][string]$Name, [switch]$NoReopen)
     $i = [int]$script:Palettes[$Name]
@@ -591,11 +630,24 @@ function Set-ReviewPalette {
     $script:Review.Palette = $Name
     $dialogs = @($r.Dialogs); $reopened = @()
     if (-not $NoReopen) {
+        $selfReopen = @(); $plain = @()
         foreach ($f in $open) {
+            $d = Invoke-ReviewGuarded { Invoke-FormReopen $f.Name }
+            $dialogs += $d.Dialogs
+            if ($d.Value) { $selfReopen += $f } else { $plain += $f }
+        }
+        foreach ($f in $plain) {
             $d = Invoke-ReviewGuarded { $acc.DoCmd.Close(2, $f.Name, 2) }   # acForm, acSaveNo
             $dialogs += $d.Dialogs
         }
-        foreach ($f in $open) {
+        foreach ($f in $selfReopen) {
+            Wait-ReviewFormReopened $f.Name
+            $o = Restore-ReviewFormSize $f.Name
+            Wait-ReviewFormIdle $f.Name
+            $dialogs += $o.Dialogs
+            $reopened += "$($f.Name) $($o.InsidePx) (own Reopen)"
+        }
+        foreach ($f in $plain) {
             $want = $script:Review.Sizes[$f.Name]
             $p = @{ Name = $f.Name; OpenArgs = $f.OpenArgs }
             if ($want) { $p.WidthPx = $want.W; $p.HeightPx = $want.H; $p.Maximize = [bool]$want.Max }
@@ -603,7 +655,6 @@ function Set-ReviewPalette {
             $dialogs += $o.Dialogs
             $reopened += "$($f.Name) $($o.InsidePx)"
         }
-        foreach ($f in $open) { Wait-ReviewFormIdle $f.Name }
     }
     [pscustomobject]@{ Palette = $Name; Index = $i; Reopened = $reopened; Dialogs = $dialogs }
 }
