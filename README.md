@@ -165,7 +165,7 @@ Control heights and font sizes never scale. `TabStrip` and `LayoutFilterRow` alr
 | Builder | What it does |
 |---|---|
 | `BuildGrid name, cols, w [, rowLines, back, zebra, rowPx, fit]` | Styled read-only table subform. Columns are `"field\|caption\|width px\|options"`; options `r` right, `c` center, `b` bold, `m` muted, `p` status pill (`StatusVariant`), `w` wrap onto `rowLines` lines instead of cutting text off, `s` mark the text matching the page's search (`GridHighlight`). `zebra` fills every other row, `rowPx` sets the row height, `fit` lets `GridFit` scale the columns. Clicking a row selects and opens it: no open buttons. |
-| `GridHeaders prefix, cols, x, y [, parentCtl, band, w, sortSf]` | Column captions above a `BuildGrid` table. `band:=True` puts them on a filled strip. `sortSf` (the table's subform control) makes them sort the table on click, again to reverse, with an up/down arrow; a fifth column part names a different sort field. |
+| `GridHeaders prefix, cols, x, y [, parentCtl, band, w, sortSf, fit]` | Column captions above a `BuildGrid` table. `band:=True` puts them on a filled strip. `fit:=True` for a table `GridFit` scales. `sortSf` (the table's subform control) makes them sort the table on click, again to reverse, with an up/down arrow; a fifth column part names a different sort field. |
 | `CF c, expr, back, fore [, bold]` | Expression-based conditional format |
 | `BadgeCF c, field, value, variant, ...` | Rounded badge colors keyed on a status field |
 | `BandCF c, field` | Status band pill colors |

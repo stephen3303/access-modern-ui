@@ -938,10 +938,13 @@ End Sub
 ' field" (e.g. the date behind a formatted text column; the record source must
 ' return it). A column whose field is an expression ("=...") and has no sort
 ' field doesn't sort. Each caption's Tag holds "x|offset|width|sort field"
-' for GridFit and GridSort.
+' for GridFit and GridSort. fit = True for a table GridFit scales: the
+' captions are anchored right, so moving them over the widened columns never
+' widens the host form (GridFit).
 Public Sub GridHeaders(ByVal prefix As String, ByVal cols As Variant, ByVal x As Long, ByVal y As Long, _
                        Optional ByVal parentCtl As String = "", Optional ByVal band As Boolean = False, _
-                       Optional ByVal w As Long = 0, Optional ByVal sortSf As String = "")
+                       Optional ByVal w As Long = 0, Optional ByVal sortSf As String = "", _
+                       Optional ByVal fit As Boolean = False)
     Dim c As Control, i As Long, p() As String, cx As Long, cy As Long, cw As Long, opts As String, key As String
     If band Then
         If w = 0 Then
@@ -969,6 +972,7 @@ Public Sub GridHeaders(ByVal prefix As String, ByVal cols As Variant, ByVal x As
             If Len(key) > 0 Then c.OnClick = "=GridSort([Form],""" & sortSf & """,""" & prefix & """," & i & ")"
         End If
         c.Tag = x & "|" & (cx - x) & "|" & cw & "|" & key
+        If fit Then Anchor c, 1, 0
         cx = cx + px(Val(p(2)))
     Next
 End Sub
