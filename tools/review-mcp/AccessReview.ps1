@@ -381,7 +381,16 @@ function Get-ReviewPalettes {
     $list
 }
 
-$script:Palettes = Get-ReviewPalettes
+# A bad setting falls back to the default list rather than stopping the server, which
+# a desktop app would only show as a server that failed to start. The problem is
+# reported in the server's instructions and in every set_palette result.
+$script:PaletteWarning = $null
+try { $script:Palettes = Get-ReviewPalettes }
+catch {
+    $script:PaletteWarning = "$($_.Exception.Message) Using the default palettes instead."
+    $env:ACCESS_REVIEW_PALETTES = $null
+    $script:Palettes = Get-ReviewPalettes
+}
 $script:DefaultPalette = @($script:Palettes.Keys)[0]
 $script:PaletteProcedure = Get-ReviewSetting 'ACCESS_REVIEW_PALETTE_PROCEDURE'
 if (-not $script:PaletteProcedure) { $script:PaletteProcedure = 'SetPalette' }
@@ -696,7 +705,7 @@ function Restore-ReviewFormSize([string]$Name) {
 function Set-ReviewPalette {
     param([Parameter(Mandatory)][string]$Name, [switch]$NoReopen)
     Assert-ReviewOpen
-    if (-not $script:Palettes.Contains($Name)) { throw "Unknown palette '$Name'. Configured: $(@($script:Palettes.Keys) -join ', ') (ACCESS_REVIEW_PALETTES)." }
+    if (-not $script:Palettes.Contains($Name)) { throw "Unknown palette '$Name'. Configured: $(@($script:Palettes.Keys) -join ', ') (ACCESS_REVIEW_PALETTES).$(if ($script:PaletteWarning) { ' ' + $script:PaletteWarning })" }
     $i = [int]$script:Palettes[$Name]
     $proc = $script:PaletteProcedure
     $acc = $script:Review.Acc
@@ -732,7 +741,7 @@ function Set-ReviewPalette {
             $reopened += "$($f.Name) $($o.InsidePx)"
         }
     }
-    [pscustomobject]@{ Palette = $Name; Index = $i; Reopened = $reopened; Dialogs = $dialogs }
+    [pscustomobject]@{ Palette = $Name; Index = $i; Reopened = $reopened; Dialogs = $dialogs; Warning = $script:PaletteWarning }
 }
 
 # Size and position facts for one open form, in pixels at 96 dpi (twips / 15) unless

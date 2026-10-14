@@ -96,6 +96,7 @@ function Get-ToolList {
 }
 
 Log "started (version $ServerVersion)"
+if ($PaletteWarning) { Log $PaletteWarning }
 try {
     while ($true) {
         $line = [Console]::In.ReadLine()
@@ -108,7 +109,7 @@ try {
             'initialize' {
                 $pv = Arg $msg.params 'protocolVersion' '2025-06-18'
                 $reply = @{ protocolVersion = $pv; capabilities = @{ tools = @{} }; serverInfo = @{ name = 'access-review'; version = $ServerVersion }
-                            instructions = 'Drives Microsoft Access over COM for visual review without using the desktop. Typical run: review_lock, open_app, error_log mark=true, open_form, capture, controls, dialogs, error_log, close_app, review_unlock.' }
+                            instructions = 'Drives Microsoft Access over COM for visual review without using the desktop. Typical run: review_lock, open_app, error_log mark=true, open_form, capture, controls, dialogs, error_log, close_app, review_unlock.' + $(if ($PaletteWarning) { " Settings problem: $PaletteWarning" }) }
             }
             'ping' { $reply = @{} }
             'tools/list' { $reply = @{ tools = (Get-ToolList) } }

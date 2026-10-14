@@ -61,7 +61,7 @@ All optional. In the extension they are fields on its settings page; with a conf
 |---|---|---|---|
 | Capture folder | `ACCESS_REVIEW_OUTPUT` | `%LOCALAPPDATA%\AccessReview` | Where PNGs are saved, in a new time-stamped folder per session. `open_app` can also take `output_dir`. |
 | Shared lock files | `ACCESS_REVIEW_LOCKS` | none | Full paths of lock files, separated by `;`, for a PC several reviewers take turns on. `review_lock` takes all or none; with none configured it does nothing. |
-| Palettes | `ACCESS_REVIEW_PALETTES` | `Navy=1;Midnight=2;Teal Navy=6` | Palettes `set_palette` offers, as `name=number`. The number is passed to the palette procedure. The first one is the default: `close_app` switches back to it. |
+| Palettes | `ACCESS_REVIEW_PALETTES` | `Navy=1;Midnight=2;Teal Navy=6` | Palettes `set_palette` offers, as `name=number`. The number is passed to the palette procedure. The first one is the default: `close_app` switches back to it. A malformed value is ignored with a warning (in the server log, its instructions and each `set_palette` result) and the defaults are used. |
 | Palette procedure | `ACCESS_REVIEW_PALETTE_PROCEDURE` | `SetPalette` | Public VBA `Sub Name(ByVal i As Long)` in your front end that switches palettes. |
 
 Example `env` for a config file:
