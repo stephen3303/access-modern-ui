@@ -776,6 +776,11 @@ Write app-specific helpers next to the builds that use them. Examples:
   they must stay themed.
 - **Anchored widths**: an anchored control's `Width` still returns the design value. Use
   `form.InsideWidth - form.Width` to get the extra width.
+- **Form width only grows**: moving a control past a form's right edge at run time widens
+  the form, and the anchored controls' design sizes grow with it. Access never narrows
+  them again. To narrow, move that control back, take the same amount off each anchored
+  control (`Width` if anchored both sides, `Left` if anchored right), then set the form's
+  `Width` (GridFit does this for its captions' host).
 - Set late-bound properties such as an image's `ControlSource` through
   `c.Properties("Name")`. Setting them directly can fail silently.
 - An unset conditional ForeColor falls back to black, so always carry the control's own

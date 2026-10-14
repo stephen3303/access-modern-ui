@@ -938,7 +938,9 @@ End Sub
 ' field" (e.g. the date behind a formatted text column; the record source must
 ' return it). A column whose field is an expression ("=...") and has no sort
 ' field doesn't sort. Each caption's Tag holds "x|offset|width|sort field"
-' for GridFit and GridSort.
+' for GridFit and GridSort, and last a named part "fw=<form width>": the
+' form's design width, which lets GridFit put the form back after a caption
+' has widened it. Named, so parts added before it keep their places.
 ' filterSf names the table's subform control too: then a funnel at the right
 ' end of each caption whose column shows a field (not "=...") opens the
 ' column's value filter (GridFilter, modGridFilter), and the caption's text
@@ -981,7 +983,7 @@ Public Sub GridHeaders(ByVal prefix As String, ByVal cols As Variant, ByVal x As
             If Len(key) = 0 And Left$(p(0), 1) <> "=" Then key = p(0)
             If Len(key) > 0 Then c.OnClick = "=GridSort([Form],""" & sortSf & """,""" & prefix & """," & i & ")"
         End If
-        c.Tag = x & "|" & (cx - x) & "|" & cw & "|" & key
+        c.Tag = x & "|" & (cx - x) & "|" & cw & "|" & key & "|fw=" & F.Width
         If funnel Then
             Set c = Lbl(prefix & "Filter" & i, ChrW(FILTER_GLYPH), cx + cw - FILTER_W, cy, FILTER_W, px(16), 9, False, _
                 CLR_MUTED_FG, acDetail, parentCtl)

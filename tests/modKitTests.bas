@@ -146,7 +146,7 @@ Public Function TestKit(ByVal root As String) As String
     Check host.secret.InputMask = SECRET_MASK And host.eye_secret.ControlTipText = "Show", "HideSecrets left the secret shown"
     grid.RecordSource = "SELECT * FROM test_rows ORDER BY id"
     ' Click-to-sort captions: ascending with an up arrow, then reversed; the arrow moves with the column.
-    Check host.head1.OnClick = "" And Right$(host.head1.Tag, 1) = "|", "Unsortable caption has a sort click"
+    Check host.head1.OnClick = "" And Split(host.head1.Tag, "|")(3) = "", "Unsortable caption has a sort click"
     Check host.sortHead1.OnClick = "=GridSort([Form],""sfRows"",""sortHead"",1)", "Sortable caption has no sort click"
     GridSort host, "sfRows", "sortHead", 1
     Check grid.OrderByOn And grid.OrderBy Like "*description], [[]id]", "First caption click did not sort ascending"
@@ -419,7 +419,7 @@ Public Function TestKit(ByVal root As String) As String
     BackdropOnClose
     Check Not AppDimmed(), "A dialog closing with no dim waiting changed the count"
     ' Column chooser on a fit table: order, hiding, captions, bad layouts.
-    Dim order() As Long, shown() As Boolean, sf As Control
+    Dim order() As Long, shown() As Boolean, sf As Control, capTag() As String
     Check ParseLayout("2,0,1h", 3, order, shown), "Valid column layout rejected"
     Check order(0) = 2 And Not shown(2), "Column layout parsed wrongly"
     Check Not ParseLayout("0,0,1", 3, order, shown), "Repeated column accepted"
@@ -437,7 +437,9 @@ Public Function TestKit(ByVal root As String) As String
     SetGridColumns sf, "fit", DefaultLayout(3)
     Set grid = sf.Form
     height = grid.txtCol2.Left + grid.txtCol2.Width          ' right edge of all the columns
-    host.fit2.Tag = host.fit2.Tag & "|id"                     ' as a sortable caption's
+    capTag = Split(host.fit2.Tag, "|")
+    capTag(3) = "id"                                          ' as a sortable caption's
+    host.fit2.Tag = Join(capTag, "|")
     SetGridColumns sf, "fit", "2,0,1h"
     Set grid = sf.Form
     Check Abs(grid.txtCol0.Left + grid.txtCol0.Width - height) <= px(2), "Shown columns did not fill the table as far as all of them"
@@ -446,7 +448,8 @@ Public Function TestKit(ByVal root As String) As String
     Check Abs(host.fit2.Left - (sf.Left + grid.txtCol2.Left)) <= 15, "Caption did not follow its column"
     Check grid.txtCol0.Width > px(160), "Shown columns did not widen into the hidden one's space"
     Check grid.txtCol1.Width <= 15, "Hidden column kept its width (can push the form past its limit)"
-    Check Right$(host.fit2.Tag, 3) = "|id", "Caption lost a later Tag part (sort field)"
+    Check Split(host.fit2.Tag, "|")(3) = "id", "Caption lost a later Tag part (sort field)"
+    Check host.fit2.Tag Like "*|fw=" & px(700), "Caption lost its form's design width"
     On Error Resume Next
     SetGridColumns sf, "fit", "0,1"
     Check Err.Number = 5, "Bad column layout was applied"
