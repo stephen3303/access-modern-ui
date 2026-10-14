@@ -6,8 +6,9 @@ Option Explicit
 ' ShowDetail, ClearDetail), search matches marked in tables (GridHighlight),
 ' tabs and filter chips with counts (SetCount, StyleChip), focus rings on
 ' inputs (FocusRing), toggle switches (ToggleSwitch, ToggleFocus), the splash
-' screen's status line (SplashStatus) and messages in the kit's look
-' (KitMsgBox). Colors set here go through Th() so they follow the palette.
+' screen's status line (SplashStatus) and messages and questions in the kit's
+' look (KitMsgBox, KitInputBox). Colors set here go through Th() so they follow
+' the palette.
 
 ' Width the table's vertical scroll bar takes (twips).
 Private Const SCROLL_W As Long = 300
@@ -36,6 +37,14 @@ Private m_ringCtl As Control
 Private m_ringHwnd As Long
 Private m_ringName As String
 Private m_ringWas As Long
+' The question the input dialog (dlgInput) is asking (KitInputBox), and the
+' text typed (Null until OK is clicked).
+Private m_inOpen As Boolean
+Private m_inPrompt As String
+Private m_inTitle As String
+Private m_inDefault As String
+Private m_inMasked As Boolean
+Private m_inAnswer As Variant
 
 ' ---------------------------------------------------------------------------
 ' Tables
@@ -748,6 +757,85 @@ End Function
 
 Public Sub SetKitMsgAnswer(ByVal answer As Long)
     m_msgAnswer = answer
+End Sub
+
+' InputBox in the kit's look: opens the input dialog (dlgInput, built by
+' BuildInputDialog), centred over Access like dlgMessage, and waits. Returns
+' the text typed when OK is clicked (a String, "" if the box was left empty)
+' or Null on Cancel, Esc or any other close, so an empty answer and a cancel
+' can be told apart. masked:=True shows each typed character as * (the
+' SECRET_MASK input mask) for a PIN or password; the text returned is the real
+' one.
+' A question while one is already showing, or a dialog that can't open (not
+' built yet), uses InputBox itself, with Null for its Cancel. A masked
+' question never does: InputBox would show the secret, so it returns Null
+' instead (logged when the dialog failed to open).
+Public Function KitInputBox(ByVal prompt As String, Optional ByVal title As String = "", _
+        Optional ByVal defaultText As String = "", Optional ByVal masked As Boolean = False) As Variant
+    Dim s As String
+    If m_inOpen Then GoTo Plain
+    On Error GoTo Failed
+    m_inPrompt = prompt
+    m_inTitle = title
+    m_inDefault = defaultText
+    m_inMasked = masked
+    m_inAnswer = Null
+    m_inOpen = True
+    CloseSplash                    ' a start-up question must not open behind the splash
+    DimApp                          ' the app behind is dimmed, as for KitMsgBox
+    DoCmd.OpenForm "dlgInput", WindowMode:=acDialog
+    UndimApp
+    m_inOpen = False
+    KitInputBox = m_inAnswer
+    ClearInput                     ' don't keep a typed PIN or password in memory
+    Exit Function
+Failed:
+    ' Only this question's own dialog failed to open; a question already
+    ' showing (Plain from the first line) keeps m_inOpen set until it closes.
+    ' m_inOpen is set just before DimApp (which never raises), so it also says
+    ' this question's dim is still on. Log first: UndimApp may clear Err.
+    If masked Then LogError "modKitUI.KitInputBox", "masked input dialog did not open"
+    If m_inOpen Then UndimApp
+    m_inOpen = False
+    ClearInput
+    If masked Then
+        KitInputBox = Null
+        Exit Function
+    End If
+Plain:
+    If masked Then          ' asked while another question is open: no error to log
+        KitInputBox = Null
+        Exit Function
+    End If
+    s = InputBox(prompt, IIf(Len(title) > 0, title, APP_NAME), defaultText)
+    If StrPtr(s) = 0 Then KitInputBox = Null Else KitInputBox = s   ' StrPtr 0: Cancel
+End Function
+
+' What the open input dialog asks, and its answer (dlgInput calls these).
+Public Function KitInputPrompt() As String
+    KitInputPrompt = m_inPrompt
+End Function
+
+Public Function KitInputTitle() As String
+    KitInputTitle = m_inTitle
+End Function
+
+Public Function KitInputDefault() As String
+    KitInputDefault = m_inDefault
+End Function
+
+Public Function KitInputMasked() As Boolean
+    KitInputMasked = m_inMasked
+End Function
+
+Public Sub SetKitInputAnswer(ByVal answer As Variant)
+    m_inAnswer = answer
+End Sub
+
+' Forget the last question and its answer once KitInputBox has returned it.
+Private Sub ClearInput()
+    m_inPrompt = "": m_inTitle = "": m_inDefault = "": m_inMasked = False
+    m_inAnswer = Null
 End Sub
 
 ' ---------------------------------------------------------------------------
