@@ -704,7 +704,8 @@ Write app-specific helpers next to the builds that use them. Examples:
   Hide it with `SetVisible` on `<nm>`, and the track goes too; `SetEnabled` on `<nm>`
   stops clicks and the Tab stop but doesn't dim the track. Use it on single forms only:
   in a continuous form the ring shows on every row.
-- **Empty states**: a centered muted 10pt label shown in place of an empty list.
+- **Empty states**: a centered muted 10pt label shown in place of an empty list. Hide the
+  list's subform while it shows (`SetVisible`): a subform always covers a label.
 - **Toasts** (`KitToast`, `dlgToast`): a 360px borderless pop-up on `CLR_SURFACE` with
   a 1px `CLR_INPUT_BORDER` edge, a 4px accent bar on the left and a Segoe MDL2 icon in
   the variant's color (success `CLR_GREEN_600`, info `CLR_PRIMARY`, warning

@@ -124,4 +124,7 @@ Private Sub RefreshPage()
     SetCount Me.tab_options, n
     SetCount Me.tab_plain, n
     SetVisible Me.lblEmpty, n = 0
+    ' The empty state shows in place of the table: a subform always covers a
+    ' label, so the table shown is hidden while nothing matches.
+    SetVisible Me(IIf(m_tab = "options", "sfOptions", "sfPlain")), Not Me.lblEmpty.Visible
 End Sub
