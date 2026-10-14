@@ -10,6 +10,10 @@ Public Function TestKit(ByVal root As String) As String
     Dim rows As DAO.Recordset, ids As Object, height As Long
     Dim text As String, fitted As String, measured As Long
     Dim db As DAO.Database, badName As Long, badScale As Long, badView As Long
+    ' A kit error message (HandleError) would sit unseen behind the hidden Access
+    ' and stall the run while it reports success; g_Silent raises it instead, so
+    ' the run fails and names it.
+    g_Silent = True
     g_SrcRoot = root & "\kit": UseBuildPalette
     CurrentDb.Execute "CREATE TABLE test_rows (id LONG PRIMARY KEY, category TEXT(60), description TEXT(255))"
     For i = 1 To 23
@@ -451,5 +455,6 @@ Public Function TestKit(ByVal root As String) As String
     Check grid.txtCol0.Left < grid.txtCol1.Left And grid.txtCol1.Left < grid.txtCol2.Left, "Default layout lost design order"
     Check grid.txtCol1.Visible And host.fit1.Visible, "Default layout left a column hidden"
     DoCmd.Close acForm, "frmTestFit", acSaveNo
+    g_Silent = False
     TestKit = checks & " kit checks passed"
 End Function
