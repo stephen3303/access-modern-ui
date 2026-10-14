@@ -18,6 +18,9 @@ Private Const MAX_FORM_W As Long = 31680
 ' descending (Unicode code points, for ChrW).
 Private Const SORT_UP As Long = &H25B2
 Private Const SORT_DOWN As Long = &H25BC
+' Design width of each GridFit host (by its window and the table's subform
+' control), read on the first fit, before any caption has widened the host.
+Private m_hostW As Collection
 ' The DateBox the date picker (dlgDatePick) is open for (PickDate).
 Private m_dateTarget As Control
 ' Dates the app marks on the date picker (MarkDate): label by "d" & date serial.
@@ -58,14 +61,18 @@ Private m_inAnswer As Variant
 Public Sub GridFit(sf As Control, Optional ByVal prefix As String = "")
     Dim host As Form, g As Form, c As Control, i As Long, t() As String
     Dim design As Long, avail As Long, ratio As Double, newW As Long
+    Dim hostW As Long, needW As Long
     Set host = sf.Parent
     Set g = sf.Form
     If Left$(Nz(g.Tag, ""), 5) <> "grid:" Then Exit Sub
     design = Val(Mid$(g.Tag, 6))
     ' An anchored control's Width keeps its design value, so add how much
-    ' wider than designed the host is.
+    ' wider than designed the host is. The host's design width, not its
+    ' Width now: moving the captions can have widened it.
+    hostW = HostDesignW(host, sf)
+    needW = hostW
     avail = sf.Width
-    If sf.HorizontalAnchor = 2 Then avail = avail + host.InsideWidth - host.Width
+    If sf.HorizontalAnchor = 2 Then avail = avail + host.InsideWidth - hostW
     ratio = (avail - SCROLL_W) / (design - SCROLL_W)
     If ratio < 1 Then ratio = 1
     If design * ratio > MAX_FORM_W Then ratio = MAX_FORM_W / design
@@ -101,6 +108,7 @@ Public Sub GridFit(sf As Control, Optional ByVal prefix As String = "")
                     t = Split(.Tag, "|")
                     If UBound(t) >= 2 Then FitCtl host.Controls(prefix & i), _
                         CLng(Val(t(0)) + Val(t(1)) * ratio), CLng((Val(t(2)) + px(8)) * ratio) - px(8)
+                    If .Left + .Width > needW Then needW = .Left + .Width
                 End With
             End If
         End If
@@ -116,8 +124,32 @@ Public Sub GridFit(sf As Control, Optional ByVal prefix As String = "")
     If newW < g.Width Then
         On Error Resume Next
         g.Width = newW
+        On Error GoTo 0
+    End If
+    ' A caption moved past the host's right edge widens the host, and Access
+    ' never narrows it on its own: after the window is narrowed again the
+    ' page would stay wide, its anchored table and scroll bar off the screen.
+    ' So narrow it back to its design width, or the widest caption.
+    If host.Width > needW Then
+        On Error Resume Next
+        host.Width = needW
     End If
 End Sub
+
+' Design width of GridFit's host form for the table in sf: the host's Width
+' the first time it is fitted, kept per window so a reopened page starts again.
+Private Function HostDesignW(host As Form, sf As Control) As Long
+    Dim k As String
+    If m_hostW Is Nothing Then Set m_hostW = New Collection
+    k = host.Hwnd & "|" & sf.Name
+    On Error Resume Next
+    HostDesignW = m_hostW(k)
+    If Err.Number <> 0 Then
+        Err.Clear
+        HostDesignW = host.Width
+        m_hostW.Add HostDesignW, k
+    End If
+End Function
 
 ' Move and size a control horizontally.
 Private Sub FitCtl(c As Control, ByVal x As Long, ByVal w As Long)
