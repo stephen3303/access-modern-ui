@@ -190,14 +190,14 @@ Private Function HostKey(host As Form) As String
 End Function
 
 ' Design width of GridFit's host: the form width GridHeaders saved in the
-' first caption's Tag (fifth part). Captions drawn before that part existed
+' first caption's Tag (part "fw=<twips>"). Captions drawn before that existed
 ' fall back to the host's Width on its first fit, which can be short of the
 ' design width while the page is still opening. Kept per window (and name,
 ' in case a window handle is reused) so a reopened page starts again. The
 ' first fit also records each anchored control's design "Left|Width"
 ' (ShrinkHost), under the host's key, "|" and the control's name.
 Private Function HostDesignW(host As Form, ByVal prefix As String) As Long
-    Dim k As String, c As Control, found As Boolean, t() As String
+    Dim k As String, c As Control, found As Boolean, p As Variant
     If m_hostW Is Nothing Then Set m_hostW = New Collection
     k = HostKey(host)
     On Error Resume Next
@@ -208,8 +208,9 @@ Private Function HostDesignW(host As Form, ByVal prefix As String) As Long
     If found Then Exit Function
     HostDesignW = host.Width
     If Len(prefix) > 0 And HasCtl(host, prefix & "0") Then
-        t = Split(host.Controls(prefix & "0").Tag & "||||", "|")
-        If Val(t(4)) > 0 Then HostDesignW = CLng(Val(t(4)))
+        For Each p In Split(host.Controls(prefix & "0").Tag, "|")
+            If Left$(p, 3) = "fw=" And Val(Mid$(p, 4)) > 0 Then HostDesignW = CLng(Val(Mid$(p, 4)))
+        Next
     End If
     m_hostW.Add HostDesignW, k
     For Each c In host.Controls

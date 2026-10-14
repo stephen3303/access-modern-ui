@@ -445,7 +445,7 @@ Public Function TestKit(ByVal root As String) As String
     Check grid.txtCol0.Width > px(160), "Shown columns did not widen into the hidden one's space"
     Check grid.txtCol1.Width <= 15, "Hidden column kept its width (can push the form past its limit)"
     Check Split(host.fit2.Tag, "|")(3) = "id", "Caption lost a later Tag part (sort field)"
-    Check Val(Split(host.fit2.Tag, "|")(4)) = px(700), "Caption lost its form's design width"
+    Check host.fit2.Tag Like "*|fw=" & px(700), "Caption lost its form's design width"
     On Error Resume Next
     SetGridColumns sf, "fit", "0,1"
     Check Err.Number = 5, "Bad column layout was applied"
