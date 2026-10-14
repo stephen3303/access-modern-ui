@@ -384,5 +384,42 @@ Public Function TestKit(ByVal root As String) As String
     Check Not AppDimmed(), "Dim left on after a dialog failed to open"
     BackdropOnClose
     Check Not AppDimmed(), "A dialog closing with no dim waiting changed the count"
+    ' Column chooser on a fit table: order, hiding, captions, bad layouts.
+    Dim order() As Long, shown() As Boolean, sf As Control
+    Check ParseLayout("2,0,1h", 3, order, shown), "Valid column layout rejected"
+    Check order(0) = 2 And Not shown(2), "Column layout parsed wrongly"
+    Check Not ParseLayout("0,0,1", 3, order, shown), "Repeated column accepted"
+    Check Not ParseLayout("0,1", 3, order, shown), "Short column layout accepted"
+    Check Not ParseLayout("0h,1h,2h", 3, order, shown), "Layout with no shown column accepted"
+    cols = Array("category|Category|160|", "description|Description|200|", "id|Id|80|r")
+    BuildGrid "subTestFit", cols, px(600), fit:=True
+    NewForm "", 0, px(700), px(300)
+    GridHeaders "fit", cols, px(24), px(20)
+    SubF "sfFit", "Form.subTestFit", px(24), px(42), px(600), px(180)
+    SaveForm "frmTestFit", "testHost"
+    DoCmd.OpenForm "frmTestFit"
+    Set host = Forms("frmTestFit"): Set sf = host.sfFit
+    sf.Form.RecordSource = "SELECT * FROM test_rows ORDER BY id"
+    SetGridColumns sf, "fit", DefaultLayout(3)
+    Set grid = sf.Form
+    height = grid.txtCol2.Left + grid.txtCol2.Width          ' right edge of all the columns
+    host.fit2.Tag = host.fit2.Tag & "|id"                     ' as a sortable caption's
+    SetGridColumns sf, "fit", "2,0,1h"
+    Set grid = sf.Form
+    Check Abs(grid.txtCol0.Left + grid.txtCol0.Width - height) <= px(2), "Shown columns did not fill the table as far as all of them"
+    Check grid.txtCol2.Left < grid.txtCol0.Left, "Moved column did not move"
+    Check Not grid.txtCol1.Visible And Not host.fit1.Visible, "Hidden column or caption still shows"
+    Check Abs(host.fit2.Left - (sf.Left + grid.txtCol2.Left)) <= 15, "Caption did not follow its column"
+    Check grid.txtCol0.Width > px(160), "Shown columns did not widen into the hidden one's space"
+    Check grid.txtCol1.Width <= 15, "Hidden column kept its width (can push the form past its limit)"
+    Check Right$(host.fit2.Tag, 3) = "|id", "Caption lost a later Tag part (sort field)"
+    On Error Resume Next
+    SetGridColumns sf, "fit", "0,1"
+    Check Err.Number = 5, "Bad column layout was applied"
+    On Error GoTo 0
+    SetGridColumns sf, "fit", DefaultLayout(3)
+    Check grid.txtCol0.Left < grid.txtCol1.Left And grid.txtCol1.Left < grid.txtCol2.Left, "Default layout lost design order"
+    Check grid.txtCol1.Visible And host.fit1.Visible, "Default layout left a column hidden"
+    DoCmd.Close acForm, "frmTestFit", acSaveNo
     TestKit = checks & " kit checks passed"
 End Function

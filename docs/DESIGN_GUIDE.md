@@ -42,8 +42,10 @@ access/
   build.ps1                  drives Access via COM; loads modules, calls BuildAll
   kit/
     modules/*.bas            reusable: modUIKit, modKitUI, modDarkMode, modPng, modGridOut,
-                             modCsv, modCrypto, modKitUtil, modBackdrop (copied unchanged from the kit)
-    forms/*.vba              kit code-behind: subGrid, dlgAppearance, dlgDatePick
+                             modGridCols, modCsv, modCrypto, modKitUtil, modBackdrop
+                             (copied unchanged from the kit)
+    forms/*.vba              kit code-behind: subGrid, dlgAppearance, dlgDatePick,
+                             dlgMessage, dlgColumns
   src/
     modules/*.bas            the app's own standard modules (incl. generated modPalette)
     themes/light/modTheme.bas   build palette constants (generated)
@@ -127,6 +129,7 @@ them, and the shell (`frmMain`) last.
 | modUIKit (kit) | Build-time control builders (section 6) |
 | modKitUI (kit) | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSwitch`, `ToggleFocus`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `KitInputBox`, `CheckRequired`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
+| modGridCols (kit) | Column chooser: `ChooseGridColumns`, `RestoreGridColumns`, `SetGridColumns`, and `BuildColumnsDialog` for `dlgColumns` |
 | modKitUtil (kit) | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `CenterOnApp`, `SetVisible`, `SetEnabled` |
 | modBackdrop (kit) | `DimApp`, `UndimApp`: the dimmed backdrop behind modal dialogs |
 | modDarkMode (kit), modPalette (gen), modTheme (gen) | Palette engine (section 7) |
@@ -460,6 +463,22 @@ End Sub
       with the same value keep id order. Sort a table in code through `GridSort` so its
       arrow stays right. A paginated table (`GridFooter`) goes back to page 1 in the new
       order (`RestartTablePages`).
+  - **Column chooser** (modGridCols), for `fit:=True` tables only: in any other table
+    the last column stretches with the window, so it can't move.
+    - A Columns button (outline, top right of the page or card, next to Print and
+      Export) calls `ChooseGridColumns Me.sfList, "hdrList"`. It opens `dlgColumns`,
+      where the user hides, shows (button or double-click) and moves columns up and
+      down, or resets to the design. At least one column stays shown.
+    - Columns keep their design widths and `GridFit` scales them, so hiding one widens
+      the rest. The captions move and hide with their columns. `PrintGrid` and
+      `ExportGrid` print the columns in the order shown and leave out hidden ones.
+    - The choice is saved per Windows user and table (registry, `<APP_NAME>\Columns`,
+      named after the table's form). The host calls `RestoreGridColumns Me.sfList,
+      "hdrList"` once the table's record source is set, and again after anything that
+      shows every caption (such as a tab switch calling `SetVisible` on them). A saved
+      layout that no longer matches the table's columns (a rebuild added or removed
+      one) is ignored.
+    - Build `dlgColumns` with `BuildColumnsDialog` alongside the app's other dialogs.
   - `PrintGrid gridForm, title, [subtitle]` and `ExportGrid gridForm, path` (modGridOut)
     print or export a table as the user sees it: its visible columns with their
     captions, and the rows its filter and sort show. `PrintGrid` builds a report

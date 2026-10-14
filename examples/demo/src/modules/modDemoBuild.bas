@@ -3,8 +3,9 @@ Option Explicit
 
 ' Kit Demo - BuildAll and the Build_<form> procedures. Each page shows a
 ' group of kit features: pgCards (Card, Progress), pgTables (BuildGrid
-' options, GridFit, tabs and chips with counts) and pgList (the list/detail
-' pattern, PrintGrid and ExportGrid). frmMain is the shell.
+' options, GridFit, the column chooser, tabs and chips with counts) and
+' pgList (the list/detail pattern, PrintGrid and ExportGrid). frmMain is the
+' shell.
 
 Public Const PAGE_W As Long = 15840             ' 1056 px
 Public Const PAGE_H As Long = 8400              ' 560 px
@@ -103,6 +104,7 @@ Private Sub BuildUserInterface()
     BuildMessageDialog             ' the kit's dlgMessage, for KitMsgBox
     BuildInputDialog               ' the kit's dlgInput, for KitInputBox
     BuildDatePicker                ' the kit's dlgDatePick, for DateBox
+    BuildColumnsDialog             ' the kit's dlgColumns, for ChooseGridColumns
     BuildSplash "frmMain", "access-modern-ui demo"   ' the kit's frmSplash, the startup form
     Build_frmMain
 End Sub
@@ -235,13 +237,15 @@ End Sub
 ' Tables: one table with every BuildGrid option (header band, zebra rows,
 ' status pills, 38px rows, proportional fit) and one built the default way,
 ' switched by a tab strip with counts; status chips with counts and a search
-' box and category filter to their right.
+' box and category filter to their right. Columns, top right, opens the
+' column chooser for the first table.
 Private Sub Build_pgTables()
     Dim c As Control, x As Long, y As Long
     NewForm "", 0, PAGE_W, PAGE_H
     Ev F, "OnLoad", "OnResize"
     PageHeader "Tables", "The first tab shows every table option; the second shows a table built the default way. " & _
-        "Resize the window: the first table's columns grow in proportion.", CX
+        "Resize the window: the first table's columns grow in proportion. Columns hides and reorders them.", CX
+    Set c = Btn("btnColumns", "Columns", PAGE_W - CX - px(96), px(24), px(96), px(32), "outline"): Anchor c, 1, 0
     TabStrip CX, px(84), CW(), "TabClick", "options|Table options|0", "plain|Default table|0"
     y = px(128)
     x = Chips(CX, y + px(1))
