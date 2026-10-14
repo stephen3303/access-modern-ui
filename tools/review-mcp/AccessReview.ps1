@@ -97,6 +97,16 @@ public static class KitReviewWin {
 
     public static IntPtr Root(IntPtr h) { return GetAncestor(h, 2); }   // GA_ROOT
 
+    [DllImport("user32.dll")] static extern uint GetDpiForWindow(IntPtr h);
+
+    // Physical pixels per 96 dpi pixel for a window (1.5 at 150% scaling).
+    public static double Scale(IntPtr h) {
+        try { uint d = GetDpiForWindow(h); if (d > 0) return d / 96.0; } catch { }
+        return 1.0;
+    }
+
+    public static int[] PrimaryScreen() { return new int[] { GetSystemMetrics(0), GetSystemMetrics(1) }; }
+
     public static int[] VirtualScreen() {
         return new int[] { GetSystemMetrics(76), GetSystemMetrics(77), GetSystemMetrics(78), GetSystemMetrics(79) };
     }
@@ -412,7 +422,7 @@ function Open-ReviewApp {
 
     $script:Review = [pscustomobject]@{
         Acc = $acc; Hwnd = $hwnd; Pid = $proc.Id; Process = $proc; Path = $Path; Mode = $Mode; Out = $OutputDirectory
-        Palette = 'Navy'; Dialogs = @(); LogMark = $null; FileMark = $null
+        Palette = 'Navy'; Dialogs = @(); LogMark = $null; FileMark = $null; Sizes = @{}
     }
     try {
         # ModalSec 0: a splash or sign-in form shown at startup is left open.
@@ -438,7 +448,7 @@ function Close-ReviewApp {
     $r = $script:Review
     $notes = @()
     if (-not $r.Process.HasExited) {
-        if ($r.Palette -ne 'Navy') { try { $null = Set-ReviewPalette 'Navy' } catch { $notes += "Could not reset the palette to Navy: $($_.Exception.Message)" } }
+        if ($r.Palette -ne 'Navy') { try { $null = Set-ReviewPalette 'Navy' -NoReopen } catch { $notes += "Could not reset the palette to Navy: $($_.Exception.Message)" } }
         try { $r.Acc.CloseCurrentDatabase() } catch {}
         try { $r.Acc.Quit(2) } catch {}   # acQuitSaveNone
     }
@@ -483,12 +493,32 @@ function Invoke-ReviewRun {
     [pscustomobject]@{ Result = $r.Value; ArgumentsAfter = @($refs | ForEach-Object { $_.Value }); Dialogs = $r.Dialogs }
 }
 
+# Switches the palette, then closes and reopens every open form (with its OpenArgs and
+# the size last asked for), as the app's own Appearance switch does: a form left open
+# keeps part of the old drawing (in Midnight, pills and progress bars went missing).
 function Set-ReviewPalette {
-    param([Parameter(Mandatory)][ValidateSet('Navy', 'Midnight', 'Teal Navy')][string]$Name)
+    param([Parameter(Mandatory)][ValidateSet('Navy', 'Midnight', 'Teal Navy')][string]$Name, [switch]$NoReopen)
     $i = [int]$script:Palettes[$Name]
-    $r = Invoke-ReviewGuarded { $script:Review.Acc.Run('SetPalette', [ref]$i) }
+    $acc = $script:Review.Acc
+    $open = @(foreach ($f in @(Get-ReviewOpenForms)) { [pscustomobject]@{ Name = $f; OpenArgs = [string](Find-FormValue $f '.OpenArgs') } })
+    $r = Invoke-ReviewGuarded { $acc.Run('SetPalette', [ref]$i) }
     $script:Review.Palette = $Name
-    [pscustomobject]@{ Palette = $Name; Index = $i; Dialogs = $r.Dialogs }
+    $dialogs = @($r.Dialogs); $reopened = @()
+    if (-not $NoReopen) {
+        foreach ($f in $open) {
+            $d = Invoke-ReviewGuarded { $acc.DoCmd.Close(2, $f.Name, 2) }   # acForm, acSaveNo
+            $dialogs += $d.Dialogs
+        }
+        foreach ($f in $open) {
+            $want = $script:Review.Sizes[$f.Name]
+            $p = @{ Name = $f.Name; OpenArgs = $f.OpenArgs }
+            if ($want) { $p.WidthPx = $want.W; $p.HeightPx = $want.H; $p.Maximize = [bool]$want.Max }
+            $o = Open-ReviewForm @p
+            $dialogs += $o.Dialogs
+            $reopened += "$($f.Name) $($o.InsidePx)"
+        }
+    }
+    [pscustomobject]@{ Palette = $Name; Index = $i; Reopened = $reopened; Dialogs = $dialogs }
 }
 
 # Size and position facts for one open form, in pixels at 96 dpi (twips / 15) unless
@@ -532,19 +562,51 @@ function Open-ReviewForm {
 function Set-ReviewFormSize {
     param([Parameter(Mandatory)][string]$Name, [int]$WidthPx, [int]$HeightPx, [switch]$Maximize)
     Assert-FormOpen $Name
+    # Requested inside size in twips (design size unless given).
+    $w = if ($WidthPx -gt 0) { $WidthPx * $script:TwipsPerPx } else { [int](Get-FormValue $Name '.Width') }
+    $h = if ($HeightPx -gt 0) { $HeightPx * $script:TwipsPerPx } else { Get-FormDesignHeight $Name }
     $r = Invoke-ReviewGuarded {
         $acc = $script:Review.Acc
         $acc.DoCmd.SelectObject(2, $Name, $false)   # acForm
         if ($Maximize) { $acc.DoCmd.Maximize() } else {
             $acc.DoCmd.Restore()
-            $w = if ($WidthPx -gt 0) { $WidthPx * $script:TwipsPerPx } else { [int](Get-FormValue $Name '.Width') }
-            $h = if ($HeightPx -gt 0) { $HeightPx * $script:TwipsPerPx } else { Get-FormDesignHeight $Name }
             Set-FormInsideSize $Name $w $h
         }
     }
+    $script:Review.Sizes[$Name] = @{ W = $WidthPx; H = $HeightPx; Max = [bool]$Maximize }
+    $app = $script:Review.Hwnd
     $root = [KitReviewWin]::Root((Get-FormHwnd $Name))
-    if ($script:Review.Mode -eq 'offscreen' -and $root -ne $script:Review.Hwnd) { [void][KitReviewWin]::Park($root) }
+    $note = $null
+    if ($root -ne $app) {
+        if ($script:Review.Mode -eq 'offscreen') { [void][KitReviewWin]::Park($root) }
+    } elseif ($Maximize) {
+        # The maximized check: the Access window at the full size of the main display.
+        $ps = [KitReviewWin]::PrimaryScreen()
+        [void][KitReviewWin]::Size($app, $ps[0], $ps[1])
+        Start-Sleep -Milliseconds 600
+    } else {
+        # A kit shell form (frmMain) fills the Access window and refits itself to it, so
+        # setting its own size does nothing. Size the Access window instead until the
+        # form's inside size matches, as reviewers do by hand.
+        $scale = [KitReviewWin]::Scale($app)
+        for ($k = 0; $k -lt 4; $k++) {
+            $dx = $w - [int](Get-FormValue $Name '.InsideWidth'); $dy = $h - [int](Get-FormValue $Name '.InsideHeight')
+            if ([Math]::Abs($dx) -le 15 -and [Math]::Abs($dy) -le 15) { break }   # within a pixel
+            $ar = [KitReviewWin]::Rect($app)
+            [void][KitReviewWin]::Size($app, $ar[2] + [int][Math]::Round($dx / 15 * $scale), $ar[3] + [int][Math]::Round($dy / 15 * $scale))
+            Start-Sleep -Milliseconds 600   # let Access and the form's Resize handler catch up
+        }
+    }
     $size = Get-ReviewFormSize $Name
+    if (-not $Maximize) {
+        $wantPx = "$([int]($w / $script:TwipsPerPx))x$([int]($h / $script:TwipsPerPx))"
+        $offW = [Math]::Abs($w - [int](Get-FormValue $Name '.InsideWidth')); $offH = [Math]::Abs($h - [int](Get-FormValue $Name '.InsideHeight'))
+        if ($offW -gt 15 -or $offH -gt 15) {   # more than a pixel out
+            $note = "Inside size is $($size.InsidePx), not the requested $wantPx. Captures are not at the designed size; the Access window may be limited by the desktop size."
+        }
+        $size | Add-Member -NotePropertyName SizeMatches -NotePropertyValue (-not $note)
+    }
+    if ($note) { $size | Add-Member -NotePropertyName Warning -NotePropertyValue $note }
     $size | Add-Member -NotePropertyName Requested -NotePropertyValue $(if ($Maximize) { 'maximized' } elseif ($WidthPx -or $HeightPx) { "${WidthPx}x${HeightPx} px" } else { 'design size' })
     $size | Add-Member -NotePropertyName Dialogs -NotePropertyValue $r.Dialogs
     $size
