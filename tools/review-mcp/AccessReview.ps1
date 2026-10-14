@@ -955,7 +955,7 @@ function Save-ReviewSnapshot {
         try {
             $r = Invoke-ReviewGuarded { $script:Review.Acc.SaveAsText(2, $n, $path) }   # 2 = acForm
             $dialogs += $r.Dialogs
-            $saved += [pscustomobject]@{ Form = $n; Objects = @(Read-FormSnapshot $path).Count }
+            $saved += [pscustomobject]@{ Form = $n; Objects = (Read-FormSnapshot $path).Count }
         } catch { $failed += [pscustomobject]@{ Form = $n; Error = $_.Exception.Message } }
     }
     [pscustomobject]@{ Label = $Label; Folder = $dir; Saved = $saved; Failed = $failed; Dialogs = $dialogs }

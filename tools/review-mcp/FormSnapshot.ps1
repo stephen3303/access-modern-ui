@@ -17,6 +17,10 @@ $script:SnapshotIgnored = @(
     'OverlapFlags'
 )
 
+# On the form itself (not its controls) these are the design window's rectangle,
+# where the form last sat in design view, which differs from build to build.
+$script:SnapshotRootIgnored = @('Left', 'Top', 'Right', 'Bottom')
+
 # Properties stored in twips, reported in 96 dpi pixels (twips / 15) like the kit's px().
 $script:SnapshotTwips = @(
     'Left', 'Top', 'Width', 'Height', 'LeftMargin', 'TopMargin', 'RightMargin', 'BottomMargin',
@@ -81,7 +85,7 @@ function ConvertFrom-FormText {
         }
         if ($line -match '^(\w+)\s*=\s?(.*)$') {
             $name = $Matches[1]
-            if ($owner -and $SnapshotIgnored -notcontains $name) {
+            if ($owner -and $SnapshotIgnored -notcontains $name -and -not ($owner.Root -and $SnapshotRootIgnored -contains $name)) {
                 $owner.Props[$name] = $Matches[2]
                 $last = @{ Owner = $owner; Name = $name }
             } else { $last = $null }

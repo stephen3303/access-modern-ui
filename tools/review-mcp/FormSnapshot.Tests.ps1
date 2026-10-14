@@ -12,6 +12,10 @@ Checksum =-123456
 Begin Form
     RecordSelectors = NotDefault
     Width =7200
+    Left =-1590
+    Top =120
+    Right =11490
+    Bottom =9180
     PrtMip = Begin
         0x6801000068010000
     End
@@ -68,8 +72,10 @@ Option Compare Database
 
 # The same form saved again after a build that moved the label 4 px, recoloured it,
 # redrew the pill, removed the text box's click handler, added a button and
-# removed nothing else. Checksum, GUID and LayoutCached* change on every save.
+# removed nothing else. Checksum, GUID, LayoutCached* and the form's own design
+# window rectangle (Left/Top/Right/Bottom on the form) change on every build.
 $pr = $base -replace 'Checksum =-123456', 'Checksum =999' `
+            -replace 'Right =11490', 'Right =11310' -replace 'Bottom =9180', 'Bottom =7800' `
             -replace '0x0123456789abcdef', '0xfedcba9876543210' `
             -replace '                    Left =240\r?$', '                    Left =300' `
             -replace 'LayoutCachedLeft =240', 'LayoutCachedLeft =300' `
@@ -96,6 +102,8 @@ $before = ConvertFrom-FormText -Lines $base
 Check 'objects keyed by name, section and default' (($before.Key -join ',') -eq 'Form,Default Label,Section Detail,lblTitle,txtTitle,imgPill')
 Check 'continued string joined' ($before[0].Props['RecordSource'] -eq '"SELECT id, title FROM items WHERE active = True"')
 Check 'volatile properties dropped' (-not $before[0].Props.Contains('PrtMip') -and -not $before[2].Props.Contains('GUID') -and -not $before[3].Props.Contains('LayoutCachedLeft') -and -not $before[3].Props.Contains('OverlapFlags'))
+Check 'form design window ignored, form width kept' (-not $before[0].Props.Contains('Right') -and -not $before[0].Props.Contains('Left') -and $before[0].Props['Width'] -eq '7200')
+Check 'control Left and Top kept' ($before[3].Props['Left'] -eq '240' -and $before[3].Props['Top'] -eq '240')
 Check 'picture kept as a hash' ($before[5].Props['PictureData'] -match '^<binary, 2 lines, [0-9a-f]{12}>$')
 Check 'code behind not read' (-not ($before | Where-Object { $_.Props.Contains('Option') }))
 

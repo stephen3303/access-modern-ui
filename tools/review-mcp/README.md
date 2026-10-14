@@ -124,7 +124,7 @@ A capture shows that something moved; a snapshot comparison says which control, 
 
 The report lists, per form, `+` for controls added and `-` for controls removed (with their position), and `~ control.Property: before -> after` for each change. Positions and sizes are in 96 dpi px, the kit's `px()` units, and colours are `#RRGGBB`. It is also saved as `snapshots\compare-main-pr.txt`.
 
-- Properties Access rewrites on every save are ignored: `Checksum`, `GUID`, `NameMap`, `RecSrcDt`, printer settings (`PrtMip`, `PrtDevMode`, `PrtDevNames`), `LayoutCached*` and `OverlapFlags`.
+- Properties Access rewrites on every save are ignored: `Checksum`, `GUID`, `NameMap`, `RecSrcDt`, printer settings (`PrtMip`, `PrtDevMode`, `PrtDevNames`), `LayoutCached*`, `OverlapFlags`, and the form's own `Left`, `Top`, `Right` and `Bottom` (where its design window last sat; controls keep theirs).
 - Pictures and other binary values compare by a hash, so a redrawn pill shows as changed without the bytes.
 - The code behind each form is not compared; it is in the PR's own diff.
 - A snapshot is the saved design. Colours and positions a form's code sets when it opens (the kit themes forms on load) are not in it; check those with `capture` and `controls`.
