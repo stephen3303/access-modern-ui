@@ -579,19 +579,47 @@ function Wait-ReviewFormIdle([string]$Name) {
     Start-Sleep -Milliseconds 300
 }
 
-# Calls a form's own public Reopen method (SABER and kit shell forms have one; it
-# reopens the form on a timer without running its sign-out on close), passing the
-# current page when the form exposes PageKey. Returns $false if the form has none.
+# True when a late-bound call failed because the object has no member of that name
+# (DISP_E_UNKNOWNNAME, which .NET reports as a MissingMemberException), rather than
+# because the member itself failed.
+function Test-UnknownMember($err) {
+    for ($e = $err; $e; $e = $e.InnerException) {
+        if ($e -is [MissingMemberException] -or $e.HResult -eq -2147352570) { return $true }
+    }
+    $false
+}
+
+# Calls a form's own public Reopen method (SABER's frmMain has one; it reopens the form
+# on a timer without running its sign-out on close), passing the current page when the
+# form exposes PageKey. Returns 'reopened', or 'none' when the form has no Reopen method
+# and is safe to close and reopen. Throws when the form has Reopen but the page can't be
+# read or the call fails: closing such a form would sign the user out.
+# Form-module members are read with InvokeMember on the form object; Eval can't reach
+# a form module's Property Get.
 function Invoke-FormReopen([string]$Name) {
     $f = $null
+    $bf = [Reflection.BindingFlags]
     try {
         $f = $script:Review.Acc.Forms.Item($Name)
-        $page = Find-FormValue $Name '.PageKey'
-        if ($null -eq $page) { try { $page = $script:Review.Acc.Eval('TempVars!StartPage') } catch {} }   # SABER keeps its page here too
-        $callArgs = if ($null -ne $page -and "$page" -ne '') { @([string]$page) } else { @() }
-        [void][__ComObject].InvokeMember('Reopen', [Reflection.BindingFlags]::InvokeMethod, $null, $f, $callArgs)
-        $true
-    } catch { $false } finally { Release-Com $f }
+        $hasPage = $true; $page = $null
+        for ($k = 0; $k -lt 10; $k++) {   # a navigation still queued on the form's timer leaves PageKey empty for a moment
+            try { $page = [string][__ComObject].InvokeMember('PageKey', $bf::GetProperty, $null, $f, $null) }
+            catch { if (Test-UnknownMember $_.Exception) { $hasPage = $false; break } else { throw "Form '$Name': could not read PageKey: $($_.Exception.Message)" } }
+            if ($page) { break }
+            Start-Sleep -Milliseconds 200
+        }
+        if ($hasPage -and -not $page) { throw "Form '$Name' has PageKey but it stayed empty, so it was not reopened (closing it would sign the user out)." }
+        $callArgs = if ($hasPage) { @($page) } else { @() }
+        try { [void][__ComObject].InvokeMember('Reopen', $bf::InvokeMethod, $null, $f, $callArgs) }
+        catch {
+            if (Test-UnknownMember $_.Exception) {
+                if ($hasPage) { throw "Form '$Name' has PageKey but no Reopen method; left open rather than closed." }
+                return 'none'
+            }
+            throw "Form '$Name': Reopen failed: $($_.Exception.Message)"
+        }
+        'reopened'
+    } finally { Release-Com $f }
 }
 
 # Waits (up to 6 s) for a form that is closing and reopening on a timer to be open
