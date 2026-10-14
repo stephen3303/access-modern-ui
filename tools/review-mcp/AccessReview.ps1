@@ -10,16 +10,22 @@
 # Used by AccessReviewMcp.ps1 (the MCP server), and usable directly:
 #
 #   . "$PSScriptRoot\AccessReview.ps1"
-#   Open-ReviewApp -Path 'C:\...\_review\spm\SPM.accdb'
+#   Open-ReviewApp -Path 'C:\Review\MyApp.accdb'
 #   Get-ReviewErrorLog -Mark
 #   Open-ReviewForm frmMain -WidthPx 1256 -HeightPx 620
-#   Save-ReviewCapture frmMain -Label navy
+#   Save-ReviewCapture frmMain -Label before
 #   Get-ReviewErrorLog
 #   Close-ReviewApp
 #
 # Rules it keeps: it only opens an existing file (a new file path brings back the
 # Enable Content prompt), it never sends input to the desktop, and it leaves the
-# palette on Navy when it closes.
+# palette on the default (first configured) palette when it closes.
+#
+# Settings come from environment variables, all optional (see README.md):
+#   ACCESS_REVIEW_LOCKS              lock files shared by reviewers, separated by ';'
+#   ACCESS_REVIEW_OUTPUT             folder for captures (default %LOCALAPPDATA%\AccessReview)
+#   ACCESS_REVIEW_PALETTES           name=value pairs for set_palette, separated by ';'
+#   ACCESS_REVIEW_PALETTE_PROCEDURE  public VBA procedure that switches palettes
 
 $ErrorActionPreference = 'Stop'
 
@@ -65,7 +71,6 @@ public static class KitReviewWin {
 
     // "[title] text | text" for a dialog: child Static/Edit text for VBA and Win32 boxes,
     // UI Automation text for Office-style alerts (NUIDialog), which have no child windows.
-    // Same approach as tools\AccessWatch.ps1.
     public static string Describe(IntPtr h) {
         var parts = new List<string>();
         EnumChildWindows(h, (ch, l) => {
@@ -222,8 +227,8 @@ public static class KitReviewWin {
 }
 
 // Keeps every top-level window of the Access process off the desktop for the whole
-// session (off-screen mode), not just during a call: a startup popup such as SABER's
-// frmLogin, a dialog opened later, or one that re-centres itself on a timer. A WinEvent
+// session (off-screen mode), not just during a call: a startup popup such as a sign-in
+// form, a dialog opened later, or one that re-centres itself on a timer. A WinEvent
 // hook moves a window the moment it is shown or moved onto the desktop; a sweep every
 // 50 ms catches anything the hook missed.
 public class KitReviewKeeper {
@@ -346,7 +351,49 @@ public class KitReviewGuard {
 }
 
 $script:Review = $null
-$script:Palettes = [ordered]@{ 'Navy' = 1; 'Midnight' = 2; 'Teal Navy' = 6 }
+
+# An environment setting, or $null when it is unset or empty. A host that fills
+# settings from a template (a desktop extension's ${user_config.x}) can pass the
+# placeholder through unexpanded when the user left it blank; that counts as unset.
+function Get-ReviewSetting([string]$Name) {
+    $v = [Environment]::GetEnvironmentVariable($Name)
+    if ([string]::IsNullOrWhiteSpace($v) -or $v -match '^\$\{.*\}$') { return $null }
+    $v.Trim()
+}
+
+# Palettes set_palette can switch to, as name = value passed to the palette procedure.
+# The first is the default: the app opens on it and close_app goes back to it. The
+# default list is access-modern-ui's (SetPalette 1, 2, 6).
+function Get-ReviewPalettes {
+    $spec = Get-ReviewSetting 'ACCESS_REVIEW_PALETTES'
+    if (-not $spec) { $spec = 'Navy=1;Midnight=2;Teal Navy=6' }
+    $list = [ordered]@{}
+    foreach ($pair in $spec -split ';') {
+        if (-not $pair.Trim()) { continue }
+        $name, $value = $pair -split '=', 2
+        $n = 0
+        if (-not $name.Trim() -or -not [int]::TryParse(([string]$value).Trim(), [ref]$n)) {
+            throw "ACCESS_REVIEW_PALETTES: '$pair' is not name=number."
+        }
+        $list[$name.Trim()] = $n
+    }
+    if (-not $list.Count) { throw 'ACCESS_REVIEW_PALETTES lists no palettes.' }
+    $list
+}
+
+# A bad setting falls back to the default list rather than stopping the server, which
+# a desktop app would only show as a server that failed to start. The problem is
+# reported in the server's instructions and in every set_palette result.
+$script:PaletteWarning = $null
+try { $script:Palettes = Get-ReviewPalettes }
+catch {
+    $script:PaletteWarning = "$($_.Exception.Message) Using the default palettes instead."
+    $env:ACCESS_REVIEW_PALETTES = $null
+    $script:Palettes = Get-ReviewPalettes
+}
+$script:DefaultPalette = @($script:Palettes.Keys)[0]
+$script:PaletteProcedure = Get-ReviewSetting 'ACCESS_REVIEW_PALETTE_PROCEDURE'
+if (-not $script:PaletteProcedure) { $script:PaletteProcedure = 'SetPalette' }
 $script:TwipsPerPx = 15   # kit layout values are pixels at 96 dpi
 
 function Assert-ReviewOpen {
@@ -427,7 +474,7 @@ function Set-FormInsideSize([string]$Name, [int]$Width, [int]$Height) {
 # Lock files shared by reviewers on one machine (ACCESS_REVIEW_LOCKS: full paths,
 # separated by ';'). Takes all of them or none, then re-reads to catch a race.
 function Enter-ReviewLock {
-    param([Parameter(Mandatory)][string]$Owner, [string[]]$Paths = @(($env:ACCESS_REVIEW_LOCKS -split ';') | Where-Object { $_ }))
+    param([Parameter(Mandatory)][string]$Owner, [string[]]$Paths = @(((Get-ReviewSetting 'ACCESS_REVIEW_LOCKS') -split ';') | ForEach-Object { $_.Trim() } | Where-Object { $_ }))
     if (-not $Paths.Count) { return [pscustomobject]@{ Held = $true; Note = 'No lock files configured (ACCESS_REVIEW_LOCKS); nothing to take.' } }
     $busy = @($Paths | Where-Object { Test-Path -LiteralPath $_ })
     if ($busy.Count) {
@@ -447,7 +494,7 @@ function Enter-ReviewLock {
 
 # Deletes only lock files this owner wrote.
 function Exit-ReviewLock {
-    param([Parameter(Mandatory)][string]$Owner, [string[]]$Paths = @(($env:ACCESS_REVIEW_LOCKS -split ';') | Where-Object { $_ }))
+    param([Parameter(Mandatory)][string]$Owner, [string[]]$Paths = @(((Get-ReviewSetting 'ACCESS_REVIEW_LOCKS') -split ';') | ForEach-Object { $_.Trim() } | Where-Object { $_ }))
     $released = @()
     foreach ($p in $Paths) {
         if ((Test-Path -LiteralPath $p) -and ((Get-Content -LiteralPath $p -Raw) -like "$Owner |*")) { Remove-Item -LiteralPath $p; $released += $p }
@@ -464,7 +511,11 @@ function Open-ReviewApp {
     if ($script:Review -and -not $script:Review.Process.HasExited) { throw "Access is already open on $($script:Review.Path). Close it first." }
     $Path = (Resolve-Path -LiteralPath $Path -ErrorAction SilentlyContinue).ProviderPath
     if (-not $Path -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw 'Open only an existing, already trusted front end; this tool never creates one.' }
-    if (-not $OutputDirectory) { $OutputDirectory = Join-Path $env:LOCALAPPDATA ('AccessReview\' + (Get-Date -Format 'yyyyMMdd-HHmmss')) }
+    if (-not $OutputDirectory) {
+        $base = Get-ReviewSetting 'ACCESS_REVIEW_OUTPUT'
+        if (-not $base) { $base = Join-Path $env:LOCALAPPDATA 'AccessReview' }
+        $OutputDirectory = Join-Path $base (Get-Date -Format 'yyyyMMdd-HHmmss')
+    }
     New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 
     $acc = New-Object -ComObject Access.Application
@@ -489,7 +540,7 @@ function Open-ReviewApp {
 
     $script:Review = [pscustomobject]@{
         Acc = $acc; Hwnd = $hwnd; Pid = $proc.Id; Process = $proc; Path = $Path; Mode = $Mode; Out = $OutputDirectory
-        Palette = 'Navy'; Dialogs = @(); LogMark = $null; FileMark = $null; Sizes = @{}; Keeper = $keeper
+        Palette = $script:DefaultPalette; Dialogs = @(); LogMark = $null; FileMark = $null; Sizes = @{}; Keeper = $keeper
     }
     try {
         # ModalSec 0: a splash or sign-in form shown at startup is left open.
@@ -509,13 +560,14 @@ function Get-ReviewOpenForms {
 }
 
 # Closes the database without saving design changes, quits, and makes sure the process
-# is gone. Resets the palette to Navy first if it was changed.
+# is gone. Resets the palette to the default first if it was changed.
 function Close-ReviewApp {
     if (-not $script:Review) { return [pscustomobject]@{ Closed = $true; Note = 'Access was not open.' } }
     $r = $script:Review
     $notes = @()
     if (-not $r.Process.HasExited) {
-        if ($r.Palette -ne 'Navy') { try { $null = Set-ReviewPalette 'Navy' -NoReopen } catch { $notes += "Could not reset the palette to Navy: $($_.Exception.Message)" } }
+        $d = $script:DefaultPalette
+        if ($r.Palette -ne $d) { try { $null = Set-ReviewPalette $d -NoReopen } catch { $notes += "Could not reset the palette to ${d}: $($_.Exception.Message)" } }
         try { $r.Acc.CloseCurrentDatabase() } catch {}
         try { $r.Acc.Quit(2) } catch {}   # acQuitSaveNone
     }
@@ -537,7 +589,7 @@ function Test-ReviewCompile {
     [pscustomobject]@{ Compiled = [bool]$r.Value; Dialogs = $r.Dialogs }
 }
 
-# Runs a public VBA procedure or function (Application.Run), e.g. SABER's Login.
+# Runs a public VBA procedure or function (Application.Run), e.g. an app's sign-in.
 function Invoke-ReviewRun {
     param([Parameter(Mandatory)][string]$Name, [object[]]$Arguments = @(), [int]$TimeoutSec = 120)
     if ($Arguments.Count -gt 8) { throw 'At most 8 arguments.' }
@@ -590,8 +642,8 @@ function Test-UnknownMember($err) {
     $false
 }
 
-# Calls a form's own public Reopen method (SABER's frmMain has one; it reopens the form
-# on a timer without running its sign-out on close), passing the current page when the
+# Calls a form's own public Reopen method (an app shell form may have one that reopens
+# the form on a timer without running its sign-out on close), passing the current page when the
 # form exposes PageKey. Returns 'reopened', or 'none' when the form has no Reopen method
 # and is safe to close and reopen. Throws when the form has Reopen but the page can't be
 # read or the call fails: closing such a form would sign the user out.
@@ -645,17 +697,21 @@ function Restore-ReviewFormSize([string]$Name) {
 
 # Switches the palette, then reopens every open form, as the app's own Appearance switch
 # does: a form left open keeps part of the old drawing (in Midnight, pills and progress
-# bars went missing). A form with a public Reopen method (a shell such as SABER's
-# frmMain) reopens itself, which keeps the user signed in and on the same page; closing
+# bars went missing). A form with a public Reopen method (an app shell such as a
+# frmMain that signs the user out on close) reopens itself, which keeps the user signed in and on the same page; closing
 # it instead would run its sign-out. Other forms (dialogs) are closed first and reopened
 # last with their OpenArgs, so they come back on top of the reopened shell. Each form
 # returns to the size last asked for.
 function Set-ReviewPalette {
-    param([Parameter(Mandatory)][ValidateSet('Navy', 'Midnight', 'Teal Navy')][string]$Name, [switch]$NoReopen)
+    param([Parameter(Mandatory)][string]$Name, [switch]$NoReopen)
+    Assert-ReviewOpen
+    if (-not $script:Palettes.Contains($Name)) { throw "Unknown palette '$Name'. Configured: $(@($script:Palettes.Keys) -join ', ') (ACCESS_REVIEW_PALETTES).$(if ($script:PaletteWarning) { ' ' + $script:PaletteWarning })" }
     $i = [int]$script:Palettes[$Name]
+    $proc = $script:PaletteProcedure
     $acc = $script:Review.Acc
     $open = @(foreach ($f in @(Get-ReviewOpenForms)) { [pscustomobject]@{ Name = $f; OpenArgs = [string](Find-FormValue $f '.OpenArgs') } })
-    $r = Invoke-ReviewGuarded { $acc.Run('SetPalette', [ref]$i) }
+    try { $r = Invoke-ReviewGuarded { $acc.Run($proc, [ref]$i) } }
+    catch { throw "Could not run the palette procedure '$proc' (ACCESS_REVIEW_PALETTE_PROCEDURE); the front end needs a public Sub $proc(ByVal i As Long). $($_.Exception.Message)" }
     $script:Review.Palette = $Name
     $dialogs = @($r.Dialogs); $reopened = @()
     if (-not $NoReopen) {
@@ -685,7 +741,7 @@ function Set-ReviewPalette {
             $reopened += "$($f.Name) $($o.InsidePx)"
         }
     }
-    [pscustomobject]@{ Palette = $Name; Index = $i; Reopened = $reopened; Dialogs = $dialogs }
+    [pscustomobject]@{ Palette = $Name; Index = $i; Reopened = $reopened; Dialogs = $dialogs; Warning = $script:PaletteWarning }
 }
 
 # Size and position facts for one open form, in pixels at 96 dpi (twips / 15) unless
@@ -710,7 +766,7 @@ function Get-ReviewFormSize([string]$Name) {
 
 # Opens a form in form view and sizes it to its designed dimensions: the form's Width
 # and the heights of its visible header, detail and footer. Pass WidthPx/HeightPx (96
-# dpi pixels) for forms whose design size is set in code, e.g. SPM frmMain 1256x620.
+# dpi pixels) for forms whose design size is set in code.
 function Open-ReviewForm {
     param([Parameter(Mandatory)][string]$Name, [string]$OpenArgs, [int]$WidthPx, [int]$HeightPx, [switch]$Maximize)
     if ($Name -match '[\[\]!"]') { throw "Unsupported form name '$Name'." }

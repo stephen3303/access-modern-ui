@@ -12,7 +12,7 @@ $utf8 = New-Object Text.UTF8Encoding($false)
 
 . (Join-Path $PSScriptRoot 'AccessReview.ps1')
 
-$ServerVersion = '0.1.0'
+$ServerVersion = '0.2.0'
 
 function Send-Message($obj) {
     [Console]::Out.WriteLine(($obj | ConvertTo-Json -Depth 20 -Compress))
@@ -37,7 +37,7 @@ $formProp = @{ type = 'string'; description = 'Form name, e.g. frmMain.' }
 
 # name, description, input schema, handler (receives the arguments object).
 $Tools = @(
-    @{ name = 'review_lock'; description = 'Take the shared reviewer lock files (ACCESS_REVIEW_LOCKS) before using Access on a shared machine. Fails if another reviewer holds them.'
+    @{ name = 'review_lock'; description = 'Take the shared reviewer lock files (ACCESS_REVIEW_LOCKS) before using Access on a machine other reviewers share. Fails if another reviewer holds them. Does nothing when no lock files are configured.'
        schema = (Schema @{ owner = @{ type = 'string'; description = 'Your thread name.' } } @('owner'))
        run = { param($a) Enter-ReviewLock -Owner (Arg $a 'owner') } }
     @{ name = 'review_unlock'; description = 'Release the lock files this owner took.'
@@ -45,21 +45,21 @@ $Tools = @(
        run = { param($a) Exit-ReviewLock -Owner (Arg $a 'owner') } }
     @{ name = 'open_app'; description = 'Start a separate Access instance and open an existing, already trusted front end (never creates a file). mode offscreen (default) parks every Access window past the desktop edge so it never covers anyone''s work; onscreen is for a dedicated review machine. Startup forms and AutoExec run as usual.'
        schema = (Schema @{ path = @{ type = 'string'; description = 'Full path of the .accdb/.accde.' }; mode = @{ type = 'string'; enum = @('offscreen', 'onscreen') }
-                          output_dir = @{ type = 'string'; description = 'Where PNGs go. Default %LOCALAPPDATA%\AccessReview\<time>.' } } @('path'))
+                          output_dir = @{ type = 'string'; description = 'Where PNGs go. Default ACCESS_REVIEW_OUTPUT or %LOCALAPPDATA%\AccessReview, in a new <time> folder.' } } @('path'))
        run = { param($a) $p = @{ Path = (Arg $a 'path'); Mode = (Arg $a 'mode' 'offscreen') }; if (Arg $a 'output_dir') { $p.OutputDirectory = $a.output_dir }; Open-ReviewApp @p } }
-    @{ name = 'close_app'; description = 'Reset the palette to Navy, close the database without saving design changes, quit Access and confirm the process is gone.'
+    @{ name = 'close_app'; description = "Reset the palette to $DefaultPalette, close the database without saving design changes, quit Access and confirm the process is gone."
        schema = (Schema @{}); run = { param($a) Close-ReviewApp } }
     @{ name = 'compile'; description = 'Compile and save all modules; reports any VBA dialog text.'
        schema = (Schema @{}); run = { param($a) Test-ReviewCompile } }
-    @{ name = 'error_log'; description = 'mark=true records where the app error log (error_log table and errors.log file) ends now; call it before testing. Then call with mark=false to get entries added since. Any new entry is a must-fix finding unless explained.'
+    @{ name = 'error_log'; description = 'mark=true records where the app error log ends now (an error_log table, and the file a public LogFilePath function returns, as access-modern-ui apps have); call it before testing. Then call with mark=false to get entries added since. Treat any new entry as a finding unless explained. Says so when the app has neither.'
        schema = (Schema @{ mark = @{ type = 'boolean' } }); run = { param($a) Get-ReviewErrorLog -Mark:([bool](Arg $a 'mark' $false)) } }
-    @{ name = 'run'; description = 'Run a public VBA procedure or function with Application.Run (e.g. SABER Login with username, password, and an output error argument). Returns the result and the arguments after the call.'
+    @{ name = 'run'; description = 'Run a public VBA procedure or function with Application.Run (e.g. a sign-in procedure with username, password and an output error argument). Returns the result and the arguments after the call.'
        schema = (Schema @{ procedure = $str; args = @{ type = 'array'; items = @{} } } @('procedure'))
        run = { param($a) Invoke-ReviewRun -Name (Arg $a 'procedure') -Arguments @(Arg $a 'args' @()) } }
-    @{ name = 'set_palette'; description = 'Switch the kit palette, then reopen every open form at its last requested size (a form left open keeps part of the old drawing). A form with a public Reopen method (SABER frmMain) reopens itself on its current page so the user stays signed in, and the call fails rather than closing it if that cannot be done; other forms are closed and reopened with their OpenArgs. Navy for layout, logic and data fixes; all three only when a PR adds controls or dialogs or changes theming or colours. close_app resets to Navy.'
-       schema = (Schema @{ palette = @{ type = 'string'; enum = @('Navy', 'Midnight', 'Teal Navy') } } @('palette'))
+    @{ name = 'set_palette'; description = "Switch the app's colour palette by running its palette procedure ($PaletteProcedure, as in access-modern-ui), then reopen every open form at its last requested size (a form left open keeps part of the old drawing). A form with a public Reopen method (an app shell that signs the user out on close) reopens itself on its current page (its PageKey) so the user stays signed in, and the call fails rather than closing it if that cannot be done; other forms are closed and reopened with their OpenArgs. close_app resets to $DefaultPalette. Fails with a clear message when the app has no such procedure."
+       schema = (Schema @{ palette = @{ type = 'string'; enum = @($Palettes.Keys) } } @('palette'))
        run = { param($a) Set-ReviewPalette -Name (Arg $a 'palette') } }
-    @{ name = 'open_form'; description = 'Open a form and size it to its designed dimensions (form width and visible section heights), or to width_px x height_px (96 dpi pixels) for forms sized in code, e.g. SPM frmMain 1256x620. Reports design, inside and window sizes and whether the Access window clips it.'
+    @{ name = 'open_form'; description = 'Open a form and size it to its designed dimensions (form width and visible section heights), or to width_px x height_px (96 dpi pixels) for forms sized in code. Reports design, inside and window sizes and whether the Access window clips it.'
        schema = (Schema @{ form = $formProp; open_args = $str; width_px = $int; height_px = $int } @('form'))
        run = { param($a) Open-ReviewForm -Name (Arg $a 'form') -OpenArgs (Arg $a 'open_args') -WidthPx (Arg $a 'width_px' 0) -HeightPx (Arg $a 'height_px' 0) } }
     @{ name = 'resize_form'; description = 'Resize an open form: to its design size (no size given), to width_px x height_px (the small check is about 1100x700), or maximized=true (the Access window at the main display''s work area, as a maximized window gets). A shell form that fills the Access window (kit frmMain) is sized by sizing the Access window; SizeMatches=false and a warning mean the size could not be reached.'
@@ -96,6 +96,7 @@ function Get-ToolList {
 }
 
 Log "started (version $ServerVersion)"
+if ($PaletteWarning) { Log $PaletteWarning }
 try {
     while ($true) {
         $line = [Console]::In.ReadLine()
@@ -108,7 +109,7 @@ try {
             'initialize' {
                 $pv = Arg $msg.params 'protocolVersion' '2025-06-18'
                 $reply = @{ protocolVersion = $pv; capabilities = @{ tools = @{} }; serverInfo = @{ name = 'access-review'; version = $ServerVersion }
-                            instructions = 'Drives Microsoft Access over COM for visual review without using the desktop. Typical run: review_lock, open_app, error_log mark=true, open_form, capture, controls, dialogs, error_log, close_app, review_unlock.' }
+                            instructions = 'Drives Microsoft Access over COM for visual review without using the desktop. Typical run: review_lock, open_app, error_log mark=true, open_form, capture, controls, dialogs, error_log, close_app, review_unlock.' + $(if ($PaletteWarning) { " Settings problem: $PaletteWarning" }) }
             }
             'ping' { $reply = @{} }
             'tools/list' { $reply = @{ tools = (Get-ToolList) } }
