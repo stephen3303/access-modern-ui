@@ -579,12 +579,13 @@ function Wait-ReviewFormIdle([string]$Name) {
     Start-Sleep -Milliseconds 300
 }
 
-# True when a late-bound call failed because the object has no member of that name
-# (DISP_E_UNKNOWNNAME, which .NET reports as a MissingMemberException), rather than
-# because the member itself failed.
+# True when a late-bound call failed because the object has no member of that name,
+# rather than because the member itself failed: DISP_E_UNKNOWNNAME (which .NET reports
+# as a MissingMemberException), or Access error 2465 (0x800A09A1), which an Access form
+# raises for a name it doesn't have.
 function Test-UnknownMember($err) {
     for ($e = $err; $e; $e = $e.InnerException) {
-        if ($e -is [MissingMemberException] -or $e.HResult -eq -2147352570) { return $true }
+        if ($e -is [MissingMemberException] -or $e.HResult -eq -2147352570 -or $e.HResult -eq -2146825823) { return $true }
     }
     $false
 }
@@ -662,7 +663,7 @@ function Set-ReviewPalette {
         foreach ($f in $open) {
             $d = Invoke-ReviewGuarded { Invoke-FormReopen $f.Name }
             $dialogs += $d.Dialogs
-            if ($d.Value) { $selfReopen += $f } else { $plain += $f }
+            if ($d.Value -eq 'reopened') { $selfReopen += $f } else { $plain += $f }   # throws, never closes, if a Reopen form cannot reopen itself
         }
         foreach ($f in $plain) {
             $d = Invoke-ReviewGuarded { $acc.DoCmd.Close(2, $f.Name, 2) }   # acForm, acSaveNo
