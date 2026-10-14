@@ -18,8 +18,9 @@ Private Const MAX_FORM_W As Long = 31680
 ' descending (Unicode code points, for ChrW).
 Private Const SORT_UP As Long = &H25B2
 Private Const SORT_DOWN As Long = &H25BC
-' Design width of each GridFit host, by its window and name, read on its
-' first fit before any caption has widened it (HostDesignW).
+' Design width of each GridFit host, by its window and name, and the design
+' Left and Width of its anchored controls, read on its first fit before any
+' caption has widened it (HostDesignW).
 Private m_hostW As Collection
 ' True while GridFit runs: narrowing the host can fire its Form_Resize again.
 Private m_fitting As Boolean
@@ -149,13 +150,13 @@ End Sub
 ' Put GridFit's host back at its design width when a caption has widened it.
 ' When the host widens, Access widens its anchored controls' design sizes
 ' with it (Width of a control anchored left and right, Left of one anchored
-' right), so they come back by the same amount first, and the captions go
-' back to their design places; otherwise Access refuses the narrower Width.
+' right), by more than the host over several widenings. So they go back to
+' the sizes HostDesignW recorded, and the captions to their design places,
+' before the host's Width; otherwise Access refuses the narrower Width.
 Private Sub ShrinkHost(host As Form, ByVal prefix As String)
-    Dim hostW As Long, d As Long, c As Control, i As Long, t() As String
+    Dim hostW As Long, c As Control, i As Long, t() As String, k As String, v() As String
     hostW = HostDesignW(host)
-    d = host.Width - hostW
-    If d <= 0 Then Exit Sub
+    If host.Width <= hostW Then Exit Sub
     If Len(prefix) > 0 Then
         Do While HasCtl(host, prefix & i)
             Set c = host.Controls(prefix & i)
@@ -164,32 +165,50 @@ Private Sub ShrinkHost(host As Form, ByVal prefix As String)
             i = i + 1
         Loop
     End If
+    k = HostKey(host)
     For Each c In host.Controls
-        ' A tab control's pages have no anchoring of their own.
-        If c.ControlType <> acPage Then
-            Select Case c.HorizontalAnchor
-                Case 2: If c.Width - d >= 15 Then c.Width = c.Width - d
-                Case 1: If c.Left - d >= 0 Then c.Left = c.Left - d
-            End Select
+        If Anchored(c) Then
+            v = Split(m_hostW(k & "|" & c.Name), "|")
+            If c.Width > CLng(v(1)) Then c.Width = CLng(v(1))
+            If c.Left <> CLng(v(0)) Then c.Left = CLng(v(0))
+            If c.Width <> CLng(v(1)) Then c.Width = CLng(v(1))
         End If
     Next
     host.Width = hostW
 End Sub
 
+' True when c is anchored right or both sides. A tab control's pages have no
+' anchoring of their own.
+Private Function Anchored(c As Control) As Boolean
+    If c.ControlType = acPage Then Exit Function
+    Anchored = c.HorizontalAnchor <> 0
+End Function
+
+' Key of a GridFit host in m_hostW.
+Private Function HostKey(host As Form) As String
+    HostKey = host.Hwnd & "|" & host.Name
+End Function
+
 ' Design width of GridFit's host: its Width on the first fit of any of its
 ' tables, kept per window (and name, in case a window handle is reused) so a
-' reopened page starts again.
+' reopened page starts again. The first fit also records each anchored
+' control's design "Left|Width" (ShrinkHost), under the host's key, "|" and
+' the control's name.
 Private Function HostDesignW(host As Form) As Long
-    Dim k As String
+    Dim k As String, c As Control, found As Boolean
     If m_hostW Is Nothing Then Set m_hostW = New Collection
-    k = host.Hwnd & "|" & host.Name
+    k = HostKey(host)
     On Error Resume Next
     HostDesignW = m_hostW(k)
-    If Err.Number <> 0 Then
-        Err.Clear
-        HostDesignW = host.Width
-        m_hostW.Add HostDesignW, k
-    End If
+    found = (Err.Number = 0)
+    Err.Clear
+    On Error GoTo 0
+    If found Then Exit Function
+    HostDesignW = host.Width
+    m_hostW.Add HostDesignW, k
+    For Each c In host.Controls
+        If Anchored(c) Then m_hostW.Add c.Left & "|" & c.Width, k & "|" & c.Name
+    Next
 End Function
 
 ' Move and size a control horizontally.
