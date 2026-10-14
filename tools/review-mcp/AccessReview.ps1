@@ -493,6 +493,17 @@ function Invoke-ReviewRun {
     [pscustomobject]@{ Result = $r.Value; ArgumentsAfter = @($refs | ForEach-Object { $_.Value }); Dialogs = $r.Dialogs }
 }
 
+# Waits (up to 5 s) until a form's timer has stopped, so work the kit queues on a timer
+# after opening it (pills, progress bars) has drawn before anyone captures it.
+function Wait-ReviewFormIdle([string]$Name) {
+    for ($k = 0; $k -lt 25; $k++) {
+        $t = Find-FormValue $Name '.TimerInterval'
+        if ($null -eq $t -or [int]$t -eq 0) { break }
+        Start-Sleep -Milliseconds 200
+    }
+    Start-Sleep -Milliseconds 300
+}
+
 # Switches the palette, then closes and reopens every open form (with its OpenArgs and
 # the size last asked for), as the app's own Appearance switch does: a form left open
 # keeps part of the old drawing (in Midnight, pills and progress bars went missing).
@@ -517,6 +528,7 @@ function Set-ReviewPalette {
             $dialogs += $o.Dialogs
             $reopened += "$($f.Name) $($o.InsidePx)"
         }
+        foreach ($f in $open) { Wait-ReviewFormIdle $f.Name }
     }
     [pscustomobject]@{ Palette = $Name; Index = $i; Reopened = $reopened; Dialogs = $dialogs }
 }
@@ -553,6 +565,7 @@ function Open-ReviewForm {
         $acc.DoCmd.OpenForm($Name, 0, $missing, $missing, $missing, 0, $(if ($OpenArgs) { $OpenArgs } else { $missing }))   # acNormal, acWindowNormal
     }
     $sized = Set-ReviewFormSize -Name $Name -WidthPx $WidthPx -HeightPx $HeightPx -Maximize:$Maximize
+    Wait-ReviewFormIdle $Name
     $sized | Add-Member -NotePropertyName Dialogs -NotePropertyValue (@($r.Dialogs) + @($sized.Dialogs)) -Force
     $sized
 }
@@ -624,12 +637,24 @@ function Save-ReviewCapture {
     if ($Crop) { $file += '-crop' }
     $path = Join-Path $script:Review.Out ($file + '.png')
     $c = if ($Crop) { if ($Crop.Count -ne 4) { throw 'Crop is x, y, width, height.' }; $Crop } else { @(0, 0, 0, 0) }
-    $res = [KitReviewWin]::Save($hwnd, $path, $c[0], $c[1], $c[2], $c[3], $Zoom)
+    # A form that was just opened or reopened may still be drawing (the kit queues its own
+    # timer after SetPalette), so capture until two frames in a row are identical.
+    $sha = [Security.Cryptography.SHA256]::Create()
+    $prev = $null; $stable = $false
+    for ($k = 0; $k -lt 10; $k++) {
+        $res = [KitReviewWin]::Save($hwnd, $path, $c[0], $c[1], $c[2], $c[3], $Zoom)
+        $hash = [BitConverter]::ToString($sha.ComputeHash([IO.File]::ReadAllBytes($path)))
+        if ($hash -eq $prev) { $stable = $true; break }
+        $prev = $hash
+        Start-Sleep -Milliseconds 300
+    }
     $size = Get-ReviewFormSize $Name
     [pscustomobject]@{
         Path = $path; ImagePx = "$($res[0])x$($res[1])"; Palette = $script:Review.Palette
         InsidePx = $size.InsidePx; ClippedByAccessWindow = $size.ClippedByAccessWindow
-        Warning = $(if ($res[2]) { 'The capture is one solid colour: the Windows session may be locked or disconnected, or the form has not drawn yet.' } else { $null })
+        Stable = $stable
+        Warning = $(if ($res[2]) { 'The capture is one solid colour: the Windows session may be locked or disconnected, or the form has not drawn yet.' }
+                    elseif (-not $stable) { 'The form was still changing after 3 s of captures (an animation or a timer); this frame may be mid-draw.' } else { $null })
     }
 }
 

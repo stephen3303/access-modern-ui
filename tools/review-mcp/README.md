@@ -19,7 +19,7 @@ AccessReviewMcp.ps1   the MCP server (stdio) that exposes them as tools
 | `set_palette` | Navy, Midnight or Teal Navy (`SetPalette` 1, 2, 6), then closes and reopens the open forms at their last size, as the app's Appearance switch does. A form left open keeps part of the old drawing (pills and progress bars went missing in Midnight). |
 | `open_form` | Opens a form and sizes it to its design size (form width, visible section heights), or to `width_px` x `height_px` at 96 dpi. Reports whether the Access window clips it. |
 | `resize_form` | Design size, a given size (small check about 1100x700) or maximized (Access window at the main display size). A shell form that fills the Access window, such as kit frmMain, is sized by resizing the Access window until its inside size matches; `SizeMatches` reports whether it did. |
-| `capture` | PNG of a form, or a zoomed crop. Returned as an image and saved in the output folder, named form-palette-label. |
+| `capture` | PNG of a form, or a zoomed crop, taken once two frames in a row match (so a form still drawing isn't caught mid-draw; `Stable` reports it). Returned as an image and saved in the output folder, named form-palette-label. |
 | `controls` | Each control's Left/Top/Width/Height (96 dpi px), section, caption and colours, for measuring gaps and the 16 px card inset. |
 | `dialogs` | Lists and captures open message boxes and popups; `close=true` closes them. Also lists dialogs seen during earlier calls. |
 | `close_app` | Resets the palette to Navy, quits without saving design changes and confirms the process is gone. |
