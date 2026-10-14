@@ -950,7 +950,7 @@ Public Sub GridHeaders(ByVal prefix As String, ByVal cols As Variant, ByVal x As
                        Optional ByVal w As Long = 0, Optional ByVal sortSf As String = "", _
                        Optional ByVal filterSf As String = "", Optional ByVal onFilter As String = "")
     Dim c As Control, i As Long, p() As String, cx As Long, cy As Long, cw As Long, opts As String, key As String
-    Dim funnel As Boolean
+    Dim funnel As Boolean, srt As String
     If band Then
         If w = 0 Then
             w = px(16)
@@ -989,7 +989,10 @@ Public Sub GridHeaders(ByVal prefix As String, ByVal cols As Variant, ByVal x As
             c.TextAlign = 2
             c.ControlTipText = "Filter"
             c.OnClick = "=GridFilter([Form],""" & filterSf & """,""" & prefix & """," & i & ")"
-            c.Tag = x & "|" & (cx - x) & "|" & cw & "|" & p(0) & "|" & IIf(UBound(p) >= 4, p(4), "") & "|" & onFilter
+            ' IIf would evaluate p(4) even for a four-part column: error 9.
+            srt = ""
+            If UBound(p) >= 4 Then srt = p(4)
+            c.Tag = x & "|" & (cx - x) & "|" & cw & "|" & p(0) & "|" & srt & "|" & onFilter
         End If
         cx = cx + px(Val(p(2)))
     Next
