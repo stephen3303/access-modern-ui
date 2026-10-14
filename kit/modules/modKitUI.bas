@@ -153,18 +153,42 @@ End Sub
 ' right), by more than the host over several widenings. So they go back to
 ' the sizes HostDesignW recorded, and the captions to their design places,
 ' before the host's Width; otherwise Access refuses the narrower Width.
+' Setting a narrower Width can land short of it (1027px for 1056 on the demo
+' Tables page), and Access ignores a wider Width on a form in a subform. A
+' control's right edge does push it out, so the first caption is stretched to
+' the design width and back, then the anchored controls, which grew with it,
+' are put back again.
 Private Sub ShrinkHost(host As Form, ByVal prefix As String)
-    Dim hostW As Long, c As Control, i As Long, t() As String, k As String, v() As String
+    Dim hostW As Long, c As Control, i As Long, t() As String, w As Long
     hostW = HostDesignW(host, prefix)
-    If host.Width <= hostW Then Exit Sub
-    If Len(prefix) > 0 Then
-        Do While HasCtl(host, prefix & i)
-            Set c = host.Controls(prefix & i)
-            t = Split(c.Tag, "|")
-            If UBound(t) >= 2 Then FitCtl c, CLng(Val(t(0)) + Val(t(1))), CLng(Val(t(2)))
-            i = i + 1
-        Loop
+    If host.Width = hostW Then Exit Sub
+    If host.Width > hostW Then
+        If Len(prefix) > 0 Then
+            Do While HasCtl(host, prefix & i)
+                Set c = host.Controls(prefix & i)
+                t = Split(c.Tag, "|")
+                If UBound(t) >= 2 Then FitCtl c, CLng(Val(t(0)) + Val(t(1))), CLng(Val(t(2)))
+                i = i + 1
+            Loop
+        End If
+        RestoreAnchored host
+        host.Width = hostW
     End If
+    If host.Width < hostW And Len(prefix) > 0 Then
+        If HasCtl(host, prefix & "0") Then
+            Set c = host.Controls(prefix & "0")
+            w = c.Width
+            c.Width = hostW - c.Left
+            c.Width = w
+            RestoreAnchored host
+        End If
+    End If
+End Sub
+
+' Put each anchored control of GridFit's host back at the design Left and
+' Width HostDesignW recorded.
+Private Sub RestoreAnchored(host As Form)
+    Dim c As Control, k As String, v() As String
     k = HostKey(host)
     For Each c In host.Controls
         If Anchored(c) Then
@@ -174,7 +198,6 @@ Private Sub ShrinkHost(host As Form, ByVal prefix As String)
             If c.Width <> CLng(v(1)) Then c.Width = CLng(v(1))
         End If
     Next
-    host.Width = hostW
 End Sub
 
 ' True when c is anchored right or both sides. A tab control's pages have no
