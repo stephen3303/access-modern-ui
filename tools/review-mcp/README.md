@@ -141,6 +141,10 @@ npx @anthropic-ai/mcpb pack tools/review-mcp access-review.mcpb
 
 That validates `manifest.json` and zips the folder (minus what `.mcpbignore` lists). When you change the tools, bump `version` in `manifest.json` and `$ServerVersion` in `AccessReviewMcp.ps1` together.
 
+## Licence
+
+MIT. See [LICENSE](LICENSE).
+
 ## In this repository's projects
 
 Reviews of access-modern-ui PRs check all three palettes only when a PR adds controls or dialogs or changes theming or colours; layout, logic and data fixes are checked in Navy only. Any new error log entry is a must-fix finding unless explained.

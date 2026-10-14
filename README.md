@@ -301,3 +301,7 @@ Use CountedCaption("Transfer", 5) for one-line filter captions. Give a filter gr
 the width of its widest measured caption and use one row when space permits.
 
 LayoutFilterRow measures the widest counted caption and gives each filter the same width. LayoutNumberedTimeline keeps circle and number dimensions fixed while distributing labels and connector lengths across the available width. See tests/README.md for the native Access checks.
+
+## Licence
+
+MIT. See [LICENSE](LICENSE).
