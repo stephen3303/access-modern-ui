@@ -61,7 +61,9 @@ Private Declare PtrSafe Function GetDriveTypeW Lib "kernel32" (ByVal root As Lon
 Public Sub BuildTrustCheck(ByVal mainForm As String)
     Dim db As DAO.Database, n As Long, d As String
     Build_dlgTrust
-    LoadMacro CLOSE_MACRO, MacroRow("", "Close", "2", TRUST_FORM, "2")      ' form dlgTrust, don't save
+    ' Save stays at Prompt (0): with the code off Access refuses Close with any other
+    ' Save argument. dlgTrust is never changed, so no save prompt can appear.
+    LoadMacro CLOSE_MACRO, MacroRow("", "Close", "2", TRUST_FORM, "0")      ' form dlgTrust, Save Prompt
     LoadMacro "AutoExec", _
         MacroRow("Not [CurrentProject].[IsTrusted]", "OpenForm", TRUST_FORM, "0", "", "", "-1", "0") & _
         MacroRow("Not [CurrentProject].[IsTrusted]", "StopMacro") & _

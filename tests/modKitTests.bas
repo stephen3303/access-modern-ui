@@ -293,6 +293,12 @@ Public Function TestKit(ByVal root As String) As String
     fitted = Replace(ReadTextFile(text), vbNullChar, "")   ' SaveAsText may write UTF-16
     Kill text
     Check InStr(fitted, "IsTrusted") > 0 And InStr(fitted, "dlgTrust") > 0 And InStr(fitted, "TrustStartup") > 0, "AutoExec lost its trust rows"
+    Application.SaveAsText acMacro, "mcrTrustClose", text
+    fitted = Replace(Replace(Replace(Replace(ReadTextFile(text), vbNullChar, ""), " ", ""), vbCr, ""), vbLf, "")
+    Kill text
+    ' With the code off Access only runs Close with Save at Prompt, so No (2) or Yes (1) breaks it
+    Check InStr(fitted, "dlgTrust") > 0 And InStr(fitted, "Argument=""dlgTrust""Argument=""1""") = 0 And _
+        InStr(fitted, "Argument=""dlgTrust""Argument=""2""") = 0, "mcrTrustClose doesn't close with Save at Prompt"
     BuildMessageDialog
     DoCmd.OpenForm "dlgMessage"
     Set host = Forms("dlgMessage")

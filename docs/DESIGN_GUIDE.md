@@ -93,6 +93,9 @@ access/
     how to add the folder in the Trust Center. Code never changes Trust Center settings.
     The check reads the user's (HKCU) settings and policies only, not machine-wide (HKLM)
     policy locations, so on such a PC the page can show when it isn't needed.
+    With the code off, Access first shows its own "active content is blocked" notice;
+    `dlgTrust` follows it. Its Close macro keeps Save at Prompt, the only setting Access
+    allows then.
   - `HideAccessSplash`, called just before `BuildTrustCheck`, hides Access's own splash.
   - Hidden: the DB window, document tabs and datasheet schema.
   - Name AutoCorrect off.
