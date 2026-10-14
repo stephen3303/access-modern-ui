@@ -34,6 +34,8 @@ Public Function TestKit(ByVal root As String) As String
     NewForm "", 0, px(700), px(700)
     GridHeaders "head", cols, px(24), px(60)
     GridHeaders "sortHead", cols, px(24), px(40), sortSf:="sfRows"
+    GridHeaders "fillHead", cols, px(24), px(770), w:=px(600)
+    GridHeaders "fitHead", cols, px(24), px(790), w:=px(600), fit:=True
     SubF "sfRows", "Form.subTest", px(24), px(82), px(600), px(180)
     SubF "sfReuse", "Form.subTest", px(24), px(320), px(600), px(180)
     SubF "sfName", "Form.subTestName", px(24), px(700), px(300), px(50)
@@ -63,6 +65,11 @@ Public Function TestKit(ByVal root As String) As String
     SaveForm "frmTest", "testHost"
     DoCmd.OpenForm "frmTest"
     Set host = Forms("frmTest"): Set grid = host.sfRows.Form
+    ' Captions are as wide as their cells; a filling last column's reaches the table's edge.
+    Check host.fillHead0.Width = grid.txtCol0.Width And host.fillHead0.Left = host.sfRows.Left + grid.txtCol0.Left, "Caption is not over its cells"
+    ' Designed width (the Tag; an anchored control's Width follows the window): 600 - 8 - 160 - 8 - 8.
+    Check Val(Split(host.fillHead1.Tag, "|")(2)) = px(416) And host.fillHead1.HorizontalAnchor = 2, "Last caption does not reach the table's edge"
+    Check host.fitHead1.Width = px(292) And host.fitHead1.HorizontalAnchor = 0, "Fit table's last caption is not its column's width"
     Check FitSingleLineText(Null, px(100)) = "", "Null presentation text differs"
     Check FitSingleLineText("A" & vbCrLf & "B" & vbLf & "C", px(100)) = "A B C", "Presentation text retains line breaks"
     measured = MeasureText("Exact fit", 9, 400)

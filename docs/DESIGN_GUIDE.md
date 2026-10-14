@@ -470,9 +470,15 @@ End Sub
       `GridClick(grid, dbl)`.
     - Each column's `Tag` holds its caption and design position, which `GridFit` and
       modGridOut read.
-  - `GridHeaders prefix, cols, x, y, [parentCtl], [band], [w], [sortSf], [filterSf], [onFilter]` puts the
-    captions above the grid in 8pt bold muted uppercase. `band:=True` draws them on a 22px `CLR_INSET`
+  - `GridHeaders prefix, cols, x, y, [parentCtl], [band], [w], [sortSf], [filterSf], [onFilter], [fit]`
+    puts the captions above the grid in 8pt bold muted uppercase. `band:=True` draws them on a 22px `CLR_INSET`
     strip, `w` wide (default: the columns' widths), that stretches with the window.
+    - Each caption is exactly as wide as its column's cells, so right-aligned and
+      centred captions sit over their values. Pass the table's width as `w`: the last
+      caption then reaches the table's right edge and stretches with it, like the last
+      column. For a `fit:=True` table pass `fit:=True` here too, so the last caption
+      keeps its column's width and `GridFit` scales it; without it the last caption is
+      anchored to stretch and `GridFit` moves it past the column.
     - **Click to sort.** `sortSf:="sfList"` (the table's subform control) makes each
       caption sort the table by its column (`GridSort`): the first click sorts
       ascending, the next reverses. The sorted caption shows ▲ or ▼ after the text, or
