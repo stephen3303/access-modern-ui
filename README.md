@@ -13,6 +13,7 @@ kit/modules/*.bas             the reusable modules, loaded before the app's own
 kit/forms/dlgAppearance.vba   code-behind for the palette picker
 kit/forms/dlgColumns.vba      code-behind for the column chooser (BuildColumnsDialog, ChooseGridColumns)
 kit/forms/dlgDatePick.vba     code-behind for the date picker (BuildDatePicker)
+kit/forms/dlgFilter.vba       code-behind for the header filter (BuildFilterDialog, GridFilter)
 kit/forms/dlgMessage.vba      code-behind for the message dialog (BuildMessageDialog, KitMsgBox)
 kit/forms/dlgToast.vba        code-behind for the toast (BuildToast, KitToast)
 kit/forms/dlgInput.vba        code-behind for the input dialog (BuildInputDialog, KitInputBox)
@@ -42,6 +43,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 | modPng | Anti-aliased PNGs for rounded shapes: `PillPng` (pills and badges), `CardPng` (card corners), `ProgressPng` (progress capsules), `ColumnPillPng` (uniform-width pills in a table column), `RoundedCardPng` (whole resizable card backgrounds), `TogglePng` and `RingPng` (toggle switch track and focus ring), cached in `%LOCALAPPDATA%\<APP_NAME>\pills` |
 | modKitUI | Run-time page helpers: `GridFit`, `GridHighlight`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSwitch`, `ToggleFocus`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `KitToast`, `KitInputBox`, `CheckRequired`, `SplashStatus`, `SetCount`, `StyleChip` (catalog below) |
 | modGridOut | `PrintGrid` and `ExportGrid`: print or export a table as the user sees it |
+| modGridFilter | Click-to-filter table headers: `GridFilter` (a caption funnel's click), `SetGridFilter`, `SetColumnFilter`, `ClearGridFilters`, `GridFilterWhere`, `GridColumnValues`, and `BuildFilterDialog` for `dlgFilter` |
 | modCsv | UTF-8 text files, RFC 4180 CSV read/write, query-to-CSV export |
 | modCrypto | SHA-256 through Windows CNG, salted password hashing |
 | modTrust | Startup check for an untrusted folder: `BuildTrustCheck mainForm` (build step, in place of `StartUpForm`) adds an `AutoExec` macro and `dlgTrust`, a page explaining how to add the folder as a Trusted Location. `TrustNeeded` and `InTrustedLocation` read the Trust Center settings (never change them), `ShowTrustHelp` opens the page. It replaces any `AutoExec` the app has |
@@ -57,7 +59,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
    - Set `FIXED` to the colors that must never change with the palette.
    - Run the script. It writes `src\themes\light\modTheme.bas` and `src\modules\modPalette.bas`, and prints a contrast check.
 3. In the app's own modules, provide the names the kit calls (listed below).
-4. For the palette picker, copy `examples\modules\modBuildAppearance.bas` to `src\modules` and `kit\forms\dlgAppearance.vba` to `src\forms`. For date fields, copy `kit\forms\dlgDatePick.vba` to `src\forms` too, for messages copy `kit\forms\dlgMessage.vba` and `kit\forms\dlgToast.vba`, for questions copy `kit\forms\dlgInput.vba`, for the column chooser copy `kit\forms\dlgColumns.vba`, and for the splash screen copy `kit\forms\frmSplash.vba`: `SaveForm` attaches code-behind from `src\forms` only, so without them `dlgDatePick`, `dlgMessage`, `dlgToast`, `dlgInput`, `dlgColumns` and `frmSplash` build with no code.
+4. For the palette picker, copy `examples\modules\modBuildAppearance.bas` to `src\modules` and `kit\forms\dlgAppearance.vba` to `src\forms`. For date fields, copy `kit\forms\dlgDatePick.vba` to `src\forms` too, for messages copy `kit\forms\dlgMessage.vba` and `kit\forms\dlgToast.vba`, for questions copy `kit\forms\dlgInput.vba`, for the column chooser copy `kit\forms\dlgColumns.vba`, for header filters copy `kit\forms\dlgFilter.vba`, and for the splash screen copy `kit\forms\frmSplash.vba`: `SaveForm` attaches code-behind from `src\forms` only, so without them `dlgDatePick`, `dlgMessage`, `dlgToast`, `dlgInput`, `dlgColumns`, `dlgFilter` and `frmSplash` build with no code.
 5. Write a `BuildAll` entry point that calls `UseBuildPalette`, sets `g_SrcRoot`, and builds the forms. The design guide (section 2) describes what it does.
 6. For startup, call `BuildTrustCheck "frmMain"` (or the login form, or `frmSplash` when the app has a splash screen) last in the startup step, instead of setting `StartUpForm`. When Access would ask to enable content, users then see how to trust the folder.
 
@@ -68,7 +70,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 | `CLR_*` roles, `FONT_UI`, `THEME_DARK` | modUIKit | modTheme (generated) |
 | `PALETTE_COUNT`, `PaletteKey`, `PaletteName`, `PaletteIsDark`, `PaletteSwatch`, `PaletteOf` | modDarkMode, dlgAppearance | modPalette (generated) |
 | `APP_NAME` | modPng, modKitUI, modKitUpdate, `BuildSplash`, modDarkMode, modGridCols (registry key for saved settings) | modGlobals |
-| `HandleError`, `LogError`, `RaiseAgain` | modDarkMode, modCsv, modKitUI, modKitUpdate, modGridCols | modErrors (`examples/modules`) |
+| `HandleError`, `LogError`, `RaiseAgain` | modDarkMode, modCsv, modKitUI, modKitUpdate, modGridCols, modGridFilter | modErrors (`examples/modules`) |
 | `MeasureText(s, size, weight)` (Segoe UI text width in twips; size in points, weight 400 normal / 700 bold) | modTextUI, modPng, `TitleTip`/`PageHeader` | modWrap |
 | `ShowTip(frm, nm)` | the "?" marks from `TitleTip` | modUI |
 | `frmMain` with `PageKey` and `Reopen pg` | `SetPalette` (reopens the window) | frmMain |
@@ -77,6 +79,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 | `dlgMessage` form | `KitMsgBox` (the app's `Notify` and `HandleError`) | call the kit's `BuildMessageDialog` with the app's dialogs + copy `kit\forms\dlgMessage.vba` to src\forms |
 | `dlgToast` form | `KitToast` | call the kit's `BuildToast` with the app's dialogs + copy `kit\forms\dlgToast.vba` to src\forms |
 | `dlgColumns` form | `ChooseGridColumns` (a table's Columns button) | call the kit's `BuildColumnsDialog` with the app's dialogs + copy `kit\forms\dlgColumns.vba` to src\forms |
+| `dlgFilter` form | `GridFilter` (a caption's funnel, `GridHeaders ..., filterSf`) | call the kit's `BuildFilterDialog` with the app's dialogs + copy `kit\forms\dlgFilter.vba` to src\forms |
 | `dlgInput` form | `KitInputBox` | call the kit's `BuildInputDialog` with the app's dialogs + copy `kit\forms\dlgInput.vba` to src\forms |
 | `frmSplash` form (optional) | the startup form, `SplashStatus` | call the kit's `BuildSplash` + copy `kit\forms\frmSplash.vba` to src\forms; pass `frmSplash` to `BuildTrustCheck` |
 | `BandLabels()`, `BandBack(label)` | `BandCF` | modUI |
@@ -134,6 +137,7 @@ Control heights and font sizes never scale. `TabStrip` and `LayoutFilterRow` alr
 | `BuildToast` | Builds `dlgToast`, the toast `KitToast` shows. Call it once with the app's dialogs. |
 | `BuildInputDialog` | Builds `dlgInput`, the dialog `KitInputBox` opens. Call it once with the app's dialogs. |
 | `BuildColumnsDialog` (modGridCols) | Builds `dlgColumns`, the column chooser `ChooseGridColumns` opens. Call it once with the app's dialogs. |
+| `BuildFilterDialog` (modGridFilter) | Builds `dlgFilter`, the value checklist a caption's funnel opens (`GridFilter`). Call it once with the app's dialogs. |
 | `DateBox nm, src, x, y, h` | Date entry: a 120px text box (dd mmm yyyy, left-aligned) and a calendar button `cal_<nm>` 4px to its right that opens the date picker. The pair is `DATEFIELD_W` (154px) wide. |
 | `SecretBox nm, src, x, y, w, h` | Password or other sensitive entry: a text box that shows asterisks (input mask `Password`) and an eye button `eye_<nm>` 4px to its right, 30px wide, that shows or hides the text. The pair is `w` wide. Masking is display only, so hash passwords (`HashPassword`) before saving. Single-record forms only: on a continuous form it raises error 5. |
 | `RO nm, src, x, y, w, h` | Read-only text: no border, not a tab stop |
@@ -165,7 +169,7 @@ Control heights and font sizes never scale. `TabStrip` and `LayoutFilterRow` alr
 | Builder | What it does |
 |---|---|
 | `BuildGrid name, cols, w [, rowLines, back, zebra, rowPx, fit]` | Styled read-only table subform. Columns are `"field\|caption\|width px\|options"`; options `r` right, `c` center, `b` bold, `m` muted, `p` status pill (`StatusVariant`), `w` wrap onto `rowLines` lines instead of cutting text off, `s` mark the text matching the page's search (`GridHighlight`). `zebra` fills every other row, `rowPx` sets the row height, `fit` lets `GridFit` scale the columns. Clicking a row selects and opens it: no open buttons. |
-| `GridHeaders prefix, cols, x, y [, parentCtl, band, w, sortSf]` | Column captions above a `BuildGrid` table. `band:=True` puts them on a filled strip. `sortSf` (the table's subform control) makes them sort the table on click, again to reverse, with an up/down arrow; a fifth column part names a different sort field. |
+| `GridHeaders prefix, cols, x, y [, parentCtl, band, w, sortSf, filterSf, onFilter]` | Column captions above a `BuildGrid` table. `band:=True` puts them on a filled strip. `sortSf` (the table's subform control) makes them sort the table on click, again to reverse, with an up/down arrow; a fifth column part names a different sort field. `filterSf` (the same control) adds a funnel to each field column's caption that filters the table by the column's values (`GridFilter`); `onFilter` names a Public Sub on the form called with the subform control's name after the user changes a filter. |
 | `CF c, expr, back, fore [, bold]` | Expression-based conditional format |
 | `BadgeCF c, field, value, variant, ...` | Rounded badge colors keyed on a status field |
 | `BandCF c, field` | Status band pill colors |
@@ -179,7 +183,7 @@ Control heights and font sizes never scale. `TabStrip` and `LayoutFilterRow` alr
 | `VCenter` | Vertically center single-line text |
 | `Ev c, "OnClick", ...` | Point event properties at the form module's handlers |
 
-**Run time** (modKitUI, modGridOut, modGridCols, modKitUtil, modBackdrop)
+**Run time** (modKitUI, modGridOut, modGridCols, modGridFilter, modKitUtil, modBackdrop)
 
 | Helper | What it does |
 |---|---|
@@ -189,6 +193,9 @@ Control heights and font sizes never scale. `TabStrip` and `LayoutFilterRow` alr
 | `GridHighlight sf, term` | Mark `term` in a table's `s` columns, in `CLR_WARNING_FG` on `CLR_WARNING_BG`, ignoring case. Call it with the search box text whenever the search changes; `""` clears the marks. Print and export show the plain text. |
 | `GridScroll g` | A `BuildGrid` table's OnCurrent (set by `BuildGrid`): show its vertical scroll bar only when its rows overflow |
 | `GridScrollAll frm` | `GridScroll` for every table on a window and the forms in it. Call it from the window's `Form_Resize`. |
+| `GridFilter host, sfName, prefix, col` (modGridFilter) | A caption funnel's click (set by `GridHeaders ..., filterSf`): list the column's values in `dlgFilter` (those the other filters leave, in the column's sort order, blanks last) and show only the rows whose value the user keeps ticked. Ticking every value removes the filter. While the column is filtered the funnel shows white on a primary-color chip. |
+| `SetGridFilter sf, where` (modGridFilter) | The page's own filter (search, chips) for a table with funnels: the table shows rows matching `where` and every header filter. Use it instead of setting the table's `Filter`, which would replace the header filters. |
+| `SetColumnFilter sf, prefix, col, keep` / `ClearGridFilters sf` (modGridFilter) | Filter a column to the values in the array `keep` in code (`Empty` removes it), or remove every header filter. `GridFilterWhere sf` returns the header filters for counting rows. |
 | `GridSort host, sfName, prefix, col` | A sortable `GridHeaders` caption's click (set by `GridHeaders ..., sortSf`): sort the table by that column (ties in id order), or reverse it, and move the arrow; a paginated table goes back to page 1. Call it to sort in code so the arrow matches. |
 | `SelectFirstRow sf` | Select a table's first row and call the host's `GridClick`, as a click would. Returns the id, or Null for an empty table. |
 | `ShowDetail host, detailCtl, formName, where [, emptyCtl]` | List/detail pages: show the matching record in the detail subform, saving a changed one first, and hide the empty state. Returns False, changing nothing, when the detail form refuses the save (its `BeforeUpdate` cancels, e.g. `CheckRequired`). |

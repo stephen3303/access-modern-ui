@@ -458,6 +458,100 @@ Public Function TestKit(ByVal root As String) As String
     Check grid.txtCol0.Left < grid.txtCol1.Left And grid.txtCol1.Left < grid.txtCol2.Left, "Default layout lost design order"
     Check grid.txtCol1.Visible And host.fit1.Visible, "Default layout left a column hidden"
     DoCmd.Close acForm, "frmTestFit", acSaveNo
+    ' Header filters (modGridFilter): funnels, value lists, and filters kept
+    ' alongside the page's filter, sorting and the column chooser.
+    Dim vals As Variant, more As Boolean
+    CurrentDb.Execute "CREATE TABLE test_filter (id LONG PRIMARY KEY, category TEXT(60), qty LONG)"
+    Set db = CurrentDb                     ' held: a field reached through a bare CurrentDb raises 3420
+    db.TableDefs("test_filter").Fields("category").AllowZeroLength = True
+    CurrentDb.Execute "INSERT INTO test_filter VALUES (1,'Alpha',5)"
+    CurrentDb.Execute "INSERT INTO test_filter VALUES (2,'Beta',5)"
+    CurrentDb.Execute "INSERT INTO test_filter VALUES (3,'Alpha',7)"
+    CurrentDb.Execute "INSERT INTO test_filter VALUES (4,NULL,7)"
+    CurrentDb.Execute "INSERT INTO test_filter VALUES (5,'',9)"
+    CurrentDb.Execute "INSERT INTO test_filter VALUES (6,'O''Brien',9)"
+    ' Qty has a sort field (a fifth part); Category has none.
+    cols = Array("category|Category|160|", "qty|Qty|80|r|id", "=[qty]*2|Double|80|r")
+    BuildGrid "subTestFilter", cols, px(500), fit:=True
+    NewForm "", 0, px(640), px(300)
+    GridHeaders "flt", cols, px(24), px(20), sortSf:="sfFlt", filterSf:="sfFlt"
+    SubF "sfFlt", "Form.subTestFilter", px(24), px(42), px(500), px(180)
+    SaveForm "frmTestFilter", "testHost"
+    DoCmd.OpenForm "frmTestFilter"
+    Set host = Forms("frmTestFilter"): Set sf = host.sfFlt
+    sf.Form.RecordSource = "SELECT * FROM test_filter ORDER BY id"
+    Check HasControl(host, "fltFilter0") And HasControl(host, "fltFilter1"), "Field column has no funnel"
+    Check Not HasControl(host, "fltFilter2"), "Computed column got a funnel"
+    Check host.flt0.Left + host.flt0.Width <= host.fltFilter0.Left, "Caption runs under its funnel"
+    Check host.fltFilter0.Left + host.fltFilter0.Width <= host.flt1.Left, "Funnel overlaps the next caption"
+    Check host.fltFilter0.ForeColor = Th(CLR_MUTED_FG), "Unfiltered funnel not muted"
+    vals = GridColumnValues(sf, "flt", 0, more)
+    Check UBound(vals) = 3 And Not more, "Column values not distinct, or blanks not merged"
+    Check vals(0) = "Alpha" And vals(1) = "Beta" And vals(2) = "O'Brien" And IsNull(vals(3)), "Column values not sorted with blanks last"
+    SetGridFilter sf, "qty < 9"
+    Check RowCount(sf.Form) = 4, "Page filter not applied"
+    SetColumnFilter sf, "flt", 0, Array("Alpha", Null)
+    Check RowCount(sf.Form) = 3, "Header filter not combined with the page filter"
+    Check GridColumnFiltered(sf, 0) And Not GridColumnFiltered(sf, 1), "Filtered columns reported wrongly"
+    Check host.fltFilter0.BackStyle = 1 And host.fltFilter0.BackColor = Th(CLR_PRIMARY) And host.fltFilter0.ForeColor = Th(CLR_WHITE), "Filtered column's funnel not shown on a chip"
+    Check host.fltFilter1.BackStyle = 0 And host.fltFilter1.ForeColor = Th(CLR_MUTED_FG), "Unfiltered column's funnel not muted"
+    vals = GridColumnValues(sf, "flt", 1)
+    Check UBound(vals) = 1 And vals(0) = 5 And vals(1) = 7, "Column values ignore the other filters, or not in sort-field order"
+    vals = GridColumnValues(sf, "flt", 0)
+    Check UBound(vals) = 2, "Column values narrowed by the column's own filter"
+    SetGridFilter sf, ""
+    Check RowCount(sf.Form) = 4, "Changing the page filter dropped the header filter, or blanks missed an empty value"
+    SetColumnFilter sf, "flt", 1, Array(9)
+    Check RowCount(sf.Form) = 1 And InStr(GridFilterWhere(sf), "[qty] IN (9)") > 0, "Second header filter not combined"
+    GridSort host, "sfFlt", "flt", 1
+    Check RowCount(sf.Form) = 1, "Sorting dropped the header filters"
+    ' A Filter the page sets itself replaces the header filters: the next
+    ' header call notices, and drops them and their funnels' color.
+    sf.Form.Filter = "id = 2"
+    sf.Form.FilterOn = True
+    Check Not GridColumnFiltered(sf, 0), "Header filter kept after the page set Filter itself"
+    Check host.fltFilter0.BackStyle = 0 And host.fltFilter0.ForeColor = Th(CLR_MUTED_FG), "Funnel still highlighted after its filter was replaced"
+    SetColumnFilter sf, "flt", 0, Array("Alpha")
+    Check RowCount(sf.Form) = 0, "Page's own Filter not kept as the page filter"
+    ClearGridFilters sf
+    SetGridFilter sf, ""
+    Check RowCount(sf.Form) = 6 And Len(GridFilterWhere(sf)) = 0, "Clearing every filter left rows hidden"
+    SetColumnFilter sf, "flt", 0, Array("O'Brien")
+    Check RowCount(sf.Form) = 1, "Value with a quote not matched"
+    SetColumnFilter sf, "flt", 0, Empty
+    Check RowCount(sf.Form) = 6 And Not GridColumnFiltered(sf, 0), "Removing a column's filter left it on"
+    On Error Resume Next
+    SetColumnFilter sf, "flt", 2, Array(1)
+    Check Err.Number = 5, "Filtered a column with no funnel"
+    On Error GoTo 0
+    ' The funnels follow their captions when the table widens or columns hide.
+    sf.Width = px(600)
+    GridFit sf, "flt"
+    Set grid = sf.Form
+    Check host.fltFilter0.Left > host.flt0.Left And host.flt0.Left + host.flt0.Width <= host.fltFilter0.Left, "Funnel not kept right of its caption"
+    Check host.fltFilter0.Left + host.fltFilter0.Width <= sf.Left + grid.txtCol1.Left + px(2), "Funnel not over its column after GridFit"
+    SetGridColumns sf, "flt", "1,0h,2"
+    Check Not host.fltFilter0.Visible And host.fltFilter1.Visible, "Hidden column's funnel still shows"
+    SetGridColumns sf, "flt", DefaultLayout(3)
+    Check host.fltFilter0.Visible, "Shown column's funnel stays hidden"
+    DoCmd.Close acForm, "frmTestFilter", acSaveNo
     g_Silent = False
     TestKit = checks & " kit checks passed"
+End Function
+
+' Rows a form shows (its recordset clone read to the end).
+Private Function RowCount(g As Form) As Long
+    With g.RecordsetClone
+        If .BOF And .EOF Then Exit Function
+        .MoveLast
+        RowCount = .RecordCount
+    End With
+End Function
+
+' True when frm has a control named nm.
+Private Function HasControl(frm As Form, ByVal nm As String) As Boolean
+    Dim c As Control
+    On Error Resume Next
+    Set c = frm.Controls(nm)
+    HasControl = Not c Is Nothing
 End Function

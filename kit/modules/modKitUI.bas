@@ -102,7 +102,7 @@ Public Sub GridFit(sf As Control, Optional ByVal prefix As String = "")
         Set c = Nothing
         On Error Resume Next
         Set c = g.Controls("txtCol" & i)
-        On Error GoTo 0
+        On Error GoTo Fail
         If c Is Nothing Then Exit Do
         t = Split(c.Tag, "|")
         If UBound(t) >= 2 Then
@@ -111,15 +111,7 @@ Public Sub GridFit(sf As Control, Optional ByVal prefix As String = "")
             Set c = g.Controls("txtCol" & i)
             If HasCtl(g, c.Name & "_bg") Then FitCtl g.Controls(c.Name & "_bg"), c.Left, c.Width
         End If
-        If Len(prefix) > 0 Then
-            If HasCtl(host, prefix & i) Then
-                With host.Controls(prefix & i)
-                    t = Split(.Tag, "|")
-                    If UBound(t) >= 2 Then FitCtl host.Controls(prefix & i), _
-                        CLng(Val(t(0)) + Val(t(1)) * ratio), CLng((Val(t(2)) + px(8)) * ratio) - px(8)
-                End With
-            End If
-        End If
+        PlaceCaption host, prefix, i, ratio
         i = i + 1
     Loop
     Set g = sf.Form
@@ -159,15 +151,13 @@ End Sub
 ' the design width and back, then the anchored controls, which grew with it,
 ' are put back again.
 Private Sub ShrinkHost(host As Form, ByVal prefix As String)
-    Dim hostW As Long, c As Control, i As Long, t() As String, w As Long
+    Dim hostW As Long, c As Control, i As Long, w As Long
     hostW = HostDesignW(host, prefix)
     If host.Width = hostW Then Exit Sub
     If host.Width > hostW Then
         If Len(prefix) > 0 Then
             Do While HasCtl(host, prefix & i)
-                Set c = host.Controls(prefix & i)
-                t = Split(c.Tag, "|")
-                If UBound(t) >= 2 Then FitCtl c, CLng(Val(t(0)) + Val(t(1))), CLng(Val(t(2)))
+                PlaceCaption host, prefix, i, 1
                 i = i + 1
             Loop
         End If
@@ -183,6 +173,25 @@ Private Sub ShrinkHost(host As Form, ByVal prefix As String)
             RestoreAnchored host
         End If
     End If
+End Sub
+
+' Place caption prefix & i (GridHeaders, Tag "x|offset|width|...") over its
+' column scaled by ratio, with its filter funnel if it has one.
+Private Sub PlaceCaption(host As Form, ByVal prefix As String, ByVal i As Long, ByVal ratio As Double)
+    Dim t() As String, capX As Long, capW As Long
+    If Len(prefix) = 0 Then Exit Sub
+    If Not HasCtl(host, prefix & i) Then Exit Sub
+    t = Split(host.Controls(prefix & i).Tag, "|")
+    If UBound(t) < 2 Then Exit Sub
+    capX = CLng(Val(t(0)) + Val(t(1)) * ratio)
+    capW = CLng((Val(t(2)) + px(8)) * ratio) - px(8)
+    ' A filter funnel (GridHeaders filterSf) keeps the right end of the
+    ' caption's space; the text stops short of it.
+    If HasCtl(host, prefix & "Filter" & i) Then
+        FitCtl host.Controls(prefix & "Filter" & i), MaxL(capX + capW - FILTER_W, 0), FILTER_W
+        capW = capW - FILTER_W - FILTER_GAP
+    End If
+    FitCtl host.Controls(prefix & i), capX, capW
 End Sub
 
 ' Put each anchored control of GridFit's host back at the design Left and
@@ -239,6 +248,11 @@ Private Function HostDesignW(host As Form, ByVal prefix As String) As Long
     For Each c In host.Controls
         If Anchored(c) Then m_hostW.Add c.Left & "|" & c.Width, k & "|" & c.Name
     Next
+End Function
+
+' The larger of a and b.
+Private Function MaxL(ByVal a As Long, ByVal b As Long) As Long
+    MaxL = IIf(a > b, a, b)
 End Function
 
 ' Move and size a control horizontally.
