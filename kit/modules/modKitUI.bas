@@ -57,7 +57,7 @@ Private m_inAnswer As Variant
 ' Form_Resize.
 Public Sub GridFit(sf As Control, Optional ByVal prefix As String = "")
     Dim host As Form, g As Form, c As Control, i As Long, t() As String
-    Dim design As Long, avail As Long, ratio As Double, newW As Long
+    Dim design As Long, avail As Long, ratio As Double, newW As Long, capX As Long, capW As Long
     Set host = sf.Parent
     Set g = sf.Form
     If Left$(Nz(g.Tag, ""), 5) <> "grid:" Then Exit Sub
@@ -97,11 +97,18 @@ Public Sub GridFit(sf As Control, Optional ByVal prefix As String = "")
         End If
         If Len(prefix) > 0 Then
             If HasCtl(host, prefix & i) Then
-                With host.Controls(prefix & i)
-                    t = Split(.Tag, "|")
-                    If UBound(t) >= 2 Then FitCtl host.Controls(prefix & i), _
-                        CLng(Val(t(0)) + Val(t(1)) * ratio), CLng((Val(t(2)) + px(8)) * ratio) - px(8)
-                End With
+                t = Split(host.Controls(prefix & i).Tag, "|")
+                If UBound(t) >= 2 Then
+                    capX = CLng(Val(t(0)) + Val(t(1)) * ratio)
+                    capW = CLng((Val(t(2)) + px(8)) * ratio) - px(8)
+                    ' A filter funnel (GridHeaders filterSf) keeps the right end
+                    ' of the caption's space; the text stops short of it.
+                    If HasCtl(host, prefix & "Filter" & i) Then
+                        FitCtl host.Controls(prefix & "Filter" & i), MaxL(capX + capW - FILTER_W, 0), FILTER_W
+                        capW = capW - FILTER_W - FILTER_GAP
+                    End If
+                    FitCtl host.Controls(prefix & i), capX, capW
+                End If
             End If
         End If
         i = i + 1
@@ -118,6 +125,11 @@ Public Sub GridFit(sf As Control, Optional ByVal prefix As String = "")
         g.Width = newW
     End If
 End Sub
+
+' The larger of a and b.
+Private Function MaxL(ByVal a As Long, ByVal b As Long) As Long
+    MaxL = IIf(a > b, a, b)
+End Function
 
 ' Move and size a control horizontally.
 Private Sub FitCtl(c As Control, ByVal x As Long, ByVal w As Long)
