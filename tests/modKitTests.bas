@@ -520,6 +520,9 @@ Public Function TestKit(ByVal root As String) As String
     Check host.fltFilter0.BackStyle = 0 And host.fltFilter0.ForeColor = Th(CLR_MUTED_FG), "Funnel still highlighted after its filter was replaced"
     SetColumnFilter sf, "flt", 0, Array("Alpha")
     Check RowCount(sf.Form) = 0, "Page's own Filter not kept as the page filter"
+    ' The table is empty, but the column's kept value is still listed to clear.
+    vals = GridColumnValues(sf, "flt", 0)
+    Check UBound(vals) = 1 And vals(0) = "Alpha" And vals(1) = "Beta", "Column's own kept value not listed when other filters hide its rows"
     ClearGridFilters sf
     SetGridFilter sf, ""
     Check RowCount(sf.Form) = 6 And Len(GridFilterWhere(sf)) = 0, "Clearing every filter left rows hidden"
