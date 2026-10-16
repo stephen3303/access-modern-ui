@@ -904,6 +904,45 @@ Public Function TestKit(ByVal root As String) As String
     DoCmd.Close acForm, "frmTestFilter", acSaveNo
     BuildHelpKey
     Check MacroExists("AutoKeys"), "F1 macro not written"
+    ' Locks and write conflicts (modKitLocks).
+    Dim lockTry As Long, cf As Form, saved As Boolean
+    Check IsLockError(3218) And IsLockError(3260) And IsLockError(3188) And Not IsLockError(3022), "Lock errors not told apart"
+    lockTry = 0
+    Check LockWait(3218, lockTry) And lockTry = 1, "Lock error not retried"
+    Check Not LockWait(3022, lockTry) And lockTry = 1, "Other error retried"
+    lockTry = LOCK_TRIES
+    Check Not LockWait(3260, lockTry), "Retried past LOCK_TRIES"
+    CurrentDb.Execute "CREATE TABLE test_conflict (id LONG PRIMARY KEY, name TEXT(60), qty LONG)"
+    Check KitExecute("INSERT INTO test_conflict VALUES (1, 'start', 1)") = 1, "KitExecute did not report the rows it changed"
+    Check KitExecute("UPDATE test_conflict SET qty = 2 WHERE id = 99") = 0, "KitExecute counted rows it did not change"
+    lockTry = 0: On Error Resume Next: KitExecute "UPDATE no_such_table SET x = 1": lockTry = Err.Number: On Error GoTo 0
+    Check lockTry <> 0, "KitExecute hid a failing query"
+    NewForm "test_conflict", 0, px(300), px(80)
+    Ev F, "OnError"
+    Txt "txtName", "name", 0, 0, px(200), px(30)
+    Txt "txtQty", "qty", 0, px(40), px(80), px(30)
+    SaveForm "frmConflict", "testConflict"
+    ' Theirs wins (No): another save lands while the form is changed; the
+    ' form's save is refused and it shows the saved record.
+    DoCmd.OpenForm "frmConflict"
+    Set cf = Forms("frmConflict")
+    cf.txtName = "mine"
+    CurrentDb.Execute "UPDATE test_conflict SET name = 'theirs' WHERE id = 1", dbFailOnError
+    SetConflictAnswer vbNo
+    saved = KitSaveRecord(cf)
+    Check Not saved And Not cf.Dirty And cf.txtName = "theirs", "Write conflict: No did not show the other user's record"
+    Check DLookup("name", "test_conflict", "id=1") = "theirs", "Write conflict: No overwrote the other user's save"
+    ' Mine wins (Yes): the change goes back on top of their record and saves.
+    cf.txtName = "mine again"
+    CurrentDb.Execute "UPDATE test_conflict SET qty = 7 WHERE id = 1", dbFailOnError
+    SetConflictAnswer vbYes
+    saved = KitSaveRecord(cf)
+    Check Not saved And cf.Dirty And cf.txtName = "mine again" And cf.txtQty = 7, "Write conflict: Yes did not keep the change over the saved record"
+    Check KitSaveRecord(cf), "Record not saved after keeping the change"
+    Check DLookup("name", "test_conflict", "id=1") = "mine again" And DLookup("qty", "test_conflict", "id=1") = 7, "Kept change lost the other user's field"
+    Check KitSaveRecord(cf), "Unchanged record not reported saved"
+    SetConflictAnswer 0
+    DoCmd.Close acForm, "frmConflict", acSaveNo
     g_Silent = False
     TestKit = checks & " kit checks passed"
 End Function
