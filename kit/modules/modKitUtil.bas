@@ -28,6 +28,16 @@ End Type
 
 Private Declare PtrSafe Function GetWindowRect Lib "user32" (ByVal hWnd As LongPtr, lpRect As RECT) As Long
 Private Declare PtrSafe Function IsIconic Lib "user32" (ByVal hWnd As LongPtr) As Long
+Private Declare PtrSafe Function OpenClipboard Lib "user32" (ByVal hWnd As LongPtr) As Long
+Private Declare PtrSafe Function EmptyClipboard Lib "user32" () As Long
+Private Declare PtrSafe Function SetClipboardData Lib "user32" (ByVal uFormat As Long, ByVal hMem As LongPtr) As LongPtr
+Private Declare PtrSafe Function CloseClipboard Lib "user32" () As Long
+Private Declare PtrSafe Sub Sleep Lib "kernel32" (ByVal ms As Long)
+Private Declare PtrSafe Function GlobalAlloc Lib "kernel32" (ByVal uFlags As Long, ByVal dwBytes As LongPtr) As LongPtr
+Private Declare PtrSafe Function GlobalLock Lib "kernel32" (ByVal hMem As LongPtr) As LongPtr
+Private Declare PtrSafe Function GlobalUnlock Lib "kernel32" (ByVal hMem As LongPtr) As Long
+Private Declare PtrSafe Function GlobalFree Lib "kernel32" (ByVal hMem As LongPtr) As LongPtr
+Private Declare PtrSafe Sub CopyMemoryW Lib "kernel32" Alias "RtlMoveMemory" (ByVal Destination As LongPtr, ByVal Source As LongPtr, ByVal Length As LongPtr)
 Private Declare PtrSafe Function MonitorFromWindow Lib "user32" (ByVal hWnd As LongPtr, ByVal dwFlags As Long) As LongPtr
 Private Declare PtrSafe Function GetMonitorInfo Lib "user32" Alias "GetMonitorInfoW" ( _
     ByVal hMonitor As LongPtr, lpmi As MONITORINFO) As Long
@@ -261,4 +271,30 @@ Public Function CenteredStart(ByVal lo As Long, ByVal hi As Long, ByVal size As 
     If p + size > workHi Then p = workHi - size
     If p < workLo Then p = workLo
     CenteredStart = p
+End Function
+
+' Put s on the clipboard as text (a Copy button). True when it is there;
+' False when another program kept the clipboard (the caller says so).
+Public Function KitCopyText(ByVal s As String) As Boolean
+    Const CF_UNICODETEXT As Long = 13, GMEM_MOVEABLE As Long = 2, TRIES As Long = 20
+    Dim hMem As LongPtr, p As LongPtr, n As LongPtr, i As Long, opened As Boolean
+    n = (Len(s) + 1) * 2
+    hMem = GlobalAlloc(GMEM_MOVEABLE, n)
+    If hMem = 0 Then Exit Function
+    p = GlobalLock(hMem)
+    If p = 0 Then GlobalFree hMem: Exit Function
+    CopyMemoryW p, StrPtr(s & vbNullChar), n
+    GlobalUnlock hMem
+    ' Another program (a remote desktop's clipboard sync, a clipboard
+    ' manager) can hold the clipboard for a moment: try for about a second,
+    ' letting Windows run between tries so it can let go.
+    For i = 1 To TRIES
+        If OpenClipboard(Application.hWndAccessApp) <> 0 Then opened = True: Exit For
+        DoEvents
+        Sleep 50
+    Next
+    If Not opened Then GlobalFree hMem: Exit Function
+    EmptyClipboard
+    If SetClipboardData(CF_UNICODETEXT, hMem) = 0 Then GlobalFree hMem Else KitCopyText = True   ' Windows owns it once set
+    CloseClipboard
 End Function

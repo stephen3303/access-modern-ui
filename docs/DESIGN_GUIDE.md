@@ -35,6 +35,8 @@ app that shows every builder working.
   `Personnel_be.accdb` in its own restricted folder (`modPersonnel`), never in an app's data
   file. Apps link to it, sign the Windows user in with no questions, and keep only their own
   roles, linked by `person_id`. No SSN or DoD ID.
+  `KitPersonnelStart` at startup finds or sets up the file and signs the user in;
+  `KitPersonnelSignOut` behind the Sign out button shows the sign-in screen for the next person.
 - **Keep the kit separate from the app.** Reusable modules go in `kit/`. App modules go in
   `src/` and provide a few named hooks the kit calls.
 

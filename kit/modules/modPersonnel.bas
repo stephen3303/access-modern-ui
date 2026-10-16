@@ -280,6 +280,35 @@ Public Function PersonnelNeedsPassword(ByVal username As String) As Boolean
     PersonnelNeedsPassword = (Len(Nz(DLookup("password_hash", PERSON_TABLE, crit), "")) = 0)
 End Function
 
+' The person_id of an active person with sign-in name username, or 0.
+Public Function PersonIdFor(ByVal username As String) As Long
+    PersonIdFor = Nz(DLookup("person_id", PERSON_TABLE, "is_active AND username=" & SqlText(Trim$(username))), 0)
+End Function
+
+' True when the Windows account running Access is username's saved account,
+' which proves who they are, so they may choose their first app password
+' themselves. Anyone else needs a Personnel admin to set it.
+Public Function PersonnelCanSetFirstPassword(ByVal username As String) As Boolean
+    Dim rs As DAO.Recordset
+    If Len(WinAccount()) = 0 Or Not PersonnelNeedsPassword(username) Then Exit Function
+    Set rs = CurrentDb.OpenRecordset("SELECT windows_account, windows_sid FROM " & PERSON_TABLE & _
+        " WHERE username=" & SqlText(Trim$(username)), dbOpenSnapshot)
+    ' The same proof as PersonnelSignInWindows: a saved SID must match (the
+    ' DOMAIN\user name may since belong to someone else); the account name
+    ' counts only while no SID is saved.
+    If Not IsNull(rs!windows_sid) Then
+        PersonnelCanSetFirstPassword = (Len(WinSid()) > 0 And StrComp(rs!windows_sid, WinSid(), vbTextCompare) = 0)
+    Else
+        PersonnelCanSetFirstPassword = (StrComp(Nz(rs!windows_account, ""), WinAccount(), vbTextCompare) = 0)
+    End If
+    rs.Close
+End Function
+
+' True when the Windows account running Access is saved for any person.
+Public Function WindowsAccountKnown() As Boolean
+    If Len(WinAccount()) > 0 Then WindowsAccountKnown = Not IsNull(DLookup("person_id", PERSON_TABLE, "windows_account=" & SqlText(WinAccount())))
+End Function
+
 ' Set a person's app password (salted hash). Returns "" or why the password
 ' is refused.
 Public Function PersonnelSetPassword(ByVal personId As Long, ByVal password As String) As String
