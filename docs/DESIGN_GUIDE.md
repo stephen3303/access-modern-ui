@@ -36,7 +36,10 @@ app that shows every builder working.
   file. Apps link to it, sign the Windows user in with no questions, and keep only their own
   roles, linked by `person_id`. No SSN or DoD ID.
   `KitPersonnelStart` at startup finds or sets up the file and signs the user in;
-  `KitPersonnelSignOut` behind the Sign out button shows the sign-in screen for the next person.
+  `KitPersonnelSignOut` behind the Sign out button shows the sign-in screen for the next person,
+  and `KitPersonnelManage` opens the Personnel page for admins. Give each site its own
+  Personnel key (`TempVars("PersonnelKey")`): the kit's default is public, so on SIPRNet the
+  folder permissions and a site key are what protect the file.
 - **Keep the kit separate from the app.** Reusable modules go in `kit/`. App modules go in
   `src/` and provide a few named hooks the kit calls.
 

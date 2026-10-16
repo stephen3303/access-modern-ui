@@ -112,17 +112,29 @@ End Function
 
 ' s with the characters Windows refuses in file names, and "#" (which
 ' breaks FollowHyperlink), replaced by "_", trimmed; "file" when nothing is
-' left.
+' left. Line breaks and tabs (a subject typed in a multi-line box) become
+' spaces, other control characters "_". A name Windows reserves for a
+' device (CON, NUL, COM1, LPT1 ...), with or without an extension, gets "_"
+' in front.
 Public Function KitSafeFileName(ByVal s As String) As String
-    Dim ch As Variant
+    Dim ch As Variant, i As Long, base As String
     For Each ch In Array("\", "/", ":", "*", "?", """", "<", ">", "|", "#")
         s = Replace(s, ch, "_")
     Next
+    s = Replace(Replace(Replace(Replace(s, vbCrLf, " "), vbCr, " "), vbLf, " "), vbTab, " ")
+    For i = 1 To 31
+        s = Replace(s, Chr$(i), "_")
+    Next
+    Do While InStr(s, "  ") > 0
+        s = Replace(s, "  ", " ")
+    Loop
     s = Trim$(s)
     Do While Right$(s, 1) = "."                 ' Windows drops a trailing dot
         s = Left$(s, Len(s) - 1)
     Loop
     If Len(s) = 0 Then s = "file"
+    base = UCase$(Trim$(Split(s, ".")(0)))
+    If base = "CON" Or base = "PRN" Or base = "AUX" Or base = "NUL" Or base Like "COM[1-9]" Or base Like "LPT[1-9]" Then s = "_" & s
     KitSafeFileName = s
 End Function
 

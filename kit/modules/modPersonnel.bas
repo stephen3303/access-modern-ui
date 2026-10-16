@@ -129,12 +129,13 @@ End Sub
 ' Returns the admin's person_id.
 Public Function CreatePersonnelFile(ByVal path As String, ByVal appCode As String, ByVal firstName As String, _
         ByVal lastName As String, Optional ByVal rank As String = "") As Long
-    Dim db As DAO.Database, n As Long, d As String, src As String
+    Dim db As DAO.Database, n As Long, d As String, src As String, made As Boolean, v As Variant
     On Error GoTo Fail
     If Len(PersonnelPath()) > 0 Then Err.Raise 5, "modPersonnel", "A Personnel file is already linked: " & PersonnelPath()
     If FileExists(path) Then Err.Raise 5, "modPersonnel", "A file already exists at " & path & "."
     EnsureFolder Left$(path, InStrRev(path, "\") - 1)
     Set db = DBEngine.CreateDatabase(path, dbLangGeneral & ";pwd=" & PersonnelKey())
+    made = True
     CreatePersonnelTables db
     db.Close
     Set db = Nothing
@@ -144,13 +145,19 @@ Public Function CreatePersonnelFile(ByVal path As String, ByVal appCode As Strin
     SetPersonApp CreatePersonnelFile, appCode, True
     Exit Function
 Fail:
-    If Not db Is Nothing Then
-        n = Err.Number: d = Err.Description: src = Err.Source        ' Close resets Err
-        On Error Resume Next
-        db.Close
-        On Error GoTo 0
-        Err.Number = n: Err.Description = d: Err.Source = src
+    ' Take back a half-made file and its links, so a second try isn't
+    ' refused as "already linked" with no admin in the file.
+    n = Err.Number: d = Err.Description: src = Err.Source        ' Close resets Err
+    On Error Resume Next
+    If Not db Is Nothing Then db.Close
+    If made Then
+        For Each v In Array(PERSON_APP_TABLE, PERSON_TABLE)
+            If StrComp(KitBackendPath(CStr(v)), path, vbTextCompare) = 0 Then CurrentDb.TableDefs.Delete v
+        Next
+        Kill path
     End If
+    On Error GoTo 0
+    Err.Number = n: Err.Description = d: Err.Source = src
     RaiseAgain "modPersonnel.CreatePersonnelFile", path
 End Function
 
@@ -352,6 +359,209 @@ End Function
 Public Function SignedInIsAdmin() As Boolean
     On Error Resume Next
     SignedInIsAdmin = Nz(TempVars("PersonIsAdmin"), False)
+End Function
+
+' True when the signed-in person is an active directory admin in the
+' Personnel file now: another admin may have changed them since they
+' signed in. Updates PersonIsAdmin to match.
+Public Function PersonnelIsAdminNow() As Boolean
+    If SignedInPersonID() = 0 Then Exit Function
+    PersonnelIsAdminNow = (DCount("*", PERSON_TABLE, "is_admin AND is_active AND person_id=" & SignedInPersonID()) > 0)
+    TempVars("PersonIsAdmin") = PersonnelIsAdminNow
+End Function
+
+' Raise error 5 unless the signed-in person is an active admin now
+' (PersonnelIsAdminNow). Every change to other people goes through this.
+Public Sub PersonnelRequireAdmin()
+    If Not PersonnelIsAdminNow() Then Err.Raise 5, "modPersonnel", "Only an active Personnel admin can add or change people."
+End Sub
+
+' ---------------------------------------------------------------------------
+' Directory admin (the Personnel page, dlgPersonnel and dlgPerson)
+' ---------------------------------------------------------------------------
+
+' Change a person: AddPerson's fields, plus active. A changed Windows account
+' clears the saved SID, which belonged to the old account. Refused (error 5)
+' when the sign-in name or Windows account is someone else's, when the
+' signed-in admin would take away their own admin or make themselves
+' inactive, or when no active admin would be left.
+Public Sub UpdatePerson(ByVal personId As Long, ByVal firstName As String, ByVal lastName As String, _
+        ByVal rank As String, ByVal windowsAccount As String, ByVal username As String, _
+        ByVal isAdmin As Boolean, ByVal isActive As Boolean, Optional ByVal middleInitial As String = "", _
+        Optional ByVal commandName As String = "", Optional ByVal email As String = "")
+    Dim oldAccount As String, wasAdmin As Boolean, wasActive As Boolean
+    On Error GoTo Fail
+    PersonnelRequireAdmin
+    firstName = Trim$(firstName): lastName = Trim$(lastName)
+    username = Trim$(username): windowsAccount = Trim$(windowsAccount)
+    If Len(firstName) = 0 Or Len(lastName) = 0 Then Err.Raise 5, "modPersonnel", "A person needs a first and last name."
+    If Len(username) = 0 Then Err.Raise 5, "modPersonnel", "A person needs a sign-in name."
+    If Not IsNull(DLookup("person_id", PERSON_TABLE, "username=" & SqlText(username) & " AND person_id<>" & personId)) Then
+        Err.Raise 5, "modPersonnel", "The sign-in name " & username & " is already used."
+    End If
+    If Len(windowsAccount) > 0 Then
+        If Not IsNull(DLookup("person_id", PERSON_TABLE, "windows_account=" & SqlText(windowsAccount) & " AND person_id<>" & personId)) Then
+            Err.Raise 5, "modPersonnel", "The Windows account " & windowsAccount & " is already someone's."
+        End If
+    End If
+    If personId = SignedInPersonID() Then
+        If Not isActive Then Err.Raise 5, "modPersonnel", "You can't make yourself inactive."
+        If SignedInIsAdmin() And Not isAdmin Then Err.Raise 5, "modPersonnel", "You can't take away your own admin access."
+    End If
+    If Not (isAdmin And isActive) Then
+        If DCount("*", PERSON_TABLE, "is_admin AND is_active AND person_id<>" & personId) = 0 Then
+            Err.Raise 5, "modPersonnel", "Personnel needs at least one active admin. Make someone else an admin first."
+        End If
+    End If
+    oldAccount = Nz(DLookup("windows_account", PERSON_TABLE, "person_id=" & personId), "")
+    wasAdmin = Nz(DLookup("is_admin", PERSON_TABLE, "person_id=" & personId), False)
+    wasActive = Nz(DLookup("is_active", PERSON_TABLE, "person_id=" & personId), False)
+    KitExecute "UPDATE " & PERSON_TABLE & " SET username=" & SqlText(username) & ", rank=" & SqlOrNull(rank) & _
+        ", first_name=" & SqlText(firstName) & ", middle_initial=" & SqlOrNull(Left$(Trim$(middleInitial), 1)) & _
+        ", last_name=" & SqlText(lastName) & ", display_name=" & SqlText(PersonDisplayName(rank, firstName, lastName)) & _
+        ", command=" & SqlOrNull(commandName) & ", email=" & SqlOrNull(email) & _
+        ", windows_account=" & SqlOrNull(windowsAccount) & _
+        IIf(StrComp(oldAccount, windowsAccount, vbTextCompare) <> 0, ", windows_sid=Null", "") & _
+        ", is_admin=" & IIf(isAdmin, "True", "False") & ", is_active=" & IIf(isActive, "True", "False") & _
+        ", " & StampSql() & " WHERE person_id=" & personId
+    ' Two admins demoting each other from two front ends can both pass the
+    ' check above. Look again now the change is saved, and put this row's
+    ' admin and active back if nobody is left: at worst both keep admin.
+    If Not (isAdmin And isActive) Then
+        If DCount("*", PERSON_TABLE, "is_admin AND is_active") = 0 Then
+            KitExecute "UPDATE " & PERSON_TABLE & " SET is_admin=" & IIf(wasAdmin, "True", "False") & _
+                ", is_active=" & IIf(wasActive, "True", "False") & " WHERE person_id=" & personId
+            Err.Raise 5, "modPersonnel", "Personnel needs at least one active admin. Make someone else an admin first."
+        End If
+    End If
+    Exit Sub
+Fail:
+    RaiseAgain "modPersonnel.UpdatePerson", CStr(personId)
+End Sub
+
+' Row source for the Personnel page's list: everyone whose name, rank,
+' sign-in name or Windows account contains term, by last name. Columns:
+' person_id (hidden), Name, Sign-in name, Windows account, whether they may
+' open appCode, and Admin / Active / Inactive.
+Public Function PersonnelPeopleSql(ByVal term As String, ByVal appCode As String) As String
+    Dim where As String
+    term = Trim$(term)
+    If Len(term) > 0 Then
+        where = " WHERE (p.last_name & ', ' & p.first_name & ' ' & Nz(p.rank,'') & ' ' & p.username & ' ' & " & _
+            "Nz(p.windows_account,'')) Like " & SqlText("*" & LikeText(term) & "*")
+    End If
+    PersonnelPeopleSql = "SELECT p.person_id, p.last_name & ', ' & p.first_name & IIf(p.rank Is Null, '', ' (' & p.rank & ')') AS [Name], " & _
+        "p.username AS [Sign-in name], p.windows_account AS [Windows account], " & _
+        "IIf(a.is_active, 'Yes', 'No') AS [Can open], " & _
+        "IIf(Not p.is_active, 'Inactive', IIf(p.is_admin, 'Admin', 'Active')) AS [Status] " & _
+        "FROM " & PERSON_TABLE & " AS p LEFT JOIN (SELECT person_id, is_active FROM " & PERSON_APP_TABLE & _
+        " WHERE app_code=" & SqlText(appCode) & ") AS a ON p.person_id = a.person_id" & where & _
+        " ORDER BY p.last_name, p.first_name"
+End Function
+
+' Add the people in a CSV or Excel file (.csv, .xlsx, .xls; first row is the
+' headers) and let them open appCode. Headers in any order and case, with
+' spaces and underscores ignored (First name, first_name): First name and
+' Last name are needed; Middle initial, Rank, Command, Email, Sign-in name
+' (or Username) and Windows account are used when there. A row that can't be
+' added (no name, or a sign-in name or Windows account already used) is
+' skipped. Returns what happened, for a message.
+Public Function PersonnelImport(ByVal path As String, ByVal appCode As String) As String
+    Dim rows As Collection, row As Variant, n As Long, added As Long, skipped As Long, why As String, problem As String
+    On Error GoTo Fail
+    PersonnelRequireAdmin
+    Set rows = ImportRows(path)
+    For Each row In rows
+        n = n + 1
+        problem = ImportPerson(row, appCode)
+        If Len(problem) = 0 Then
+            added = added + 1
+        Else
+            skipped = skipped + 1
+            If skipped <= 5 Then why = why & vbCrLf & "- Row " & (n + 1) & ": " & problem   ' row 1 is the headers
+        End If
+    Next
+    If n = 0 Then PersonnelImport = "That file has no people in it.": Exit Function
+    PersonnelImport = "Added " & added & IIf(added = 1, " person", " people") & "."
+    If skipped > 0 Then
+        PersonnelImport = PersonnelImport & " Skipped " & skipped & ":" & why
+        If skipped > 5 Then PersonnelImport = PersonnelImport & vbCrLf & "- and " & (skipped - 5) & " more"
+    End If
+    Exit Function
+Fail:
+    RaiseAgain "modPersonnel.PersonnelImport", path
+End Function
+
+' The file's rows as dictionaries keyed by header with spaces, underscores
+' and hyphens taken out ("firstname"). Error 5 for a file type it can't read.
+Private Function ImportRows(ByVal path As String) As Collection
+    Const TMP As String = "zz_personnel_import"
+    Dim out As New Collection, d As Object, src As Variant, k As Variant, ext As String
+    Dim rs As DAO.Recordset, fld As DAO.Field
+    On Error GoTo Fail
+    ext = LCase$(Mid$(path, InStrRev(path, ".") + 1))
+    Select Case ext
+    Case "csv"
+        For Each src In ReadCsvDicts(path)
+            Set d = CreateObject("Scripting.Dictionary")
+            For Each k In src.Keys
+                d(HeaderKey(k)) = Trim$(Nz(src(k), ""))
+            Next
+            out.Add d
+        Next
+    Case "xlsx", "xls"
+        On Error Resume Next                    ' left from an earlier import that failed
+        CurrentDb.TableDefs.Delete TMP
+        On Error GoTo Fail
+        DoCmd.TransferSpreadsheet acImport, IIf(ext = "xls", acSpreadsheetTypeExcel8, acSpreadsheetTypeExcel12Xml), TMP, path, True
+        Set rs = CurrentDb.OpenRecordset(TMP, dbOpenSnapshot)
+        Do Until rs.EOF
+            Set d = CreateObject("Scripting.Dictionary")
+            For Each fld In rs.Fields
+                d(HeaderKey(fld.Name)) = Trim$(Nz(fld.Value, ""))
+            Next
+            out.Add d
+            rs.MoveNext
+        Loop
+        rs.Close
+        CurrentDb.TableDefs.Delete TMP
+    Case Else
+        Err.Raise 5, "modPersonnel", "Import reads .csv, .xlsx or .xls files."
+    End Select
+    Set ImportRows = out
+    Exit Function
+Fail:
+    RaiseAgain "modPersonnel.ImportRows", path
+End Function
+
+' Add one imported row and let them open appCode. "" when added, else why
+' not (AddPerson's refusals).
+Private Function ImportPerson(ByVal d As Object, ByVal appCode As String) As String
+    Dim id As Long, username As String
+    On Error GoTo Fail
+    username = ImportValue(d, "signinname")
+    If Len(username) = 0 Then username = ImportValue(d, "username")
+    id = AddPerson(ImportValue(d, "firstname"), ImportValue(d, "lastname"), ImportValue(d, "rank"), _
+        ImportValue(d, "windowsaccount"), username, False, ImportValue(d, "middleinitial"), _
+        ImportValue(d, "command"), ImportValue(d, "email"))
+    SetPersonApp id, appCode, True
+    Exit Function
+Fail:
+    If Err.Number <> 5 Then RaiseAgain "modPersonnel.ImportPerson"
+    ImportPerson = Err.Description
+End Function
+
+Private Function ImportValue(ByVal d As Object, ByVal key As String) As String
+    If d.Exists(key) Then ImportValue = d(key)
+End Function
+
+Private Function HeaderKey(ByVal s As String) As String
+    HeaderKey = LCase$(Replace(Replace(Replace(Trim$(s), " ", ""), "_", ""), "-", ""))
+End Function
+
+' s with Like's wildcards made literal.
+Private Function LikeText(ByVal s As String) As String
+    LikeText = Replace(Replace(Replace(Replace(s, "[", "[[]"), "*", "[*]"), "?", "[?]"), "#", "[#]")
 End Function
 
 ' ---------------------------------------------------------------------------

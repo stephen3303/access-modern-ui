@@ -21,6 +21,11 @@ Err_Handler:
     LogError "dlgSignIn.Form_Load"
 End Sub
 
+' F1 opens the help on this screen (KitHelp).
+Public Property Get HelpTopic() As String
+    HelpTopic = "personnel.signin"
+End Property
+
 ' Hide the controls tagged row and move everything under them up by the
 ' space they took, then shrink the dialog by the same amount.
 Private Sub CollapseRow(ByVal row As String)
