@@ -33,6 +33,7 @@ Private Declare PtrSafe Function GetUserNameExW Lib "secur32" (ByVal NameFormat 
 Private Declare PtrSafe Function GetCurrentProcess Lib "kernel32" () As LongPtr
 Private Declare PtrSafe Function OpenProcessToken Lib "advapi32" (ByVal ProcessHandle As LongPtr, ByVal DesiredAccess As Long, TokenHandle As LongPtr) As Long
 Private Declare PtrSafe Function GetTokenInformation Lib "advapi32" (ByVal TokenHandle As LongPtr, ByVal TokenInformationClass As Long, TokenInformation As Any, ByVal TokenInformationLength As Long, ReturnLength As Long) As Long
+Private Declare PtrSafe Function LookupAccountSidW Lib "advapi32" (ByVal lpSystemName As LongPtr, ByVal Sid As LongPtr, ByVal Name As LongPtr, cchName As Long, ByVal ReferencedDomainName As LongPtr, cchReferencedDomainName As Long, peUse As Long) As Long
 Private Declare PtrSafe Function ConvertSidToStringSidW Lib "advapi32" (ByVal Sid As LongPtr, StringSid As LongPtr) As Long
 Private Declare PtrSafe Function CloseHandle Lib "kernel32" (ByVal hObject As LongPtr) As Long
 Private Declare PtrSafe Function LocalFree Lib "kernel32" (ByVal hMem As LongPtr) As LongPtr
@@ -74,17 +75,27 @@ Public Function WinComputer() As String
     WinComputer = m_computer
 End Function
 
-'' The full Windows account, DOMAIN\user ("NAVY\jsmith", or "PC-042\jsmith"
-' off a domain), read once from Windows (GetUserNameExW); the USERDOMAIN and
-' USERNAME variables only if Windows doesn't answer. Use this, not
+' The full Windows account, DOMAIN\user ("NAVY\jsmith", or "PC-042\jsmith"
+' off a domain), read once from Windows: GetUserNameExW, else the account
+' of Access's process token (LookupAccountSidW). "" if neither answers;
+' never the USERDOMAIN variable, which anyone can set. Use this, not
 ' WinUser(), to match a person record: two domains can both have a jsmith.
 Public Function WinAccount() As String
-    Dim buf As String, n As Long
+    Dim buf As String, n As Long, tok() As Byte, pSid As LongPtr, nm As String, dom As String, nNm As Long, nDom As Long, use As Long
     If Len(m_account) = 0 Then
         n = 512
         buf = String$(n, vbNullChar)
         If GetUserNameExW(NAME_SAM_COMPATIBLE, StrPtr(buf), n) <> 0 Then m_account = Left$(buf, n)
-        If Len(m_account) = 0 Then m_account = Environ$("USERDOMAIN") & "\" & WinUser()
+    End If
+    If Len(m_account) = 0 Then                  ' e.g. no domain controller in reach
+        pSid = TokenUserSid(tok)
+        If pSid <> 0 Then
+            nNm = 257: nDom = 256
+            nm = String$(nNm, vbNullChar): dom = String$(nDom, vbNullChar)
+            If LookupAccountSidW(0, pSid, StrPtr(nm), nNm, StrPtr(dom), nDom, use) <> 0 Then
+                m_account = Left$(dom, nDom) & "\" & Left$(nm, nNm)
+            End If
+        End If
     End If
     WinAccount = m_account
 End Function
@@ -95,23 +106,16 @@ End Function
 ' answer; there is no environment fallback, since a SID that can be typed
 ' in can't be trusted.
 Public Function WinSid() As String
-    Dim hTok As LongPtr, need As Long, buf() As Byte, pSid As LongPtr, pStr As LongPtr, n As Long
+    Dim tok() As Byte, pSid As LongPtr, pStr As LongPtr, n As Long
     If Len(m_sid) > 0 Then WinSid = m_sid: Exit Function
-    If OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, hTok) = 0 Then Exit Function
-    GetTokenInformation hTok, TOKEN_USER_CLASS, ByVal 0&, 0, need     ' asks the size; fails by design
-    If need > 0 Then
-        ReDim buf(0 To need - 1)
-        If GetTokenInformation(hTok, TOKEN_USER_CLASS, buf(0), need, need) <> 0 Then
-            CopyMemory pSid, buf(0), LenB(pSid)                     ' TOKEN_USER starts with the SID pointer
-            If ConvertSidToStringSidW(pSid, pStr) <> 0 Then
-                n = lstrlenW(pStr)
-                m_sid = String$(n, vbNullChar)
-                CopyMemory ByVal StrPtr(m_sid), ByVal pStr, n * 2
-                LocalFree pStr
-            End If
-        End If
+    pSid = TokenUserSid(tok)
+    If pSid = 0 Then Exit Function
+    If ConvertSidToStringSidW(pSid, pStr) <> 0 Then
+        n = lstrlenW(pStr)
+        m_sid = String$(n, vbNullChar)
+        CopyMemory ByVal StrPtr(m_sid), ByVal pStr, n * 2
+        LocalFree pStr
     End If
-    CloseHandle hTok
     WinSid = m_sid
 End Function
 
@@ -183,6 +187,23 @@ End Function
 ' ---------------------------------------------------------------------------
 ' Helpers
 ' ---------------------------------------------------------------------------
+
+' The SID of the account running Access, from its process token: a
+' pointer into tok (TOKEN_USER), so tok must outlive its use. 0 if Windows
+' doesn't answer.
+Private Function TokenUserSid(tok() As Byte) As LongPtr
+    Dim hTok As LongPtr, need As Long, p As LongPtr
+    If OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, hTok) = 0 Then Exit Function
+    GetTokenInformation hTok, TOKEN_USER_CLASS, ByVal 0&, 0, need     ' asks the size; fails by design
+    If need > 0 Then
+        ReDim tok(0 To need - 1)
+        If GetTokenInformation(hTok, TOKEN_USER_CLASS, tok(0), need, need) <> 0 Then
+            CopyMemory p, tok(0), LenB(p)                          ' TOKEN_USER starts with the SID pointer
+        End If
+    End If
+    CloseHandle hTok
+    TokenUserSid = p
+End Function
 
 ' Set field nm of frm's current record, when its record source has it.
 Private Sub SetField(frm As Form, ByVal nm As String, ByVal v As Variant)
