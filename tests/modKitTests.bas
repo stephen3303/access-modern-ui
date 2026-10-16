@@ -1041,6 +1041,8 @@ Public Function TestKit(ByVal root As String) As String
     fileErr = 0: On Error Resume Next: FileFilterText "CSV file|*.csv|Text": fileErr = Err.Number: On Error GoTo 0
     Check fileErr = 5, "Unpaired file filter not refused"
     Check KitSafeFileName("Q3: a/b *final*?.") = "Q3_ a_b _final__" And KitSafeFileName(" # ") = "_" And KitSafeFileName("...") = "file", "Unsafe file name characters kept"
+    Check KitSafeFileName("Weekly" & vbCrLf & "report" & vbTab & "v2" & Chr$(7)) = "Weekly report v2_" And KitSafeFileName("con.txt") = "_con.txt" And _
+        KitSafeFileName("LPT1") = "_LPT1" And KitSafeFileName("Console") = "Console", "Control characters or device names kept in a file name"
     RememberFolder "test", root & "\some file.csv"
     Check LastFolder("test") = root, "Chosen file's folder not remembered"
     RememberFolder "test", root
