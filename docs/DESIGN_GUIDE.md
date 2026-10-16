@@ -459,7 +459,7 @@ End Sub
   - `PageHeader title, tip`: 15pt bold title at y = 22px, 9pt muted subtitle at
     y = 52px, a "?" tip and a dark-only accent bar the height of the title's text
     (it does not reach the subtitle).
-  - `TitleTip`, `AccentBar`/`DarkOnly`, `TitleBar` (an accent bar sized to a title's
+  - `Banner` (classification; see modKitClassification), `TitleTip`, `AccentBar`/`DarkOnly`, `TitleBar` (an accent bar sized to a title's
     font: cap tops to baseline)
   - `ContextBanner`: inset box with an icon, name, subline and optional pill.
 - **Tables**
@@ -637,6 +637,10 @@ Write app-specific helpers next to the builds that use them. Examples:
 ### 6.5 Application shell
 
 - `frmMain` is a single form containing:
+  - A classification **banner** at the top and bottom (20px, full width, anchored), built
+    with `Banner` and marked by `ApplyBanner` in `Form_Load`. The app's classification
+    (`SetClassification`) also limits which labels a record may carry
+    (`FillClassificationCombo`, `RequireClassification`).
   - A **sidebar** on the left: 200px, collapsible to 60px icons-only, with the collapsed
     state saved in the registry. It contains:
     - The brand icon, name and subtitle.
@@ -1098,6 +1102,7 @@ Fixed colors (never repainted), used for semantic scales:
 - amber 245,158,11
 - red 185,28,28
 - gray 107,114,128 (not evaluated or none)
+- classification banners (`CLR_CLASS_*`): green 0,168,0 UNCLASSIFIED, purple 80,43,133 CUI, blue 0,51,160 CONFIDENTIAL, red 200,16,46 SECRET, orange 255,103,27 TOP SECRET, yellow 252,232,0 TS//SCI, and black 0,0,0 for the text on the last two
 - destructive hover 185,28,28 and pressed 153,27,27
 
 ### 7.4 Palettes shipped

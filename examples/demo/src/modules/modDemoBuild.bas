@@ -399,19 +399,19 @@ Private Sub Build_pgDash()
     SaveForm "pgDash"
 End Sub
 
-' Shell: sidebar with the pages, Folder trust (the kit's trust page) and
-' Appearance, and the page host sfPage.
+' Shell: classification banners (top and bottom), sidebar with the pages,
+' Folder trust (the kit's trust page) and Appearance, and the page host sfPage.
 Private Sub Build_frmMain()
     Dim c As Control, i As Long, pages As Variant, y As Long
-    NewForm "", 0, px(200) + PAGE_W, PAGE_H
+    NewForm "", 0, px(200) + PAGE_W, PAGE_H + px(40)
     Ev F, "OnLoad", "OnTimer", "OnResize", "OnUnload"
     F.Caption = APP_NAME
-    Set c = Box("boxSide", 0, 0, px(200), PAGE_H, CLR_SIDEBAR): Anchor c, 0, 2
-    Lbl "lblBrand", APP_NAME, px(20), px(20), px(160), px(26), 13, True, CLR_WHITE
-    Lbl "lblBrandSub", "access-modern-ui", px(20), px(46), px(160), px(18), 8, False, CLR_NAV_MUTED
-    Box "boxSideLine", px(16), px(76), px(168), px(1), CLR_SIDEBAR_LINE
+    Set c = Box("boxSide", 0, px(20), px(200), PAGE_H, CLR_SIDEBAR): Anchor c, 0, 2
+    Lbl "lblBrand", APP_NAME, px(20), px(40), px(160), px(26), 13, True, CLR_WHITE
+    Lbl "lblBrandSub", "access-modern-ui", px(20), px(66), px(160), px(18), 8, False, CLR_NAV_MUTED
+    Box "boxSideLine", px(16), px(96), px(168), px(1), CLR_SIDEBAR_LINE
     pages = Array("cards|Cards and progress", "tables|Tables", "list|List and detail", "steps|Steps and sections", "dash|Dashboard")
-    y = px(90)
+    y = px(110)
     For i = 0 To UBound(pages)
         Set c = Link("nt_" & Split(pages(i), "|")(0), Split(pages(i), "|")(1), px(12), y, px(176), px(34), _
             "=NavTo(""" & Split(pages(i), "|")(0) & """)", 10, CLR_NAV_FG)
@@ -420,19 +420,21 @@ Private Sub Build_frmMain()
         VCenter c, px(34), 10, True
         y = y + px(38)
     Next
-    Set c = Link("lnkHelp", "Help", px(12), PAGE_H - px(128), px(176), px(34), "=KitHelp()", 10, CLR_NAV_FG)
+    Set c = Link("lnkHelp", "Help", px(12), PAGE_H + px(20) - px(128), px(176), px(34), "=KitHelp()", 10, CLR_NAV_FG)
     c.LeftMargin = px(12)
     VCenter c, px(34), 10, True
     Anchor c, 0, 1
-    Set c = Link("lnkTrust", "Folder trust", px(12), PAGE_H - px(90), px(176), px(34), "=ShowTrustHelp()", 10, CLR_NAV_FG)
+    Set c = Link("lnkTrust", "Folder trust", px(12), PAGE_H + px(20) - px(90), px(176), px(34), "=ShowTrustHelp()", 10, CLR_NAV_FG)
     c.LeftMargin = px(12)
     VCenter c, px(34), 10, True
     Anchor c, 0, 1
-    Set c = Link("lnkAppearance", "Appearance", px(12), PAGE_H - px(52), px(176), px(34), "=DemoAppearance()", 10, CLR_NAV_FG)
+    Set c = Link("lnkAppearance", "Appearance", px(12), PAGE_H + px(20) - px(52), px(176), px(34), "=DemoAppearance()", 10, CLR_NAV_FG)
     c.LeftMargin = px(12)
     VCenter c, px(34), 10, True
     Anchor c, 0, 1
-    Set c = SubF("sfPage", "pgCards", px(200), 0, PAGE_W, PAGE_H): Anchor c, 2, 2
+    Set c = SubF("sfPage", "pgCards", px(200), px(20), PAGE_W, PAGE_H): Anchor c, 2, 2
+    Banner "lblBannerTop", 0, px(200) + PAGE_W
+    Banner "lblBannerBottom", PAGE_H + px(20), px(200) + PAGE_W, vAnchor:=1
     SaveForm "frmMain"
 End Sub
 

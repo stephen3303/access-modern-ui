@@ -59,6 +59,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 | modTrust | Startup check for an untrusted folder: `BuildTrustCheck mainForm` (build step, in place of `StartUpForm`) adds an `AutoExec` macro and `dlgTrust`, a page explaining how to add the folder as a Trusted Location. `TrustNeeded` and `InTrustedLocation` read the Trust Center settings (never change them), `ShowTrustHelp` opens the page. It replaces any `AutoExec` the app has |
 | modKitUtil | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `CenterOnApp`, `SetVisible`, `SetEnabled` |
 | modKitUpdate | `CheckForUpdate current, folder, [advice]`: at startup, tells the user when the release folder's `version.txt` names a newer version (`ReleasedVersion`, `CompareVersions`) |
+| modKitClassification | Classification banner and permitted labels: the app's classification (`SetClassification "SECRET"`, saved in the database; `UNCLASSIFIED` when none is chosen) limits which labels it accepts. `ClassificationMarkings()` lists the commonly used markings (UNCLASSIFIED, FOUO, CUI and its common categories, CONFIDENTIAL, SECRET, TOP SECRET, TS//SCI, with NOFORN/REL variants) in one editable place; `ClassificationPermits(label)`, `PermittedClassifications()`, `FillClassificationCombo cbo` (a label combo box limited to the permitted markings) and `RequireClassification(label)` (a save's check, with a message) enforce the ceiling. `ApplyBanner frm` shows the marking and its fixed color on the form's `lblBanner*` labels (`Banner` in modUIKit builds them). The `CLR_CLASS_*` colors are `FIXED` entries in make_themes.py |
 | modBackdrop | `DimApp`/`UndimApp`: dims the app behind a modal dialog, like a web modal (`RunDialog`, `KitMsgBox` and `KitInputBox` use it) |
 
 ## Starting a new app with the kit
@@ -190,6 +191,7 @@ Control heights and font sizes never scale. `TabStrip` and `LayoutFilterRow` alr
 | `PageHeader title, tip` | Page title with a "?" explanation mark |
 | `TitleTip` | "?" mark placed after any title |
 | `AccentBar` | Left accent bar beside section titles (dark palettes only) |
+| `Banner nm, y, w [, vAnchor]` | Full-width 20px classification banner label, named `lblBanner...`; `ApplyBanner` (modKitClassification) sets its marking and colors at run time. Put one at the top and one at the bottom of the shell |
 | `ContextBanner` | Inset banner showing the current record, with an optional pill |
 
 **Tables and conditional colors**

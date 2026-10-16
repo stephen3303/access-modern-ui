@@ -1785,6 +1785,22 @@ Private Function PillImage(c As Control) As Control
     Set PillImage = im
 End Function
 
+' Classification banner label spanning the form width, 20px tall. It builds
+' showing UNCLASSIFIED; ApplyBanner (modKitClassification) sets the app's
+' marking and colors at run time. Name it "lblBanner..." so ApplyBanner finds
+' it. vAnchor 1 pins it to the bottom of the form (a footer banner).
+Public Function Banner(ByVal nm As String, ByVal y As Long, ByVal w As Long, Optional ByVal vAnchor As Integer = 0, _
+                       Optional ByVal sec As Integer = acDetail) As Control
+    Dim c As Control
+    Set c = Lbl(nm, CLASS_DEFAULT, 0, y, w, px(20), 8, True, ClassificationFore(CLASS_DEFAULT), sec)
+    c.BackStyle = 1
+    c.BackColor = ClassificationBack(CLASS_DEFAULT)
+    c.TextAlign = 2
+    c.FontWeight = 700
+    If Not m_isReport Then Anchor c, 2, vAnchor
+    Set Banner = c
+End Function
+
 ' Blue left accent bar used beside section titles in the dark theme.
 Public Function AccentBar(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal h As Long, _
         Optional ByVal parentCtl As String = "") As Control

@@ -1055,6 +1055,31 @@ Public Function TestKit(ByVal root As String) As String
     Check LastFolder("test") = "", "Missing remembered folder offered"
     DeleteSetting APP_NAME, "Files"
     g_Silent = False
+    ' Classification: the ceiling limits the permitted labels; the banner takes its color.
+    Check KitClassification() = "UNCLASSIFIED", "the default classification is not UNCLASSIFIED"
+    Check ClassificationPermits("UNCLASSIFIED") And Not ClassificationPermits("CUI") And Not ClassificationPermits(""), "UNCLASSIFIED permits more than UNCLASSIFIED labels"
+    SetClassification "secret"
+    Check KitClassification() = "SECRET", "SetClassification did not save the level"
+    Check ClassificationPermits("cui//sp-cti") And ClassificationPermits("SECRET//NOFORN") And Not ClassificationPermits("TOP SECRET") And Not ClassificationPermits("TOP SECRET//SCI"), "SECRET does not permit exactly the labels up to SECRET"
+    Check Not ClassificationPermits("MADE UP") And ClassificationPermits("SECRET//ORCON"), "unknown labels or level suffixes are mishandled"
+    Check UBound(PermittedClassifications()) = 11, "SECRET does not permit 12 of the listed markings"
+    Check ClassificationBack("SECRET") = CLR_CLASS_SECRET And ClassificationFore("SECRET") = CLR_WHITE And ClassificationFore("TOP SECRET//SCI") = CLR_CLASS_DARK_TEXT, "banner colors are wrong"
+    badName = 0
+    On Error Resume Next
+    SetClassification "EXTRA SPECIAL"
+    If Err.Number = 5 Then badName = 1
+    Err.Clear
+    On Error GoTo 0
+    Check badName = 1 And KitClassification() = "SECRET", "an unknown classification was accepted"
+    NewForm "", 0, px(300), px(60)
+    Banner "lblBannerTop", 0, px(300)
+    Banner "lblBannerBottom", px(40), px(300), vAnchor:=1
+    SaveForm "testBanner"
+    DoCmd.OpenForm "testBanner", acDesign
+    ApplyBanner Forms("testBanner")
+    Check Forms("testBanner").Controls("lblBannerTop").Caption = "SECRET" And Forms("testBanner").Controls("lblBannerBottom").BackColor = CLR_CLASS_SECRET, "ApplyBanner did not mark the banners"
+    DoCmd.Close acForm, "testBanner", acSaveNo
+    SetClassification "UNCLASSIFIED"
     TestKit = checks & " kit checks passed"
 End Function
 
