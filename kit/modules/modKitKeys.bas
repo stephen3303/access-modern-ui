@@ -31,9 +31,10 @@ Public Const SHORTCUT_FIND As String = "find"
 Public Sub BuildShortcutKeys(Optional ByVal withHelp As Boolean = True)
     Dim text As String
     text = "Version =196611" & vbCrLf & "ColumnsShown =1" & vbCrLf
-    text = text & KeyMacro("^S", "KitShortcut(""" & SHORTCUT_SAVE & """)")
-    text = text & KeyMacro("^N", "KitShortcut(""" & SHORTCUT_NEW & """)")
-    text = text & KeyMacro("^F", "KitShortcut(""" & SHORTCUT_FIND & """)")
+    ' Single quotes: double quotes inside a macro argument don't survive LoadFromText.
+    text = text & KeyMacro("^S", "KitShortcut('" & SHORTCUT_SAVE & "')")
+    text = text & KeyMacro("^N", "KitShortcut('" & SHORTCUT_NEW & "')")
+    text = text & KeyMacro("^F", "KitShortcut('" & SHORTCUT_FIND & "')")
     If withHelp Then text = text & KeyMacro("{F1}", "KitHelp()")
     WriteAutoKeys text
 End Sub
@@ -132,13 +133,17 @@ Private Function KeyMacro(ByVal key As String, ByVal fn As String) As String
         "    Argument =""" & Replace(fn, """", """""") & """" & vbCrLf & "End" & vbCrLf
 End Function
 
-' frm's Shortcut(action), or False when it has none (438).
+' frm's Shortcut(action), or False when it has none (438, or 2465 for a
+' form whose module lacks it or that has no module).
 Private Function AskShortcut(frm As Object, ByVal action As String) As Boolean
     On Error GoTo NoHandler
     AskShortcut = frm.Shortcut(action)
     Exit Function
 NoHandler:
-    If Err.Number <> 438 Then RaiseAgain "modKitKeys.AskShortcut", frm.Name & " " & action
+    Select Case Err.Number
+        Case 438, 2465
+        Case Else: RaiseAgain "modKitKeys.AskShortcut", frm.Name & " " & action
+    End Select
 End Function
 
 Private Function IsDirty(frm As Object) As Boolean

@@ -1009,6 +1009,20 @@ Public Function TestKit(ByVal root As String) As String
     DoCmd.Close acForm, "frmKeys", acSaveNo
     BuildShortcutKeys
     Check MacroExists("AutoKeys"), "Shortcut macro not written"
+    ' A form with no Shortcut of its own (no module at all), through the macro
+    ' itself as a key press runs it.
+    NewForm "", 0, px(400), px(80)
+    Txt "txtOther", "", 0, 0, px(150), px(30)
+    Txt "txtSearch", "", px(210), 0, px(150), px(30)
+    SaveForm "frmKeysPlain"
+    DoCmd.OpenForm "frmKeysPlain"
+    Forms("frmKeysPlain").SetFocus
+    Forms("frmKeysPlain").txtOther.SetFocus
+    DoCmd.RunMacro "AutoKeys.^F"
+    Check Screen.ActiveControl.Name = "txtSearch", "Ctrl+F (the macro) did not reach the search box of a form without Shortcut"
+    DoCmd.RunMacro "AutoKeys.^S"
+    DoCmd.RunMacro "AutoKeys.^N"
+    DoCmd.Close acForm, "frmKeysPlain", acSaveNo
     g_Silent = False
     TestKit = checks & " kit checks passed"
 End Function
