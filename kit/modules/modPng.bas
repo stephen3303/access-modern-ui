@@ -80,6 +80,68 @@ Fail:
     TogglePng = Null
 End Function
 
+' Slider of wPx x hPx: a 6px track in color track across it, filled in color
+' fill from the left to percent (0-100, Null or text is 0), and a round knob
+' of diameter hPx in color knob with a 2px ring in color fill at that point.
+Public Function SliderPng(ByVal percent As Variant, ByVal fill As Long, ByVal track As Long, ByVal knob As Long, _
+                          ByVal wPx As Long, ByVal hPx As Long) As Variant
+    Dim key As String, path As String, draw As Boolean, v As Double
+    SliderPng = Null
+    If wPx <= hPx Or hPx < 8 Then Exit Function
+    On Error GoTo Fail
+    If IsNumeric(percent) Then v = CDbl(percent)
+    If v < 0 Then v = 0
+    If v > 100 Then v = 100
+    v = Int(v * 10 + 0.5) / 10
+    key = "s_" & Hex6(fill) & "_" & Hex6(track) & "_" & Hex6(knob) & "_" & Replace(CStr(v), ",", ".") & "_" & wPx & "x" & hPx
+    path = ImagePath(key, draw)
+    If draw Then
+        WriteSlider path, fill, track, knob, v / 100, wPx * SCALE_UP, hPx * SCALE_UP
+        Remember key, path
+    End If
+    SliderPng = path
+    Exit Function
+Fail:
+    SliderPng = Null
+End Function
+
+Private Sub WriteSlider(ByVal path As String, ByVal fill As Long, ByVal track As Long, ByVal knob As Long, _
+                        ByVal fraction As Double, ByVal w As Long, ByVal h As Long)
+    Dim raw() As Byte, x As Long, y As Long, i As Long, th As Double, kx As Double, r As Double, bw As Double
+    Dim ta As Double, tc As Long, d As Double, outer As Double, inner As Double, kc As Long, a As Double, c As Long
+    th = 6 * SCALE_UP
+    r = h / 2
+    bw = 2 * SCALE_UP
+    kx = r + (w - h) * fraction
+    ReDim raw(0 To h * (w * 4 + 1) - 1)
+    i = 0
+    For y = 0 To h - 1
+        raw(i) = 0: i = i + 1
+        For x = 0 To w - 1
+            ' the track: a capsule th tall from the first knob center to the last
+            ta = CapsuleCover(x + 0.5 - r + th / 2, y + 0.5 - (h - th) / 2, w - h + th, th, 0)
+            tc = IIf(x + 0.5 <= kx, fill, track)
+            d = Sqr((x + 0.5 - kx) ^ 2 + (y + 0.5 - r) ^ 2)
+            outer = r - d + 0.5
+            If outer < 0 Then outer = 0
+            If outer > 1 Then outer = 1
+            inner = r - bw - d + 0.5
+            If inner < 0 Then inner = 0
+            If inner > 1 Then inner = 1
+            kc = Blend(fill, knob, inner)
+            If outer > 0 Then
+                c = Blend(tc, kc, IIf(ta > 0, outer, 1))
+                a = outer + ta * (1 - outer)
+            Else
+                c = tc: a = ta
+            End If
+            PutPixel raw, i, c, a
+            i = i + 4
+        Next
+    Next
+    WritePng path, w, h, raw
+End Sub
+
 ' Focus ring for a capsule control: the outline of a wPx x hPx capsule, 2px
 ' wide, in clr, transparent inside (modUIKit.Toggle draws it 4px larger than
 ' the track on every side, which leaves a 2px gap).

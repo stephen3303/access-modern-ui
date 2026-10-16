@@ -139,7 +139,7 @@ them, and the shell (`frmMain`) last.
 | modBuildUI, modBuildPages, modBuildPages2 | `Build_<form>` procedures, one per form, grouped by area |
 | modUI | Run-time UI helpers: `NavTo`, badges/pills painting, `ShowTip`, the app's hooks (`BadgeColors`, `StatusVariant`) |
 | modUIKit (kit) | Build-time control builders (section 6) |
-| modKitUI (kit) | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSwitch`, `ToggleFocus`, `SegmentClick`, `SetSegment`, `SegmentValue`, `ShowAlert`, `HideAlert`, `SetBreadcrumb`, `CrumbClick`, `SetStep`, `CurrentStep`, `OpenSection`, `SectionOpen`, `ShowEmpty`, `SearchText`, `SetSearch`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `KitToast`, `KitInputBox`, `CheckRequired`, `SetCount`, `StyleChip` |
+| modKitUI (kit) | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSwitch`, `ToggleFocus`, `SegmentClick`, `SetSegment`, `SegmentValue`, `ShowAlert`, `HideAlert`, `SetBreadcrumb`, `CrumbClick`, `SetStep`, `CurrentStep`, `OpenSection`, `SectionOpen`, `ShowEmpty`, `SearchText`, `SetSearch`, `SetRating`, `RatingValue`, `SetSlider`, `SliderValue`, `KitPopover`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `KitToast`, `KitInputBox`, `CheckRequired`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
 | modGridCols (kit) | Column chooser: `ChooseGridColumns`, `RestoreGridColumns`, `SetGridColumns`, and `BuildColumnsDialog` for `dlgColumns` |
 | modGridFilter (kit) | Header filters: `GridFilter`, `SetGridFilter`, `SetColumnFilter`, `ClearGridFilters`, `GridFilterWhere`, and `BuildFilterDialog` for `dlgFilter` |
@@ -814,6 +814,17 @@ Write app-specific helpers next to the builds that use them. Examples:
   (a filter, nothing created yet), use `EmptyState` rather than a bare label: an icon that
   names the thing, a title saying what is missing, a line saying why or what to do, and a
   button that does it (Clear filters, New item).
+- **Rating**: `Rating` shows and sets a 0 to 5 score as 24px MDL2 stars, filled
+  `CLR_AMBER_500` and outlined `CLR_INPUT_BORDER`; a second click on the value clears it.
+  Use `readOnly` to show a score on table rows.
+- **Slider**: `Slider` picks a number from a short, even range (rows per page, a
+  percentage in steps of 10) where the exact value matters less than its place in the range.
+  The knob is 20px with a 2px `CLR_PRIMARY` ring on a 6px track; show the value at the
+  right with `showValue`. Use a text box for exact or wide-ranging numbers.
+- **Popover**: `KitPopover` explains a field or setting in a sentence or three, next to
+  it, from a muted MDL2 help mark (E9CE) beside the caption. 280px wide, a 10pt bold title,
+  9pt text, up to 8 lines. It closes on a click anywhere or Esc. Keep page-level help in the
+  page title's "?" (`TitleTip`).
 - **Empty states**: a centered muted 10pt label shown in place of an empty list. Hide the
   list's subform while it shows (`SetVisible`): a subform always covers a label.
 - **Toasts** (`KitToast`, `dlgToast`): a 360px borderless pop-up on `CLR_SURFACE` with

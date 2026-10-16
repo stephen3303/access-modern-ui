@@ -102,6 +102,7 @@ Private Sub BuildUserInterface()
     Build_pgTables
     Build_pgList
     Build_subAbout
+    Build_subPrefs
     Build_pgSteps
     Build_pgDash
     Build_dlgAppearance
@@ -112,6 +113,7 @@ Private Sub BuildUserInterface()
     BuildColumnsDialog             ' the kit's dlgColumns, for ChooseGridColumns
     BuildFilterDialog              ' the kit's dlgFilter, for the header funnels (GridFilter)
     BuildMenuDialog                ' the kit's dlgMenu, for KitMenu (the detail card's More button)
+    BuildPopoverDialog             ' the kit's dlgPopover, for KitPopover (the Preferences section's help)
     BuildSplash "frmMain", "access-modern-ui demo"   ' the kit's frmSplash, the startup form
     Build_frmMain
 End Sub
@@ -325,6 +327,27 @@ Private Sub Build_subAbout()
     SaveForm "subAbout"
 End Sub
 
+' The accordion's Preferences section: a stepped Slider with its value, a
+' star Rating, and a help mark that opens a KitPopover. Unbound: the demo
+' keeps no settings.
+Private Sub Build_subPrefs()
+    Dim c As Control, x2 As Long
+    NewForm "", 0, CW() - px(32), px(112)
+    F.KeyPreview = True                    ' arrow keys move the slider (Form_KeyDown)
+    Ev F, "OnKeyDown"
+    F.Section(acDetail).BackColor = CLR_BG
+    F.Section(acDetail).AlternateBackColor = CLR_BG
+    FieldLbl "lblRows", "ROWS PER PAGE", px(4), px(4), px(140)
+    Set c = Link("lnkRowsHelp", ChrW(&HE9CE), px(112), px(2), px(20), px(20), "=RowsHelp()", 10, CLR_MUTED_FG)
+    c.FontName = "Segoe MDL2 Assets": c.TextAlign = 2: c.ControlTipText = "What is this?"
+    Slider "sldRows", "", px(4), px(30), px(360), 10, 50, 5, "RowsChanged", True
+    x2 = px(420)
+    FieldLbl "lblUseful", "HOW USEFUL IS THIS DEMO?", x2, px(4), px(220)
+    Rating "rtUseful", "", x2, px(28), onChange:="UsefulChanged"
+    Lbl "lblUseful2", "", x2, px(64), px(260), px(20), 9, False, CLR_MUTED_FG
+    SaveForm "subPrefs"
+End Sub
+
 ' Steps and sections: a step indicator (Stepper) in a card with Back and
 ' Next, and an accordion of three sections below it, the first holding the
 ' items table.
@@ -341,7 +364,7 @@ Private Sub Build_pgSteps()
     Set c = Btn("btnBack", "Back", CX + CW() - px(224), y + px(116), px(96), px(28), "outline")
     Set c = Btn("btnNext", "Next", CX + CW() - px(112), y + px(116), px(96), px(28))
     Accordion "acc", CX, y + px(176), CW(), True, "Items|subGridCards|150|open", "About sections|subAbout|56", _
-        "One open at a time|subAbout|56"
+        "Preferences|subPrefs|112"
     SaveForm "pgSteps"
 End Sub
 

@@ -1133,6 +1133,105 @@ Public Function StatTone(ByVal v As Variant, ByVal upIsGood As Boolean) As Long
     StatTone = IIf((CDbl(v) > 0) = upIsGood, 0, 1)
 End Function
 
+' Star rating (a web "rating"): n stars (5 by default) for a number field,
+' filled CLR_AMBER_500 up to the value and outlined CLR_INPUT_BORDER after it.
+' A click on star i sets the value to i; a click on the star already the
+' value clears it to 0, as on most review sites. readOnly:=True builds the
+' stars only, for showing a rating on every row of a continuous form. size is
+' a star's box, 24px by default. onChange names a Public Sub in the form's
+' code-behind called after the user changes it. Parts (i from 1): <nm>_val a
+' hidden text box bound to src (Read Me!<nm>_val or RatingValue), <nm>_s<i>
+' the stars (calculated, so they follow the record) and <nm>_b<i> the
+' transparent buttons over them. Raises error 5 for fewer than 3 or more than
+' 10 stars, and for clickable stars on a continuous form.
+Public Function Rating(ByVal nm As String, ByVal src As String, ByVal x As Long, ByVal y As Long, _
+        Optional ByVal stars As Long = 5, Optional ByVal size As Long = 360, Optional ByVal readOnly As Boolean = False, _
+        Optional ByVal onChange As String = "") As Control
+    Dim c As Control, v As Control, i As Long, e As String, fsize As Integer
+    If stars < 3 Or stars > 10 Then Err.Raise 5, , "Rating " & nm & " takes 3 to 10 stars"
+    If Not readOnly And F.DefaultView <> 0 Then Err.Raise 5, , "Rating " & nm & " can only be read-only on a continuous form"
+    Set v = Mk(acTextBox, nm & "_val", x, y, px(13), px(13), acDetail, "")
+    If Len(src) > 0 Then v.ControlSource = src Else v.DefaultValue = "0"
+    v.Visible = False: v.TabStop = False
+    v.Tag = CStr(stars)
+    e = "Nz([" & nm & "_val],0)"
+    fsize = CInt((size \ 15) * 0.55 + 0.5)
+    For i = 1 To stars
+        Set c = RO(nm & "_s" & i, "=IIf(" & e & ">=" & i & ",ChrW(59189),ChrW(59188))", x + (i - 1) * size, y, size, size, _
+            fsize, False, CLR_INPUT_BORDER)
+        c.FontName = "Segoe MDL2 Assets": c.TextAlign = 2
+        VCenter c, size, fsize, True
+        CF c, e & ">=" & i, -1, CLR_AMBER_500
+        If Not readOnly Then
+            Set c = Mk(acCommandButton, nm & "_b" & i, x + (i - 1) * size, y, size, size, acDetail, "")
+            c.Transparent = True
+            c.Tag = onChange
+            c.ControlTipText = i & IIf(i = 1, " star", " stars")
+            c.OnClick = "=RatingClick([Form],""" & nm & """," & i & ")"
+        End If
+    Next
+    Set Rating = v
+End Function
+
+' Stepped slider (a web range input): a 6px track filled CLR_PRIMARY up to
+' the value, with a CLR_SURFACE knob ringed in CLR_PRIMARY on it (SliderPng),
+' for a number field from minV to maxV in steps of stepV (2 to 41 steps). A
+' click anywhere on the track moves the knob to the nearest step. showValue
+' adds the value at the right, 48px wide (fmt formats it, "0%" for a 0-1
+' range). onChange names a Public Sub in the form's code-behind, called after
+' the user changes it. The steps are transparent buttons, so arrow keys need
+' the form's own KeyDown: call SliderStep there. Parts: <nm>_val a hidden text
+' box bound to src (SliderValue), <nm>_bg the track image, <nm>_ring the focus
+' ring, <nm>_b<i> the steps (i from 0) and <nm>_lbl the value. h is the knob's
+' size, 20px by default. Single forms only (error 5 on a continuous form, and
+' for a bad range or step count).
+Public Function Slider(ByVal nm As String, ByVal src As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, _
+        Optional ByVal minV As Double = 0, Optional ByVal maxV As Double = 100, Optional ByVal stepV As Double = 10, _
+        Optional ByVal onChange As String = "", Optional ByVal showValue As Boolean = False, Optional ByVal fmt As String = "", _
+        Optional ByVal h As Long = 300) As Control
+    Dim c As Control, v As Control, n As Long, i As Long, tw As Long, seg As Double, bx As Long, pct As String
+    If F.DefaultView <> 0 Then Err.Raise 5, , "Slider " & nm & " needs a single-record form"
+    If maxV <= minV Or stepV <= 0 Then Err.Raise 5, , "Slider " & nm & " has a bad range or step"
+    n = CLng((maxV - minV) / stepV) + 1
+    If n < 2 Or n > 41 Or Abs(minV + (n - 1) * stepV - maxV) > stepV / 1000 Then _
+        Err.Raise 5, , "Slider " & nm & " needs 2 to 41 steps that end on its maximum"
+    tw = w
+    If showValue Then tw = w - px(56)
+    Set v = Mk(acTextBox, nm & "_val", x, y, px(13), px(13), acDetail, "")
+    If Len(src) > 0 Then v.ControlSource = src Else v.DefaultValue = Str$(minV)
+    v.Visible = False: v.TabStop = False
+    v.Tag = Str$(minV) & "|" & Str$(maxV) & "|" & Str$(stepV)
+    pct = "(Nz([" & nm & "_val]," & Trim$(Str$(minV)) & ")-(" & Trim$(Str$(minV)) & "))*100/(" & Trim$(Str$(maxV - minV)) & ")"
+    Set c = Mk(acImage, nm & "_ring", x - px(4), y - px(4), tw + px(8), h + px(8), acDetail, "")
+    ImageProps c
+    c.Properties("ControlSource") = "=RingPng(" & CLR_PRIMARY & "," & (tw + px(8)) \ 15 & "," & (h + px(8)) \ 15 & ")"
+    c.Visible = False
+    Set c = Mk(acImage, nm & "_bg", x, y, tw, h, acDetail, "")
+    ImageProps c
+    c.Properties("ControlSource") = "=SliderPng(" & pct & "," & CLR_PRIMARY & "," & CLR_SECONDARY_BG & "," & CLR_SURFACE & "," & _
+        tw \ 15 & "," & h \ 15 & ")"
+    ' Step i's button is centered on its knob position and as wide as a step.
+    seg = (tw - h) / (n - 1)
+    For i = 0 To n - 1
+        bx = x + CLng(h / 2 + i * seg - seg / 2)
+        If i = 0 Then bx = x
+        Set c = Mk(acCommandButton, nm & "_b" & i, bx, y, CLng(IIf(i = 0 Or i = n - 1, seg / 2 + h / 2, seg)), h, acDetail, "")
+        c.Transparent = True
+        c.Tag = onChange
+        c.TabStop = (i = 0)
+        c.ControlTipText = Trim$(Format$(minV + i * stepV, IIf(Len(fmt) > 0, fmt, "General Number")))
+        c.OnClick = "=SliderClick([Form],""" & nm & """," & i & ")"
+        c.OnGotFocus = "=ToggleFocus([Form],""" & nm & """,True)"
+        c.OnLostFocus = "=ToggleFocus([Form],""" & nm & """,False)"
+    Next
+    If showValue Then
+        Set c = RO(nm & "_lbl", "=[" & nm & "_val]", x + tw + px(8), y, px(48), h, 9, True)
+        c.TextAlign = 3
+        If Len(fmt) > 0 Then c.Format = fmt
+    End If
+    Set Slider = v
+End Function
+
 ' Empty state: what a list or page shows when there is nothing in it, as on
 ' the web - a muted icon in a soft circle, a short title, a line or two saying
 ' why and what to do, and an optional button to do it ("No items match. Try
