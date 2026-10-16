@@ -66,15 +66,16 @@ Err_Handler:
     HandleError "pgTables.Chip"
 End Function
 
-Private Sub txtSearch_Change()
+' The search box's handler (SearchBox): filter as the user types.
+Public Sub SearchFor(ByVal text As String)
     On Error GoTo Err_Handler
-    m_search = Nz(Me.txtSearch.Text, "")
+    m_search = text
     RefreshPage
     Me.txtSearch.SetFocus
     Me.txtSearch.SelStart = Len(m_search)
     Exit Sub
 Err_Handler:
-    HandleError "pgTables.txtSearch_Change"
+    HandleError "pgTables.SearchFor"
 End Sub
 
 Private Sub cboCategory_AfterUpdate()

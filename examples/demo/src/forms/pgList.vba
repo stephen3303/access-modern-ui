@@ -112,6 +112,16 @@ Err_Handler:
     HandleError "pgList.btnMore_Click"
 End Sub
 
+' The empty state's button: back to every item.
+Private Sub emptyList_b_Click()
+    On Error GoTo Err_Handler
+    SetSearch Me, "txtSearch", ""
+    Chip 0
+    Exit Sub
+Err_Handler:
+    HandleError "pgList.emptyList_b_Click"
+End Sub
+
 ' The detail panel saved an item: show the change in the list.
 Public Sub ItemSaved(ByVal id As Long)
     Me.sfList.Form.Requery
@@ -132,15 +142,16 @@ Err_Handler:
     HandleError "pgList.Chip"
 End Function
 
-Private Sub txtSearch_Change()
+' The search box's handler (SearchBox): filter as the user types.
+Public Sub SearchFor(ByVal text As String)
     On Error GoTo Err_Handler
-    m_search = Nz(Me.txtSearch.Text, "")
+    m_search = text
     RefreshPage
     Me.txtSearch.SetFocus
     Me.txtSearch.SelStart = Len(m_search)
     Exit Sub
 Err_Handler:
-    HandleError "pgList.txtSearch_Change"
+    HandleError "pgList.SearchFor"
 End Sub
 
 Private Sub btnPrint_Click()
@@ -191,7 +202,7 @@ Private Sub RefreshPage()
     GridHighlight Me.sfList, m_search
     RefreshCounts
     ' ClearDetail's result isn't needed: every caller (Chip, Form_Load, and
-    ' txtSearch_Change, which only runs once the focus has left the panel)
+    ' SearchFor, which only runs once the focus has left the panel)
     ' has already saved the open item.
     If IsNull(SelectFirstRow(Me.sfList)) Then ClearDetail Me, "sfDetail"
     ShowCrumbs
@@ -203,7 +214,7 @@ Private Sub RefreshCounts()
         StyleChip Me("chip" & i), i = m_chip, ItemCount(Status(i), m_search)
     Next
     n = ItemCount(Status(m_chip), m_search)
-    SetVisible Me.lblEmpty, n = 0
+    ShowEmpty Me, "emptyList", n = 0
     ' The empty state shows in place of the list: a subform always covers a
     ' label.
     SetVisible Me.sfList, n > 0

@@ -103,6 +103,7 @@ Private Sub ShowPage(ByVal key As String)
         Case "tables": formName = "pgTables"
         Case "list": formName = "pgList"
         Case "steps": formName = "pgSteps"
+        Case "dash": formName = "pgDash"
         Case Else: key = "cards": formName = "pgCards"
     End Select
     m_page = key
@@ -113,7 +114,7 @@ End Sub
 ' Highlight the current page in the sidebar.
 Private Sub RefreshNav()
     Dim k As Variant
-    For Each k In Array("cards", "tables", "list", "steps")
+    For Each k In Array("cards", "tables", "list", "steps", "dash")
         With Me("nt_" & k)
             .BackStyle = IIf(k = m_page, 1, 0)
             .BackColor = Th(CLR_NAV_ACTIVE_BG)

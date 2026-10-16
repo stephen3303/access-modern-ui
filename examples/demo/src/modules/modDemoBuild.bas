@@ -103,6 +103,7 @@ Private Sub BuildUserInterface()
     Build_pgList
     Build_subAbout
     Build_pgSteps
+    Build_pgDash
     Build_dlgAppearance
     BuildMessageDialog             ' the kit's dlgMessage, for KitMsgBox
     BuildInputDialog               ' the kit's dlgInput, for KitInputBox
@@ -158,12 +159,10 @@ Private Function Chips(ByVal x As Long, ByVal y As Long) As Long
     Chips = x
 End Function
 
-' Search box with a placeholder; its Change event filters as you type.
-Private Sub SearchBox(ByVal x As Long, ByVal y As Long, ByVal w As Long)
-    Dim c As Control
-    Set c = Txt("txtSearch", "", x, y, w, px(28), 9)
-    c.Format = "@;""Search items or owners..."""
-    Ev c, "OnChange"
+' The kit's search box (magnifier, placeholder, clear mark); the page's
+' SearchFor filters as you type.
+Private Sub PageSearch(ByVal x As Long, ByVal y As Long, ByVal w As Long)
+    SearchBox "txtSearch", x, y, w, "SearchFor", "Search items or owners...", px(28)
 End Sub
 
 ' Detail panel form for pgList: one item, editable. The Flagged switch
@@ -261,7 +260,7 @@ Private Sub Build_pgTables()
     TabStrip CX, px(84), CW(), "TabClick", "options|Table options|0", "plain|Default table|0"
     y = px(128)
     x = Chips(CX, y + px(1))
-    SearchBox x + px(10), y, px(220)
+    PageSearch x + px(10), y, px(220)
     Set c = Cbo("cboCategory", "", "(All categories);Engineering;Weapons;Supply;Navigation;Medical", x + px(240), y, px(170), px(28))
     Ev c, "AfterUpdate"
     y = px(170)
@@ -294,13 +293,14 @@ Private Sub Build_pgList()
     Breadcrumb "crumb", CX, px(54), px(620), 3, "CrumbGo", "c0|All items"
     y = px(84)
     x = Chips(CX, y + px(1))
-    SearchBox x + px(10), y, px(220)
+    PageSearch x + px(10), y, px(220)
     y = px(124): h = PAGE_H - y - px(16)
     Card "List", "Items", CX, y, lw, h, , 2, 2
     GridHeaders "hdrList", ListCols(), CX + px(16), y + px(40), w:=ListW() - px(32), sortSf:="sfList"
     Set c = SubF("sfList", "subGridList", CX + px(16), y + px(62), lw - px(32), h - px(78)): Anchor c, 2, 2
-    Set c = Lbl("lblEmpty", "No items match.", CX + px(16), y + px(100), lw - px(32), px(20), 10, False, CLR_MUTED_FG)
-    c.TextAlign = 2: c.Visible = False: Anchor c, 2, 0
+    ' Shown in place of the list when nothing matches (EmptyState).
+    EmptyState "emptyList", CX + px(16), y + px(90), lw - px(32), "E721", "No items match", _
+        "Nothing matches the status and search you picked. Clear them to see every item.", "Clear filters"
     x = CX + lw + px(12)
     Card "Detail", "Details", x, y, DETAIL_W, h, , 1, 2
     ' More: the open item's actions in a dropdown menu (KitMenu).
@@ -345,6 +345,34 @@ Private Sub Build_pgSteps()
     SaveForm "pgSteps"
 End Sub
 
+' Dashboard: four stat tiles (StatTile) over the items, and the flagged items
+' in a card, with an empty state (EmptyState) when none are flagged. The
+' tiles' changes are fixed demo numbers: the demo keeps no history.
+Private Sub Build_pgDash()
+    Dim c As Control, tw As Long, y As Long, h As Long, i As Long
+    Const OPEN_ITEMS As String = "status Not In ('Complete','Cancelled')"
+    NewForm "", 0, PAGE_W, PAGE_H
+    Ev F, "OnLoad"
+    PageHeader "Dashboard", "Stat tiles (StatTile) with change badges, and an empty state (EmptyState) where a list has nothing to show.", CX
+    y = px(84)
+    tw = (CW() - 3 * Sp(SP_CARD_GAP)) \ 4
+    StatTile "statOpen", "Open items", "=DCount(""*"",""demo_item"",""" & OPEN_ITEMS & """)", CX, y, tw, , "=8", _
+        "vs last week (demo)", "E8FD", "#,##0"
+    StatTile "statLate", "Past due", "=DCount(""*"",""demo_item"",""due_date<Date() And " & OPEN_ITEMS & """)", _
+        CX + (tw + Sp(SP_CARD_GAP)), y, tw, , "=-25", "vs last week (demo)", "E823", "#,##0", False
+    StatTile "statDone", "Complete", "=DCount(""*"",""demo_item"",""status='Complete'"")", CX + 2 * (tw + Sp(SP_CARD_GAP)), y, tw, , _
+        "=12", "vs last week (demo)", "E73E", "#,##0"
+    StatTile "statPct", "Average done", "=DAvg(""percent_done"",""demo_item"")/100", CX + 3 * (tw + Sp(SP_CARD_GAP)), y, tw, , _
+        "=0", "no change (demo)", "E8EF", "0%"
+    y = y + px(112) + Sp(SP_CARD_GAP): h = PAGE_H - y - px(16)
+    Card "Flagged", "Flagged for review", CX, y, CW(), h, , 2, 2
+    GridHeaders "hdrFlagged", CardCols(), CX + px(16), y + px(40), w:=CW() - px(32)
+    Set c = SubF("sfFlagged", "subGridCards", CX + px(16), y + px(62), CW() - px(32), h - px(78)): Anchor c, 2, 2
+    EmptyState "emptyFlagged", CX + px(16), y + px(56), CW() - px(32), "E7C1", "Nothing is flagged", _
+        "Flag an item for review on the List and detail page, and it shows here.", "Flag the first item"
+    SaveForm "pgDash"
+End Sub
+
 ' Shell: sidebar with the pages, Folder trust (the kit's trust page) and
 ' Appearance, and the page host sfPage.
 Private Sub Build_frmMain()
@@ -356,7 +384,7 @@ Private Sub Build_frmMain()
     Lbl "lblBrand", APP_NAME, px(20), px(20), px(160), px(26), 13, True, CLR_WHITE
     Lbl "lblBrandSub", "access-modern-ui", px(20), px(46), px(160), px(18), 8, False, CLR_NAV_MUTED
     Box "boxSideLine", px(16), px(76), px(168), px(1), CLR_SIDEBAR_LINE
-    pages = Array("cards|Cards and progress", "tables|Tables", "list|List and detail", "steps|Steps and sections")
+    pages = Array("cards|Cards and progress", "tables|Tables", "list|List and detail", "steps|Steps and sections", "dash|Dashboard")
     y = px(90)
     For i = 0 To UBound(pages)
         Set c = Link("nt_" & Split(pages(i), "|")(0), Split(pages(i), "|")(1), px(12), y, px(176), px(34), _

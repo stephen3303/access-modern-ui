@@ -139,7 +139,7 @@ them, and the shell (`frmMain`) last.
 | modBuildUI, modBuildPages, modBuildPages2 | `Build_<form>` procedures, one per form, grouped by area |
 | modUI | Run-time UI helpers: `NavTo`, badges/pills painting, `ShowTip`, the app's hooks (`BadgeColors`, `StatusVariant`) |
 | modUIKit (kit) | Build-time control builders (section 6) |
-| modKitUI (kit) | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSwitch`, `ToggleFocus`, `SegmentClick`, `SetSegment`, `SegmentValue`, `ShowAlert`, `HideAlert`, `SetBreadcrumb`, `CrumbClick`, `SetStep`, `CurrentStep`, `OpenSection`, `SectionOpen`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `KitToast`, `KitInputBox`, `CheckRequired`, `SetCount`, `StyleChip` |
+| modKitUI (kit) | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSwitch`, `ToggleFocus`, `SegmentClick`, `SetSegment`, `SegmentValue`, `ShowAlert`, `HideAlert`, `SetBreadcrumb`, `CrumbClick`, `SetStep`, `CurrentStep`, `OpenSection`, `SectionOpen`, `ShowEmpty`, `SearchText`, `SetSearch`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `KitToast`, `KitInputBox`, `CheckRequired`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
 | modGridCols (kit) | Column chooser: `ChooseGridColumns`, `RestoreGridColumns`, `SetGridColumns`, and `BuildColumnsDialog` for `dlgColumns` |
 | modGridFilter (kit) | Header filters: `GridFilter`, `SetGridFilter`, `SetColumnFilter`, `ClearGridFilters`, `GridFilterWhere`, and `BuildFilterDialog` for `dlgFilter` |
@@ -800,6 +800,20 @@ Write app-specific helpers next to the builds that use them. Examples:
   destructive actions last, after a separator, as `!Caption` (`CLR_DESTRUCTIVE`), and
   confirm them with `KitMsgBox`; show an action that doesn't apply as disabled (`~key`)
   rather than leaving it out, so the menu keeps its shape. Keep it to about seven items.
+- **Stat tiles**: a dashboard opens with a row of `StatTile`s, 112px tall, sharing the
+  width with `Sp(SP_CARD_GAP)` between them: a 9pt muted label, the 22pt bold value, an
+  MDL2 icon at the top right in `CLR_MUTED_FG`, and below the value a 64 x 20px change
+  badge (success up, destructive down, secondary flat) with an 8pt muted caption saying
+  what it compares with. Use `upIsGood:=False` where a rise is bad (overdue, cost). Four
+  tiles fit a 1000px page; keep labels to two or three words.
+- **Search box**: `SearchBox` is the page's search field: a 28 to 32px frame in the input
+  colors with a magnifier (MDL2 E721) 8px in, the text, and a clear mark (E711) 8px from
+  the right that shows once there is text. Filter as the user types (its handler), and keep
+  the placeholder to what can be searched ("Search items or owners...").
+- **Empty state component**: where a list may be empty for a reason the user can act on
+  (a filter, nothing created yet), use `EmptyState` rather than a bare label: an icon that
+  names the thing, a title saying what is missing, a line saying why or what to do, and a
+  button that does it (Clear filters, New item).
 - **Empty states**: a centered muted 10pt label shown in place of an empty list. Hide the
   list's subform while it shows (`SetVisible`): a subform always covers a label.
 - **Toasts** (`KitToast`, `dlgToast`): a 360px borderless pop-up on `CLR_SURFACE` with

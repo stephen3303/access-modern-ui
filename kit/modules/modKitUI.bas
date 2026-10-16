@@ -1202,6 +1202,77 @@ Public Sub AccordionLayout(frm As Object, ByVal prefix As String)
     frame.Height = y - frame.Top
 End Sub
 
+' Show or hide EmptyState nm (every part), with a new title and text when
+' given ("" keeps the built ones).
+Public Sub ShowEmpty(frm As Form, ByVal nm As String, ByVal isShown As Boolean, _
+        Optional ByVal title As String = "", Optional ByVal text As String = "")
+    Dim s As Variant, c As Control
+    If Len(title) > 0 Then frm.Controls(nm & "_t").Caption = Replace(title, "&", "&&")
+    If Len(text) > 0 Then frm.Controls(nm & "_m").Caption = Replace(text, "&", "&&")
+    For Each s In Array("", "_bg", "_ico", "_t", "_m", "_b")
+        Set c = Nothing
+        On Error Resume Next
+        Set c = frm.Controls(nm & s)
+        On Error GoTo 0
+        If Not c Is Nothing Then SetVisible c, isShown
+    Next
+End Sub
+
+' A SearchBox's typing (set by the builder): show the clear mark once there
+' is text, and call the handler with it.
+Public Function SearchChanged(frm As Form, ByVal nm As String)
+    On Error GoTo Fail
+    SearchNotify frm, nm, Nz(frm.Controls(nm).Text, "")
+    Exit Function
+Fail:
+    HandleError "modKitUI.SearchChanged", nm
+End Function
+
+' A SearchBox's clear mark (set by the builder): empty the box, put the focus
+' back in it and call the handler with "".
+Public Function SearchClear(frm As Form, ByVal nm As String)
+    On Error GoTo Fail
+    frm.Controls(nm).Value = Null
+    frm.Controls(nm).SetFocus
+    SearchNotify frm, nm, ""
+    Exit Function
+Fail:
+    HandleError "modKitUI.SearchClear", nm
+End Function
+
+' A SearchBox's focus (set by the builder): the focus ring is on its frame.
+Public Function SearchFocus(frm As Form, ByVal nm As String, ByVal hasFocus As Boolean)
+    On Error GoTo Fail
+    If hasFocus Then FocusRingClear
+    frm.Controls(nm & "_f").BorderColor = Th(IIf(hasFocus, CLR_PRIMARY, CLR_INPUT_BORDER))
+    Exit Function
+Fail:
+    LogError "modKitUI.SearchFocus", nm
+End Function
+
+' A SearchBox's text: what is typed so far while it has the focus, else its value.
+Public Function SearchText(frm As Form, ByVal nm As String) As String
+    Dim c As Control, act As String
+    Set c = frm.Controls(nm)
+    On Error Resume Next
+    act = frm.ActiveControl.Name            ' error 2474 when none has the focus
+    On Error GoTo 0
+    If act = nm Then SearchText = Nz(c.Text, "") Else SearchText = Nz(c.Value, "")
+End Function
+
+' Put text in a SearchBox in code and call its handler, as typing would.
+Public Sub SetSearch(frm As Form, ByVal nm As String, ByVal text As String)
+    frm.Controls(nm).Value = IIf(Len(text) = 0, Null, text)
+    SearchNotify frm, nm, text
+End Sub
+
+Private Sub SearchNotify(frm As Form, ByVal nm As String, ByVal text As String)
+    Dim handler As String
+    SetVisible frm.Controls(nm & "_x"), Len(text) > 0
+    handler = Nz(frm.Controls(nm & "_f").Tag, "")
+    If Len(handler) > 0 Then CallByName frm, handler, VbMethod, text
+End Sub
+
 ' ---------------------------------------------------------------------------
 ' Messages
 ' ---------------------------------------------------------------------------

@@ -5,6 +5,7 @@ Public toggleChanges As Long
 Public segmentChanges As Long
 Public lastCrumb As String
 Public lastStep As Long
+Public lastSearch As String
 ' A Toggle's onChange (modKitTests).
 Public Sub ToggleChanged()
     toggleChanges = toggleChanges + 1
@@ -20,6 +21,10 @@ End Sub
 ' A Stepper's handler (modKitTests).
 Public Sub StepPicked(ByVal i As Long)
     lastStep = i
+End Sub
+' A SearchBox's handler (modKitTests).
+Public Sub SearchTyped(ByVal text As String)
+    lastSearch = text
 End Sub
 Public Sub GridClick(ByVal grid As String, ByVal dbl As Boolean)
     callbackGrid = grid
