@@ -43,7 +43,7 @@ End Sub
 
 ' F1 opens the help on this screen (KitHelp).
 Public Property Get HelpTopic() As String
-    HelpTopic = "personnel.setup"
+    HelpTopic = "directory.setup"
 End Property
 
 ' Show the controls tagged panel (and the untagged title) at their designed

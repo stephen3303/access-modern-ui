@@ -23,7 +23,7 @@ End Sub
 
 ' F1 opens the help on this screen (KitHelp).
 Public Property Get HelpTopic() As String
-    HelpTopic = "personnel.signin"
+    HelpTopic = "directory.signin"
 End Property
 
 ' Hide the controls tagged row and move everything under them up by the

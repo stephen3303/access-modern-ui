@@ -9,6 +9,23 @@ Option Explicit
 Private m_id As Long            ' 0 while adding
 Private m_saved As Boolean
 
+' Only an active Personnel admin may open this, whoever opens it: the
+' check is against the Personnel file now (PersonnelIsAdminNow). RunDialog
+' treats the cancelled open as not ok. The builder wires OnOpen to this, in
+' place of the usual =ThemeForm([Form]) hook, so it themes the form too.
+Private Sub Form_Open(Cancel As Integer)
+    On Error GoTo Err_Handler
+    ThemeForm Me
+    If Not PersonnelIsAdminNow() Then
+        KitMsgBox "Only an active Personnel admin can add or change people.", vbExclamation
+        Cancel = True
+    End If
+    Exit Sub
+Err_Handler:
+    Cancel = True
+    HandleError "dlgPerson.Form_Open"
+End Sub
+
 Private Sub Form_Load()
     On Error GoTo Err_Handler
     Dim rs As DAO.Recordset
@@ -39,7 +56,7 @@ End Sub
 
 ' F1 opens the help on adding and changing people (KitHelp).
 Public Property Get HelpTopic() As String
-    HelpTopic = "personnel.person"
+    HelpTopic = "directory.person"
 End Property
 
 ' Empty boxes for the next person to add.
@@ -61,6 +78,10 @@ Private Sub btnSave_Click()
     Me.btnSave.SetFocus                         ' commits the box being typed in
     Me.lblError.Caption = ""
     PersonnelRequireAdmin                       ' error 5, shown below, if an admin has since changed them
+    If m_id <> 0 And m_id = SignedInPersonID() And Not Nz(Me.chkApp, False) Then
+        ' Checked before anything is saved; SetPersonApp refuses it too.
+        Me.lblError.Caption = "You can't take away your own access to " & APP_NAME & ".": Exit Sub
+    End If
     pwd = Nz(Me.txtPwd, "")
     If StrComp(pwd, Nz(Me.txtPwd2, ""), vbBinaryCompare) <> 0 Then   ' case matters; <> ignores it here
         Me.lblError.Caption = "The two passwords don't match."

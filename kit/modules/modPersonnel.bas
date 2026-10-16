@@ -193,10 +193,15 @@ Fail:
     RaiseAgain "modPersonnel.AddPerson", firstName & " " & lastName
 End Function
 
-' Give (or take away) a person's access to appCode.
+' Give (or take away) a person's access to appCode. Refused (error 5) when
+' the signed-in person would take away their own access, which would lock
+' the last admin out of the app with no one able to put it back.
 Public Sub SetPersonApp(ByVal personId As Long, ByVal appCode As String, ByVal allowed As Boolean)
     Dim crit As String
     On Error GoTo Fail
+    If Not allowed And personId = SignedInPersonID() Then
+        Err.Raise 5, "modPersonnel", "You can't take away your own access to " & APP_NAME & "."
+    End If
     crit = "person_id=" & personId & " AND app_code=" & SqlText(appCode)
     If IsNull(DLookup("person_id", PERSON_APP_TABLE, crit)) Then
         KitExecute "INSERT INTO " & PERSON_APP_TABLE & " (person_id, app_code, is_active, granted_at, granted_by) VALUES (" & _

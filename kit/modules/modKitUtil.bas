@@ -212,7 +212,8 @@ End Function
 ' Open a modal dialog and report whether it was confirmed. The app behind it
 ' is dimmed while it is open (DimApp, modBackdrop) unless dimBehind is False.
 ' The dim is removed when the dialog closes, and also when it fails to open,
-' before the error goes back to the caller.
+' before the error goes back to the caller. A dialog that cancels its own
+' open in Form_Open (error 2501) ends as not confirmed, with no error.
 Public Function RunDialog(ByVal formName As String, Optional ByVal openArgs As String = "", _
                           Optional ByVal dimBehind As Boolean = True) As Boolean
     Dim dimmed As Boolean, num As Long, desc As String, src As String
@@ -227,6 +228,7 @@ Fail:
     ' UndimApp resets Err, so keep the error to pass it on.
     num = Err.Number: desc = Err.Description: src = Err.Source
     If dimmed Then UndimApp
+    If num = 2501 Then Exit Function            ' the dialog cancelled its own open (Form_Open): not ok
     Err.Number = num: Err.Description = desc: Err.Source = src
     RaiseAgain "modKitUtil.RunDialog", formName
 End Function

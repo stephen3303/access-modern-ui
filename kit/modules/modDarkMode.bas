@@ -86,13 +86,24 @@ End Function
 ' Switch palettes and redraw the app: the main window is reopened on the same
 ' page, which rebuilds every form from its light design.
 Public Sub SetPalette(ByVal i As Long)
-    Dim pg As String
-    Dim frm As Form
+    Dim pg As String, shownTopic As String, reopenHelp As Boolean
+    Dim frm As Form, help As Object
     If i < 1 Or i > PALETTE_COUNT Or i = CurrentPalette() Then Exit Sub
     m_pal = i
     SaveSetting APP_NAME, "UI", "Theme", PaletteKey(i)
-    ' Pop-ups still open keep their contents until reopened, but their title
-    ' bars follow the new palette now (forms opened later get it in ThemeForm).
+    ' The help window (modKitHelp, when the app has it) stays open beside the
+    ' page, so it is closed and opened again on the same topic in the new
+    ' colors. Its form is read late-bound, so apps without help still compile.
+    If IsFormOpen("dlgHelp") Then
+        Set help = Forms("dlgHelp")
+        shownTopic = help.HelpTopic
+        Set help = Nothing
+        DoCmd.Close acForm, "dlgHelp", acSaveNo
+        reopenHelp = True
+    End If
+    ' Other pop-ups still open keep their contents until reopened, but their
+    ' title bars follow the new palette now (forms opened later get it in
+    ' ThemeForm).
     For Each frm In Forms
         ThemeTitleBar frm
     Next
@@ -100,6 +111,7 @@ Public Sub SetPalette(ByVal i As Long)
         pg = Forms("frmMain").PageKey
         Forms("frmMain").Reopen pg
     End If
+    If reopenHelp Then DoCmd.OpenForm "dlgHelp", OpenArgs:=shownTopic
 End Sub
 
 ' Form Open hook (each form's OnOpen is =ThemeForm([Form])).
