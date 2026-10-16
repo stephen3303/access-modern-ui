@@ -1072,6 +1072,17 @@ Public Function TestKit(ByVal root As String) As String
     Check KitRelinkAll(be2) = 2 And KitBackendPath("be_notes") = be2 And DLookup("name", "be_items", "id=1") = "two", "Relink did not move every table"
     Check KitEnsureBackend("be_items", "be_two.accdb"), "Reachable data file not accepted"
     Check KitEnsureBackend("test_rows", "be_two.accdb"), "Local table taken for a lost data file"
+    ' A second, encrypted data file keeps its own links and password when the first moves.
+    Dim be3 As String
+    be3 = root & "\be_pw.accdb"
+    Set beDb = DBEngine.CreateDatabase(be3, dbLangGeneral & ";pwd=kit test")
+    beDb.Execute "CREATE TABLE be_people (id LONG PRIMARY KEY)", dbFailOnError
+    beDb.Close
+    Check KitLinkTables(be3, Array("be_people"), "kit test") = 1 And KitBackendPath("be_people") = be3, "Encrypted data file not linked"
+    Check KitLinkedTables(be2).Count = 2 And KitLinkedTables().Count = 3, "Linked tables not listed per file"
+    Check KitRelinkAll(be1, be2) = 2 And KitBackendPath("be_people") = be3 And DCount("*", "be_people") = 0, "Relink moved another file's tables"
+    Check KitRelinkAll(be2, be1) = 2 And KitRelinkAll(be3, be3) = 1 And DCount("*", "be_people") = 0, "Relink lost the link's password"
+    CurrentDb.TableDefs.Delete "be_people"
     beErr = 0: On Error Resume Next: KitCheckBackendPath "be_one.accdb": beErr = Err.Number: On Error GoTo 0
     Check beErr = 5, "Relative data file path accepted"
     beErr = 0: On Error Resume Next: KitCheckBackendPath CurrentDb.Name: beErr = Err.Number: On Error GoTo 0

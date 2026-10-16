@@ -17,7 +17,9 @@ Option Explicit
 '   msg = KitVersionProblem(beVersion, SCHEMA_VERSION, minBuild, APP_BUILD, advice)
 '   If Len(msg) > 0 Then KitMsgBox msg, vbExclamation: DoCmd.Quit
 '
-' Only links to Access data files (Connect ";DATABASE=...") are touched.
+' Only links to Access data files (Connect ";DATABASE=...") are touched, and
+' a relink moves only the tables linked to the same file as the probe table,
+' so a second linked file (the shared Personnel file) keeps its links.
 
 Private Const DB_PREFIX As String = ";DATABASE="
 
@@ -28,15 +30,19 @@ Public Function KitBackendPath(ByVal probeTable As String) As String
     On Error Resume Next                        ' no such table: ""
     cn = CurrentDb.TableDefs(probeTable).Connect
     On Error GoTo 0
-    If Left$(cn, Len(DB_PREFIX)) = DB_PREFIX Then KitBackendPath = Mid$(cn, Len(DB_PREFIX) + 1)
+    KitBackendPath = ConnectPath(cn)
 End Function
 
-' The tables linked to Access data files, by name.
-Public Function KitLinkedTables() As Collection
-    Dim td As DAO.TableDef
+' The tables linked to Access data files, by name: all of them, or only
+' those linked to bePath.
+Public Function KitLinkedTables(Optional ByVal bePath As String = "") As Collection
+    Dim td As DAO.TableDef, p As String
     Set KitLinkedTables = New Collection
     For Each td In CurrentDb.TableDefs
-        If Left$(td.Connect, Len(DB_PREFIX)) = DB_PREFIX Then KitLinkedTables.Add td.Name
+        p = ConnectPath(td.Connect)
+        If Len(p) > 0 Then
+            If Len(bePath) = 0 Or StrComp(p, bePath, vbTextCompare) = 0 Then KitLinkedTables.Add td.Name
+        End If
     Next
 End Function
 
@@ -55,26 +61,30 @@ Public Sub KitCheckBackendPath(ByVal path As String)
     If Not FileExists(path) Then Err.Raise 5, "modKitBackend", "The data file doesn't exist: " & path
 End Sub
 
-' Point every table linked to an Access data file at bePath, checking the
-' path first (KitCheckBackendPath). Each table keeps its name and source
-' table. Changes nothing, raising error 5, when bePath lacks any of the
+' Point the tables linked to fromPath (every table linked to an Access data
+' file when fromPath is "") at bePath, checking the path first
+' (KitCheckBackendPath). Each table keeps its name, source table and
+' password. Changes nothing, raising error 5, when bePath lacks any of the
 ' source tables. Returns how many tables were relinked.
-Public Function KitRelinkAll(ByVal bePath As String) As Long
+Public Function KitRelinkAll(ByVal bePath As String, Optional ByVal fromPath As String = "") As Long
     Dim db As DAO.Database, nm As Variant, td As DAO.TableDef, be As DAO.Database, missing As String
-    Dim n As Long, d As String, src As String
+    Dim n As Long, d As String, src As String, tables As Collection
     On Error GoTo Fail
     KitCheckBackendPath bePath
     Set db = CurrentDb
-    Set be = DBEngine.OpenDatabase(bePath, False, True)     ' shared, read-only: just to look
-    For Each nm In KitLinkedTables()
+    Set tables = KitLinkedTables(fromPath)
+    If tables.Count = 0 Then Exit Function
+    ' Shared, read-only, with the links' password: just to look.
+    Set be = DBEngine.OpenDatabase(bePath, False, True, ConnectRest(db.TableDefs(tables(1)).Connect))
+    For Each nm In tables
         If Not HasTableDef(be, db.TableDefs(nm).SourceTableName) Then missing = missing & IIf(Len(missing) > 0, ", ", "") & nm
     Next
     be.Close
     Set be = Nothing
     If Len(missing) > 0 Then Err.Raise 5, "modKitBackend", "That data file has no " & missing & " table."
-    For Each nm In KitLinkedTables()
+    For Each nm In tables
         Set td = db.TableDefs(nm)
-        td.Connect = DB_PREFIX & bePath
+        td.Connect = DB_PREFIX & bePath & ConnectRest(td.Connect)
         td.RefreshLink
         KitRelinkAll = KitRelinkAll + 1
     Next
@@ -91,17 +101,11 @@ Fail:
     RaiseAgain "modKitBackend.KitRelinkAll", bePath & " (" & nm & ")"
 End Function
 
-Private Function HasTableDef(db As DAO.Database, ByVal nm As String) As Boolean
-    Dim td As DAO.TableDef
-    For Each td In db.TableDefs
-        If StrComp(td.Name, nm, vbTextCompare) = 0 Then HasTableDef = True: Exit Function
-    Next
-End Function
-
 ' Link tables (an array of names) from bePath, replacing a local or linked
-' table of the same name; the source table has the same name. For the
-' build's link step. Returns how many were linked.
-Public Function KitLinkTables(ByVal bePath As String, ByVal tables As Variant) As Long
+' table of the same name; the source table has the same name. pwd is the
+' file's password, when it is encrypted. For the build's link step.
+' Returns how many were linked.
+Public Function KitLinkTables(ByVal bePath As String, ByVal tables As Variant, Optional ByVal pwd As String = "") As Long
     Dim db As DAO.Database, i As Long, td As DAO.TableDef
     On Error GoTo Fail
     KitCheckBackendPath bePath
@@ -111,7 +115,7 @@ Public Function KitLinkTables(ByVal bePath As String, ByVal tables As Variant) A
         db.TableDefs.Delete tables(i)
         On Error GoTo Fail
         Set td = db.CreateTableDef(tables(i))
-        td.Connect = DB_PREFIX & bePath
+        td.Connect = DB_PREFIX & bePath & IIf(Len(pwd) > 0, ";PWD=" & pwd, "")
         td.SourceTableName = tables(i)
         db.TableDefs.Append td
         KitLinkTables = KitLinkTables + 1
@@ -160,7 +164,7 @@ Public Function KitEnsureBackend(ByVal probeTable As String, ByVal backendFile A
         End If
     End If
     DoCmd.Hourglass True
-    KitRelinkAll candidate
+    KitRelinkAll candidate, KitBackendPath(probeTable)
     DoCmd.Hourglass False
     KitEnsureBackend = KitBackendReachable(probeTable)
     If Not KitEnsureBackend Then KitMsgBox "That file isn't the " & APP_NAME & " data file, or it can't be opened.", vbExclamation
@@ -194,4 +198,33 @@ Public Function KitVersionProblem(ByVal beVersion As Long, ByVal supports As Lon
             "This copy of " & APP_NAME & " is out of date. " & advice
     End If
     KitVersionProblem = msg
+End Function
+
+' ---------------------------------------------------------------------------
+' Helpers
+' ---------------------------------------------------------------------------
+
+Private Function HasTableDef(db As DAO.Database, ByVal nm As String) As Boolean
+    Dim td As DAO.TableDef
+    For Each td In db.TableDefs
+        If StrComp(td.Name, nm, vbTextCompare) = 0 Then HasTableDef = True: Exit Function
+    Next
+End Function
+
+' The file in an Access link's Connect (";DATABASE=path;PWD=..." gives
+' path), or "" for any other kind of link.
+Private Function ConnectPath(ByVal cn As String) As String
+    Dim p As Long
+    If Left$(cn, Len(DB_PREFIX)) <> DB_PREFIX Then Exit Function
+    ConnectPath = Mid$(cn, Len(DB_PREFIX) + 1)
+    p = InStr(ConnectPath, ";")
+    If p > 0 Then ConnectPath = Left$(ConnectPath, p - 1)
+End Function
+
+' What follows the file in an Access link's Connect (";PWD=..."), or "".
+Private Function ConnectRest(ByVal cn As String) As String
+    Dim p As Long
+    If Left$(cn, Len(DB_PREFIX)) <> DB_PREFIX Then Exit Function
+    p = InStr(Len(DB_PREFIX) + 1, cn, ";")
+    If p > 0 Then ConnectRest = Mid$(cn, p)
 End Function
