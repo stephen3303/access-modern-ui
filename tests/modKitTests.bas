@@ -989,6 +989,51 @@ Public Function TestKit(ByVal root As String) As String
     Check DLookup("created_by", "test_stamp", "name='form2'") = "first" And DLookup("updated_by", "test_stamp", "name='form2'") = "second", "Changed record stamp wrong"
     DoCmd.Close acForm, "frmStamp", acSaveNo
     TempVars("Username") = Null
+    ' Keyboard shortcuts (modKitKeys).
+    Dim kf As Form
+    NewForm "SELECT * FROM test_rows ORDER BY id", 0, px(400), px(80)
+    Txt "txtDesc", "description", 0, 0, px(200), px(30)
+    Txt "txtSearch", "", px(210), 0, px(150), px(30)
+    SaveForm "frmKeys", "testKeys"
+    DoCmd.OpenForm "frmKeys"
+    Set kf = Forms("frmKeys")
+    kf.SetFocus
+    kf.txtDesc.SetFocus
+    Check KitShortcut(SHORTCUT_NEW) And kf.lastAction = "new", "Form's own Shortcut not asked"
+    kf.txtDesc = "Saved by Ctrl+S"
+    Check kf.Dirty, "Test record not changed"
+    Check KitShortcut(SHORTCUT_SAVE) And Not kf.Dirty And kf.lastAction = "save", "Ctrl+S did not save the changed record"
+    Check DCount("*", "test_rows", "description='Saved by Ctrl+S'") = 1, "Ctrl+S save not in the table"
+    Check KitShortcut(SHORTCUT_FIND) And Screen.ActiveControl.Name = "txtSearch", "Ctrl+F did not go to the search box"
+    Check Not KitShortcut("nothing"), "Unknown shortcut reported done"
+    DoCmd.Close acForm, "frmKeys", acSaveNo
+    BuildShortcutKeys
+    Check MacroExists("AutoKeys"), "Shortcut macro not written"
+    ' A form with no Shortcut of its own (no module at all), through the macro
+    ' itself as a key press runs it.
+    NewForm "", 0, px(400), px(80)
+    Txt "txtOther", "", 0, 0, px(150), px(30)
+    Txt "txtSearch", "", px(210), 0, px(150), px(30)
+    SaveForm "frmKeysPlain"
+    DoCmd.OpenForm "frmKeysPlain"
+    Forms("frmKeysPlain").SetFocus
+    Forms("frmKeysPlain").txtOther.SetFocus
+    DoCmd.RunMacro "AutoKeys.^F"
+    Check Screen.ActiveControl.Name = "txtSearch", "Ctrl+F (the macro) did not reach the search box of a form without Shortcut"
+    DoCmd.RunMacro "AutoKeys.^S"
+    DoCmd.RunMacro "AutoKeys.^N"
+    DoCmd.Close acForm, "frmKeysPlain", acSaveNo
+    ' A form with no search box: Ctrl+F does nothing, without an error.
+    NewForm "", 0, px(400), px(80)
+    Txt "txtOther", "", 0, 0, px(150), px(30)
+    SaveForm "frmKeysNoSearch"
+    DoCmd.OpenForm "frmKeysNoSearch"
+    Forms("frmKeysNoSearch").SetFocus
+    Forms("frmKeysNoSearch").txtOther.SetFocus
+    DoCmd.RunMacro "AutoKeys.^F"
+    DoCmd.RunMacro "AutoKeys.^S"
+    Check Screen.ActiveControl.Name = "txtOther", "Ctrl+F moved the focus on a form without a search box"
+    DoCmd.Close acForm, "frmKeysNoSearch", acSaveNo
     g_Silent = False
     TestKit = checks & " kit checks passed"
 End Function

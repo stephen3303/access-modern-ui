@@ -92,27 +92,13 @@ Private Sub BadLine(ByVal i As Long, ByVal problem As String, ByVal s As String)
 End Sub
 
 ' Build step: the AutoKeys macro, so F1 opens the kit's help instead of
-' Access's. It replaces any AutoKeys macro the database already has.
+' Access's. It replaces any AutoKeys macro the database already has; an app
+' that also wants the kit's Ctrl+S, Ctrl+N and Ctrl+F calls
+' BuildShortcutKeys (modKitKeys) instead, which keeps F1 for help.
 Public Sub BuildHelpKey()
-    Dim path As String, f As Integer
-    path = Environ$("TEMP") & "\kit_autokeys_" & Format$(Now(), "yyyymmddhhnnss") & ".txt"
-    f = FreeFile
-    Open path For Output As #f
-    Print #f, "Version =196611" & vbCrLf & "ColumnsShown =1" & vbCrLf & "Begin" & vbCrLf & _
+    WriteAutoKeys "Version =196611" & vbCrLf & "ColumnsShown =1" & vbCrLf & "Begin" & vbCrLf & _
         "    MacroName =""{F1}""" & vbCrLf & "    Action =""RunCode""" & vbCrLf & _
-        "    Argument =""KitHelp()""" & vbCrLf & "End" & vbCrLf;
-    Close #f
-    On Error Resume Next
-    DoCmd.DeleteObject acMacro, "AutoKeys"
-    On Error GoTo Fail
-    Application.LoadFromText acMacro, "AutoKeys", path
-    Kill path
-    Exit Sub
-Fail:
-    On Error Resume Next
-    Kill path
-    On Error GoTo 0
-    RaiseAgain "modKitHelp.BuildHelpKey"
+        "    Argument =""KitHelp()""" & vbCrLf & "End" & vbCrLf
 End Sub
 
 ' Build dlgHelp, the help window. Call it once with the app's dialogs.

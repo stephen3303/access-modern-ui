@@ -463,7 +463,7 @@ Private Sub SetStartupOptions()
     SetProp "Perform Name AutoCorrect", dbLong, 0
     SetProp "Track Name AutoCorrect Info", dbLong, 0
     SetProp "AppBuild", dbText, Format$(Now(), "yyyy-mm-dd hh:nn")
-    BuildHelpKey                    ' F1 opens the kit's help (the AutoKeys macro)
+    BuildShortcutKeys               ' Ctrl+S, Ctrl+N, Ctrl+F and F1 (the kit's help), the AutoKeys macro
     HideAccessSplash                ' it writes a file, so a failure leaves the settings above in place
     BuildTrustCheck "frmSplash"     ' after any StartUpForm setting: it removes StartUpForm
 End Sub
