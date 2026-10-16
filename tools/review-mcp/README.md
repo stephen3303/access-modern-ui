@@ -61,7 +61,7 @@ All optional. In the extension they are fields on its settings page; with a conf
 
 | Setting | Environment variable | Default | What it does |
 |---|---|---|---|
-| Capture folder | `ACCESS_REVIEW_OUTPUT` | `%LOCALAPPDATA%\AccessReview` | Where PNGs are saved, in a new time-stamped folder per session. `open_app` can also take `output_dir`. |
+| Capture folder | `ACCESS_REVIEW_OUTPUT` | `%LOCALAPPDATA%\AccessReview` | Full path. Where PNGs are saved, in a new time-stamped folder per session. `open_app` can also take `output_dir`. |
 | Front-end folder | `ACCESS_REVIEW_ALLOWED_FOLDERS` | none (extension: required) | Folders `open_app` may open files from, including subfolders, separated by `;`. Full paths. When unset, any existing file can be opened. |
 | Shared lock files | `ACCESS_REVIEW_LOCKS` | none | Full paths of lock files, separated by `;`, for a PC several reviewers take turns on. `review_lock` takes all or none; with none configured it does nothing. |
 | Palettes | `ACCESS_REVIEW_PALETTES` | `Navy=1;Midnight=2;Teal Navy=6` | Palettes `set_palette` offers, as `name=number`. The number is passed to the palette procedure. The first one is the default: `close_app` switches back to it. A malformed value is ignored with a warning (in the server log, its instructions and each `set_palette` result) and the defaults are used. |
@@ -124,7 +124,7 @@ A capture shows that something moved; a snapshot comparison says which control, 
 2. Rebuild the same front end from the PR, `open_app`, `snapshot` with `label=pr`.
 3. `compare_snapshots` with `before=main`, `after=pr`.
 
-The report lists, per form, `+` for controls added and `-` for controls removed (with their position), and `~ control.Property: before -> after` for each change. Positions and sizes are in 96 dpi px, the kit's `px()` units, and colours are `#RRGGBB`. It is also saved as `snapshots\compare-main-pr.txt`.
+The report lists, per form, `+` for controls added and `-` for controls removed (with their position), and `~ control.Property: before -> after` for each change. Positions and sizes are in 96 dpi px, the kit's `px()` units, and colours are `#RRGGBB`. A form whose snapshot failed on either side is listed with `?` as not compared. The report is also saved as `snapshots\compare main to pr.txt`.
 
 - Properties Access rewrites on every save are ignored: `Checksum`, `GUID`, `NameMap`, `RecSrcDt`, printer settings (`PrtMip`, `PrtDevMode`, `PrtDevNames`), `LayoutCached*`, `OverlapFlags`, and the form's own `Left`, `Top`, `Right` and `Bottom` (where its design window last sat; controls keep theirs).
 - Pictures and other binary values compare by a hash, so a redrawn pill shows as changed without the bytes.
