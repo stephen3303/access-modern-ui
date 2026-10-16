@@ -152,7 +152,7 @@ Private Sub Build_dlgPersonnelSetup()
     y = pad
     Lbl "lblTitle", "Set up the Personnel directory", x, y, w, px(26), 13, True
     y = y + px(26) + gap
-    Set c = Lbl("lblWhy", "", x, y, w, px(72))            ' filled in by Form_Load; 4 lines for a long path
+    Set c = Lbl("lblWhy", "", x, y, w, px(72))            ' filled in and fitted to its text by Form_Load
     c.Tag = "choice"
     ' choice
     y = y + px(72) + gap

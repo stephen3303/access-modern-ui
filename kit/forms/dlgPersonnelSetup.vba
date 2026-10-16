@@ -34,6 +34,7 @@ Private Sub Form_Load()
     End If
     Me.txtFolder = Left$(PersonnelDefaultPath(PersonnelUiAppTable()), InStrRev(PersonnelDefaultPath(PersonnelUiAppTable()), "\") - 1)
     Me.txtAsk = PersonnelAdminNote()
+    FitWhy
     ShowPanel "choice"
     Exit Sub
 Err_Handler:
@@ -69,6 +70,23 @@ Private Sub ShowPanel(ByVal panel As String)
     Next
     FitToPanel panel
     Me.Repaint                                  ' no trace of the last panel's text
+End Sub
+
+' Make lblWhy as tall as its text (two lines usually, four with a long path)
+' and move the choices under it to match. Measured like dlgMessage: 10pt
+' lines, with 10% spare for word breaks.
+Private Sub FitWhy()
+    Dim lines As Long, dy As Long, k As Variant
+    lines = -Int(-(MeasureText(Me.lblWhy.Caption, 10, 400) * 1.1) / Me.lblWhy.Width)
+    If lines < 1 Then lines = 1
+    dy = lines * CLng(10 * 20 * 1.36) + 30 - Me.lblWhy.Height
+    If dy = 0 Then Exit Sub
+    m_fullHeight = m_fullHeight + IIf(dy > 0, dy, 0)
+    Me.Section(acDetail).Height = m_fullHeight
+    Me.lblWhy.Height = Me.lblWhy.Height + dy
+    For Each k In m_tops.Keys
+        If Me.Controls(k).Tag = "choice" And m_tops(k) > m_tops("lblWhy") Then m_tops(k) = m_tops(k) + dy
+    Next
 End Sub
 
 ' Height to the lowest visible control of panel, plus the dialog padding.
