@@ -8,9 +8,11 @@ Option Explicit
 
 ' Only an active Personnel admin may open this, whoever opens it: the
 ' check is against the Personnel file now (PersonnelIsAdminNow). RunDialog
-' treats the cancelled open as not ok.
+' treats the cancelled open as not ok. The builder wires OnOpen to this, in
+' place of the usual =ThemeForm([Form]) hook, so it themes the form too.
 Private Sub Form_Open(Cancel As Integer)
     On Error GoTo Err_Handler
+    ThemeForm Me
     If Not PersonnelIsAdminNow() Then
         KitMsgBox "Only an active Personnel admin can add or change people.", vbExclamation
         Cancel = True

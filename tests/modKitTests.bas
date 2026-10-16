@@ -1248,10 +1248,12 @@ Public Function TestKit(ByVal root As String) As String
     DoCmd.Close acForm, SIGNIN_FORM, acSaveNo
     DoCmd.OpenForm PERSONNEL_FORM
     Set peFrm = Forms(PERSONNEL_FORM)
+    Check peFrm.OnOpen = "[Event Procedure]" And peFrm.lstPeople.Visible, "Personnel page's admin check not wired to Open"
     Check peFrm.lstPeople.ListCount = DCount("*", PERSON_TABLE) + 1 And Not peFrm.lblNone.Visible, "Personnel page doesn't list everyone"
     DoCmd.Close acForm, PERSONNEL_FORM, acSaveNo
     DoCmd.OpenForm PERSON_FORM, , , , , , "new"
     Set peFrm = Forms(PERSON_FORM)
+    Check peFrm.OnOpen = "[Event Procedure]", "Add person's admin check not wired to Open"
     Check peFrm.lblTitle.Caption = "Add person" And peFrm.chkActive And peFrm.chkApp And Not peFrm.chkAdmin And IsNull(peFrm.txtFirst), "Add person didn't open empty"
     DoCmd.Close acForm, PERSON_FORM, acSaveNo
     DoCmd.OpenForm PERSON_FORM, , , , , , CStr(pe2)

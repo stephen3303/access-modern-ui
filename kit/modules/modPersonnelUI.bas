@@ -284,7 +284,7 @@ Private Sub Build_dlgPersonnel()
     pad = Sp(SP_DIALOG)
     x = pad: w = DLG_W - 2 * pad: btnW = px(110): listH = px(340)
     NewDialog "Personnel", DLG_W, px(540)
-    Ev F, "OnLoad"
+    Ev F, "OnLoad", "OnOpen"                 ' Form_Open checks admin and themes the form
     y = pad
     Lbl "lblTitle", "Personnel", x, y, w - px(260), px(26), 13, True
     y = y + px(26) + Sp(16)
@@ -320,7 +320,7 @@ Private Sub Build_dlgPerson()
     pad = Sp(SP_DIALOG): gap = Sp(SP_ROW_GAP)
     x = pad: w = DLG_W - 2 * pad: half = (w - Sp(16)) \ 2: x2 = x + half + Sp(16): btnW = px(96)
     NewDialog "Person", DLG_W, px(640)
-    Ev F, "OnLoad"
+    Ev F, "OnLoad", "OnOpen"                 ' Form_Open checks admin and themes the form
     y = pad
     Lbl "lblTitle", "Add person", x, y, w, px(26), 13, True
     y = y + px(26) + Sp(16)
