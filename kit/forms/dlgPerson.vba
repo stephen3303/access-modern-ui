@@ -78,6 +78,10 @@ Private Sub btnSave_Click()
     Me.btnSave.SetFocus                         ' commits the box being typed in
     Me.lblError.Caption = ""
     PersonnelRequireAdmin                       ' error 5, shown below, if an admin has since changed them
+    If m_id <> 0 And m_id = SignedInPersonID() And Not Nz(Me.chkApp, False) Then
+        ' Checked before anything is saved; SetPersonApp refuses it too.
+        Me.lblError.Caption = "You can't take away your own access to " & APP_NAME & ".": Exit Sub
+    End If
     pwd = Nz(Me.txtPwd, "")
     If StrComp(pwd, Nz(Me.txtPwd2, ""), vbBinaryCompare) <> 0 Then   ' case matters; <> ignores it here
         Me.lblError.Caption = "The two passwords don't match."

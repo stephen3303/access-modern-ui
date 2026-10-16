@@ -1190,6 +1190,8 @@ Public Function TestKit(ByVal root As String) As String
     Check PersonnelSignInWindows("TEST", True) And SignedInIsAdmin(), "Admin not signed in for the admin checks"
     peErr = 0: On Error Resume Next: UpdatePerson peId, "Pat", "O'Neil", "LT", WinAccount(), "poneil", False, True: peErr = Err.Number: On Error GoTo 0
     Check peErr = 5 And DLookup("is_admin", PERSON_TABLE, "person_id=" & peId), "Admin took away their own admin access"
+    peErr = 0: On Error Resume Next: SetPersonApp peId, "TEST", False: peErr = Err.Number: On Error GoTo 0
+    Check peErr = 5 And PersonCanUse(peId, "TEST"), "Admin took away their own access to the app"
     peErr = 0: On Error Resume Next: UpdatePerson pe2, "Ann", "Lee", "YN1", "", DLookup("username", PERSON_TABLE, "person_id=" & peId), False, True: peErr = Err.Number: On Error GoTo 0
     Check peErr = 5, "A person was given someone else's sign-in name"
     UpdatePerson pe2, "Ann", "Lee", "YN1", "TESTDOM\alee", "alee", False, True, "B", "USS Test", "ann.lee@test.mil"
