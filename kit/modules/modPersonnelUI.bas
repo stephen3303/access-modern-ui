@@ -48,8 +48,10 @@ Public Function KitPersonnelStart(ByVal appTable As String, ByVal appCode As Str
         If Not RunDialog(SETUP_FORM) Then Exit Function
         If PersonnelStatus(appTable) <> PERSONNEL_READY Then Exit Function
     End If
-    If SignedInPersonID() > 0 Then                   ' the setup's creator: add the first people
-        RunDialog PERSON_FORM, "new"
+    If SignedInPersonID() > 0 Then
+        ' The setup's creator (the first admin) goes on to add the first people.
+        ' Anyone already signed in otherwise just carries on.
+        If status <> PERSONNEL_READY And PersonnelIsAdminNow() Then RunDialog PERSON_FORM, "new"
         KitPersonnelStart = True
         Exit Function
     End If
