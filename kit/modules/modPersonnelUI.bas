@@ -149,7 +149,8 @@ End Sub
 '           Find the Personnel file, Create a new Personnel file (never while
 '           one is linked), I'm not the admin
 '   create  the first admin's name and rank, the folder (Change opens the
-'           folder picker) and their app password twice
+'           folder picker), the site key (a new random one, filled in) and
+'           their app password twice
 '   ask     what to send the admin, with Copy, and Close app
 Private Sub Build_dlgPersonnelSetup()
     Const DLG_W As Long = 7200          ' 480 px
@@ -194,6 +195,14 @@ Private Sub Build_dlgPersonnelSetup()
     Lbl("lblFolderHint", "Only Personnel admins should be able to change this folder. Ask IT to restrict it.", _
         x, y, w, px(18), 9, False, CLR_MUTED_FG).Tag = "create"
     y = y + px(18) + gap
+    FieldLabel "lblKey", "Site key", x, y, w, "create"
+    y = y + px(18)
+    Txt("txtKey", "", x, y, w, px(30)).Tag = "create"                   ' btnCreate_Click fills in a new random key
+    y = y + px(30) + px(4)
+    Lbl("lblKeyHint", "Locks the Personnel file. It's saved as " & PERSONNEL_KEY_FILE & " in that folder, where every app reads it, " & _
+        "so nobody has to type it. Keep the suggested one unless your site has its own.", _
+        x, y, w, px(32), 9, False, CLR_MUTED_FG).Tag = "create"
+    y = y + px(32) + gap
     FieldLabel "lblPwd", "Your app password", x, y, half, "create"
     FieldLabel "lblPwd2", "Type it again", x + half + Sp(SP_ITEM_GAP), y, half, "create"
     y = y + px(18)

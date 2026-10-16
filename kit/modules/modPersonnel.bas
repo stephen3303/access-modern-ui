@@ -27,13 +27,18 @@ Option Explicit
 ' matches the Windows account (WinSid, then WinAccount) with no questions;
 ' after Sign out, PersonnelSignIn checks a sign-in name and app password.
 '
-' The file's password: PersonnelKey(), the kit's default unless the app sets
-' TempVars("PersonnelKey") before the first call. Every app that shares the
-' file must use the same key. The folder's permissions are the real control:
-' the key travels in each front end's links.
+' The file's password is the site key, chosen by the first admin when they
+' create the file and kept in Personnel.key beside it, never in the code.
+' Every app reads the key from there when it finds or links the file
+' (PersonnelKeyFor). A file made before site keys has no key file and uses
+' the kit's old default key. The folder's permissions are the real control:
+' the key also travels in each front end's links.
 
 Public Const PERSONNEL_FILE As String = "Personnel_be.accdb"
 Public Const PERSONNEL_FOLDER As String = "Personnel"
+Public Const PERSONNEL_KEY_FILE As String = "Personnel.key"
+Public Const PERSONNEL_KEY_MIN As Long = 12
+Public Const PERSONNEL_KEY_MAX As Long = 20       ' an Access database password's limit
 Public Const PERSON_TABLE As String = "kit_person"
 Public Const PERSON_APP_TABLE As String = "kit_person_app"
 
@@ -45,12 +50,52 @@ Public Const PERSONNEL_LOST As Long = 2           ' linked, but the file can't b
 Private Const DEFAULT_KEY As String = "kit-personnel-1"
 Private Const MIN_PASSWORD_LEN As Long = 8
 
-' The Personnel file's password (see the top of the module).
+' The linked Personnel file's password (see the top of the module).
 Public Function PersonnelKey() As String
-    On Error Resume Next                        ' TempVars may be unset
-    PersonnelKey = Nz(TempVars("PersonnelKey"), "")
-    On Error GoTo 0
-    If Len(PersonnelKey) = 0 Then PersonnelKey = DEFAULT_KEY
+    PersonnelKey = PersonnelKeyFor(PersonnelPath())
+End Function
+
+' The password of the Personnel file at path: the first line of the
+' Personnel.key beside it, or the old default key when there is none.
+Public Function PersonnelKeyFor(ByVal path As String) As String
+    Dim kf As String, k As String
+    If InStrRev(path, "\") > 0 Then kf = PersonnelKeyPath(path)
+    If Len(kf) > 0 Then
+        If FileExists(kf) Then
+            k = Replace(ReadTextFile(kf), vbCr, vbLf)
+            If InStr(k, vbLf) > 0 Then k = Left$(k, InStr(k, vbLf) - 1)
+            k = Trim$(k)
+        End If
+    End If
+    If Len(k) = 0 Then k = DEFAULT_KEY
+    PersonnelKeyFor = k
+End Function
+
+' The key file for the Personnel file at path: Personnel.key in its folder.
+Public Function PersonnelKeyPath(ByVal path As String) As String
+    PersonnelKeyPath = Left$(path, InStrRev(path, "\")) & PERSONNEL_KEY_FILE
+End Function
+
+' A new random site key: PERSONNEL_KEY_MAX hex characters.
+Public Function NewPersonnelKey() As String
+    NewPersonnelKey = UCase$(RandomHex(PERSONNEL_KEY_MAX \ 2))
+End Function
+
+' Why key can't be a site key ("" when it can): its length, or a character
+' that would break the file's connection string.
+Public Function PersonnelKeyProblem(ByVal key As String) As String
+    Dim i As Long, ch As String
+    If Len(key) < PERSONNEL_KEY_MIN Or Len(key) > PERSONNEL_KEY_MAX Then
+        PersonnelKeyProblem = "Use " & PERSONNEL_KEY_MIN & " to " & PERSONNEL_KEY_MAX & " characters for the site key."
+        Exit Function
+    End If
+    For i = 1 To Len(key)
+        ch = Mid$(key, i, 1)
+        If AscW(ch) < 33 Or AscW(ch) > 126 Or InStr(";'""[]", ch) > 0 Then
+            PersonnelKeyProblem = "Use letters, digits and punctuation for the site key, with no spaces or ; ' "" [ ]."
+            Exit Function
+        End If
+    Next
 End Function
 
 ' The linked Personnel file, or "" when the tables aren't linked.
@@ -96,15 +141,16 @@ Fail:
 End Function
 
 ' Why path can't be used as the Personnel file ("" when it can): missing,
-' not opening with PersonnelKey(), or without the two tables.
+' not opening with its key (PersonnelKeyFor), or without the two tables.
 Public Function PersonnelFileProblem(ByVal path As String) As String
     Dim db As DAO.Database
     If Not FileExists(path) Then PersonnelFileProblem = "There is no file at " & path & ".": Exit Function
     On Error Resume Next
-    Set db = DBEngine.OpenDatabase(path, False, True, ";PWD=" & PersonnelKey())
+    Set db = DBEngine.OpenDatabase(path, False, True, ";PWD=" & PersonnelKeyFor(path))
     On Error GoTo 0
     If db Is Nothing Then
-        PersonnelFileProblem = "That file can't be opened as the Personnel file. It may be another app's file, or use a different key."
+        PersonnelFileProblem = "That file can't be opened as the Personnel file. It may be another app's file, or its " & _
+            PERSONNEL_KEY_FILE & " may be missing or changed."
         Exit Function
     End If
     If Not (HasTable(db, PERSON_TABLE) And HasTable(db, PERSON_APP_TABLE)) Then
@@ -119,22 +165,32 @@ Public Sub LinkPersonnelFile(ByVal path As String)
     Dim problem As String
     problem = PersonnelFileProblem(path)
     If Len(problem) > 0 Then Err.Raise 5, "modPersonnel.LinkPersonnelFile", problem
-    KitLinkTables path, Array(PERSON_TABLE, PERSON_APP_TABLE), PersonnelKey()
+    KitLinkTables path, Array(PERSON_TABLE, PERSON_APP_TABLE), PersonnelKeyFor(path)
 End Sub
 
-' Create a new, encrypted Personnel file at path, link it, and add the
-' current Windows user as its first person and directory admin, with
-' access to appCode. Refuses (error 5) while a Personnel file is linked, so
-' nobody makes a second directory by mistake, or when path exists.
+' Create a new, encrypted Personnel file at path with the site key siteKey
+' (a new random one when empty), saved in Personnel.key beside it; link it,
+' and add the current Windows user as its first person and directory admin,
+' with access to appCode. Refuses (error 5) while a Personnel file is
+' linked, so nobody makes a second directory by mistake, when path or the
+' key file exists, or when the key is unusable (PersonnelKeyProblem).
 ' Returns the admin's person_id.
 Public Function CreatePersonnelFile(ByVal path As String, ByVal appCode As String, ByVal firstName As String, _
-        ByVal lastName As String, Optional ByVal rank As String = "") As Long
-    Dim db As DAO.Database, n As Long, d As String, src As String, made As Boolean, v As Variant
+        ByVal lastName As String, Optional ByVal rank As String = "", Optional ByVal siteKey As String = "") As Long
+    Dim db As DAO.Database, n As Long, d As String, src As String, made As Boolean, keyMade As Boolean, v As Variant
+    Dim problem As String
     On Error GoTo Fail
     If Len(PersonnelPath()) > 0 Then Err.Raise 5, "modPersonnel", "A Personnel file is already linked: " & PersonnelPath()
     If FileExists(path) Then Err.Raise 5, "modPersonnel", "A file already exists at " & path & "."
+    If FileExists(PersonnelKeyPath(path)) Then Err.Raise 5, "modPersonnel", "A key file already exists at " & PersonnelKeyPath(path) & "."
+    siteKey = Trim$(siteKey)
+    If Len(siteKey) = 0 Then siteKey = NewPersonnelKey()
+    problem = PersonnelKeyProblem(siteKey)
+    If Len(problem) > 0 Then Err.Raise 5, "modPersonnel", problem
     EnsureFolder Left$(path, InStrRev(path, "\") - 1)
-    Set db = DBEngine.CreateDatabase(path, dbLangGeneral & ";pwd=" & PersonnelKey())
+    WriteTextFile PersonnelKeyPath(path), siteKey & vbCrLf
+    keyMade = True
+    Set db = DBEngine.CreateDatabase(path, dbLangGeneral & ";pwd=" & siteKey)
     made = True
     CreatePersonnelTables db
     db.Close
@@ -156,6 +212,7 @@ Fail:
         Next
         Kill path
     End If
+    If keyMade Then Kill PersonnelKeyPath(path)
     On Error GoTo 0
     Err.Number = n: Err.Description = d: Err.Source = src
     RaiseAgain "modPersonnel.CreatePersonnelFile", path
