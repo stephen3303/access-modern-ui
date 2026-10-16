@@ -30,6 +30,7 @@ Private m_appTable As String
 Private m_appCode As String
 Private m_setupMode As Long
 Private m_signInWhy As String
+Private m_created As Boolean       ' the setup screen created the Personnel file
 
 ' ---------------------------------------------------------------------------
 ' Startup and sign out
@@ -40,7 +41,7 @@ Private m_signInWhy As String
 Public Function KitPersonnelStart(ByVal appTable As String, ByVal appCode As String) As Boolean
     Dim status As Long
     On Error GoTo Fail
-    m_appTable = appTable: m_appCode = appCode
+    m_appTable = appTable: m_appCode = appCode: m_created = False
     status = PersonnelStatus(appTable)
     If status <> PERSONNEL_READY Then
         m_setupMode = status
@@ -49,9 +50,9 @@ Public Function KitPersonnelStart(ByVal appTable As String, ByVal appCode As Str
         If PersonnelStatus(appTable) <> PERSONNEL_READY Then Exit Function
     End If
     If SignedInPersonID() > 0 Then
-        ' The setup's creator (the first admin) goes on to add the first people.
-        ' Anyone already signed in otherwise just carries on.
-        If status <> PERSONNEL_READY And PersonnelIsAdminNow() Then RunDialog PERSON_FORM, "new"
+        ' The admin who just created the file goes on to add the first people.
+        ' Anyone else already signed in (after Find, too) just carries on.
+        If m_created And PersonnelIsAdminNow() Then RunDialog PERSON_FORM, "new"
         KitPersonnelStart = True
         Exit Function
     End If
@@ -110,6 +111,12 @@ End Function
 Public Function PersonnelUiSignInWhy() As String
     PersonnelUiSignInWhy = m_signInWhy
 End Function
+
+' dlgPersonnelSetup: the Personnel file was created (not found), so
+' KitPersonnelStart opens Add person next.
+Public Sub PersonnelUiCreated()
+    m_created = True
+End Sub
 
 ' What a person who isn't the admin sends to their admin.
 Public Function PersonnelAdminNote() As String

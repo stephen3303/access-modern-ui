@@ -206,6 +206,7 @@ Private Sub btnCreateGo_Click()
     DoCmd.Hourglass False
     If Len(problem) > 0 Then KitMsgBox problem, vbExclamation
     PersonnelSignInWindows PersonnelUiAppCode()
+    PersonnelUiCreated                          ' KitPersonnelStart opens Add person next
     TempVars("DialogResult") = "ok"
     DoCmd.Close acForm, Me.Name, acSaveNo
     Exit Sub
