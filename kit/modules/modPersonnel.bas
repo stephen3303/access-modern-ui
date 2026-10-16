@@ -361,6 +361,21 @@ Public Function SignedInIsAdmin() As Boolean
     SignedInIsAdmin = Nz(TempVars("PersonIsAdmin"), False)
 End Function
 
+' True when the signed-in person is an active directory admin in the
+' Personnel file now: another admin may have changed them since they
+' signed in. Updates PersonIsAdmin to match.
+Public Function PersonnelIsAdminNow() As Boolean
+    If SignedInPersonID() = 0 Then Exit Function
+    PersonnelIsAdminNow = (DCount("*", PERSON_TABLE, "is_admin AND is_active AND person_id=" & SignedInPersonID()) > 0)
+    TempVars("PersonIsAdmin") = PersonnelIsAdminNow
+End Function
+
+' Raise error 5 unless the signed-in person is an active admin now
+' (PersonnelIsAdminNow). Every change to other people goes through this.
+Public Sub PersonnelRequireAdmin()
+    If Not PersonnelIsAdminNow() Then Err.Raise 5, "modPersonnel", "Only an active Personnel admin can add or change people."
+End Sub
+
 ' ---------------------------------------------------------------------------
 ' Directory admin (the Personnel page, dlgPersonnel and dlgPerson)
 ' ---------------------------------------------------------------------------
@@ -374,8 +389,9 @@ Public Sub UpdatePerson(ByVal personId As Long, ByVal firstName As String, ByVal
         ByVal rank As String, ByVal windowsAccount As String, ByVal username As String, _
         ByVal isAdmin As Boolean, ByVal isActive As Boolean, Optional ByVal middleInitial As String = "", _
         Optional ByVal commandName As String = "", Optional ByVal email As String = "")
-    Dim oldAccount As String
+    Dim oldAccount As String, wasAdmin As Boolean, wasActive As Boolean
     On Error GoTo Fail
+    PersonnelRequireAdmin
     firstName = Trim$(firstName): lastName = Trim$(lastName)
     username = Trim$(username): windowsAccount = Trim$(windowsAccount)
     If Len(firstName) = 0 Or Len(lastName) = 0 Then Err.Raise 5, "modPersonnel", "A person needs a first and last name."
@@ -398,6 +414,8 @@ Public Sub UpdatePerson(ByVal personId As Long, ByVal firstName As String, ByVal
         End If
     End If
     oldAccount = Nz(DLookup("windows_account", PERSON_TABLE, "person_id=" & personId), "")
+    wasAdmin = Nz(DLookup("is_admin", PERSON_TABLE, "person_id=" & personId), False)
+    wasActive = Nz(DLookup("is_active", PERSON_TABLE, "person_id=" & personId), False)
     KitExecute "UPDATE " & PERSON_TABLE & " SET username=" & SqlText(username) & ", rank=" & SqlOrNull(rank) & _
         ", first_name=" & SqlText(firstName) & ", middle_initial=" & SqlOrNull(Left$(Trim$(middleInitial), 1)) & _
         ", last_name=" & SqlText(lastName) & ", display_name=" & SqlText(PersonDisplayName(rank, firstName, lastName)) & _
@@ -406,6 +424,16 @@ Public Sub UpdatePerson(ByVal personId As Long, ByVal firstName As String, ByVal
         IIf(StrComp(oldAccount, windowsAccount, vbTextCompare) <> 0, ", windows_sid=Null", "") & _
         ", is_admin=" & IIf(isAdmin, "True", "False") & ", is_active=" & IIf(isActive, "True", "False") & _
         ", " & StampSql() & " WHERE person_id=" & personId
+    ' Two admins demoting each other from two front ends can both pass the
+    ' check above. Look again now the change is saved, and put this row's
+    ' admin and active back if nobody is left: at worst both keep admin.
+    If Not (isAdmin And isActive) Then
+        If DCount("*", PERSON_TABLE, "is_admin AND is_active") = 0 Then
+            KitExecute "UPDATE " & PERSON_TABLE & " SET is_admin=" & IIf(wasAdmin, "True", "False") & _
+                ", is_active=" & IIf(wasActive, "True", "False") & " WHERE person_id=" & personId
+            Err.Raise 5, "modPersonnel", "Personnel needs at least one active admin. Make someone else an admin first."
+        End If
+    End If
     Exit Sub
 Fail:
     RaiseAgain "modPersonnel.UpdatePerson", CStr(personId)
@@ -441,6 +469,7 @@ End Function
 Public Function PersonnelImport(ByVal path As String, ByVal appCode As String) As String
     Dim rows As Collection, row As Variant, n As Long, added As Long, skipped As Long, why As String, problem As String
     On Error GoTo Fail
+    PersonnelRequireAdmin
     Set rows = ImportRows(path)
     For Each row In rows
         n = n + 1

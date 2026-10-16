@@ -60,6 +60,7 @@ Private Sub btnSave_Click()
     Dim pwd As String, problem As String, id As Long, who As String
     Me.btnSave.SetFocus                         ' commits the box being typed in
     Me.lblError.Caption = ""
+    PersonnelRequireAdmin                       ' error 5, shown below, if an admin has since changed them
     pwd = Nz(Me.txtPwd, "")
     If StrComp(pwd, Nz(Me.txtPwd2, ""), vbBinaryCompare) <> 0 Then   ' case matters; <> ignores it here
         Me.lblError.Caption = "The two passwords don't match."

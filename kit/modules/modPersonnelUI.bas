@@ -79,7 +79,7 @@ End Function
 ' told to ask one. For a sidebar link: =KitPersonnelManage("SABER").
 Public Function KitPersonnelManage(ByVal appCode As String)
     On Error GoTo Fail
-    If Not SignedInIsAdmin() Then
+    If Not PersonnelIsAdminNow() Then                ' not the sign-in's copy: an admin may have changed it since
         KitMsgBox "Only a Personnel admin can add or change people. Ask one to make the change.", vbInformation, "Personnel"
         Exit Function
     End If

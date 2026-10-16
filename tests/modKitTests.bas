@@ -1154,7 +1154,10 @@ Public Function TestKit(ByVal root As String) As String
         DLookup("command", PERSON_TABLE, "person_id=" & pe2) = "USS Test", "A person's changes not saved"
     PersonnelSignOut
     peErr = 0: On Error Resume Next: UpdatePerson peId, "Pat", "O'Neil", "LT", WinAccount(), "poneil", False, True: peErr = Err.Number: On Error GoTo 0
-    Check peErr = 5, "The last active admin was taken away"
+    Check peErr = 5 And DLookup("is_admin", PERSON_TABLE, "person_id=" & peId), "People changed with no admin signed in"
+    peErr = 0: On Error Resume Next: PersonnelImport root & "\none.csv", "TEST": peErr = Err.Number: On Error GoTo 0
+    Check peErr = 5, "Import allowed with no admin signed in"
+    Check PersonnelSignInWindows("TEST", True) And PersonnelIsAdminNow(), "Admin not signed back in"
     Set peRs = CurrentDb.OpenRecordset(PersonnelPeopleSql("lee", "TEST"), dbOpenSnapshot)
     Check Not peRs.EOF And peRs.Fields(0) = pe2 And peRs.Fields(4) = "No" And peRs.Fields(5) = "Active", "Personnel list wrong for a search"
     peRs.MoveNext: Check peRs.EOF, "Personnel search matched too many"
