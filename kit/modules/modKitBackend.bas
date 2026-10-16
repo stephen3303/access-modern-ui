@@ -17,7 +17,8 @@ Option Explicit
 '   msg = KitVersionProblem(beVersion, SCHEMA_VERSION, minBuild, APP_BUILD, advice)
 '   If Len(msg) > 0 Then KitMsgBox msg, vbExclamation: DoCmd.Quit
 '
-' Only links to Access data files (Connect ";DATABASE=...") are touched, and
+' Only links to Access data files (Connect ";DATABASE=..." or "MS Access;...")
+' are touched, and
 ' a relink moves only the tables linked to the same file as the probe table,
 ' so a second linked file (the shared Personnel file) keeps its links.
 
@@ -211,20 +212,34 @@ Private Function HasTableDef(db As DAO.Database, ByVal nm As String) As Boolean
     Next
 End Function
 
-' The file in an Access link's Connect (";DATABASE=path;PWD=..." gives
-' path), or "" for any other kind of link.
+' The file in an Access link's Connect, or "" for any other kind of link.
+' Access stores ";DATABASE=path" as given, but a link with a password as
+' "MS Access;PWD=...;DATABASE=path", so the parts are looked for by name.
 Private Function ConnectPath(ByVal cn As String) As String
-    Dim p As Long
-    If Left$(cn, Len(DB_PREFIX)) <> DB_PREFIX Then Exit Function
-    ConnectPath = Mid$(cn, Len(DB_PREFIX) + 1)
-    p = InStr(ConnectPath, ";")
-    If p > 0 Then ConnectPath = Left$(ConnectPath, p - 1)
+    Dim parts() As String, i As Long
+    If Not IsAccessConnect(cn) Then Exit Function
+    parts = Split(cn, ";")
+    For i = 1 To UBound(parts)
+        If UCase$(Left$(parts(i), 9)) = "DATABASE=" Then ConnectPath = Mid$(parts(i), 10): Exit Function
+    Next
 End Function
 
-' What follows the file in an Access link's Connect (";PWD=..."), or "".
+' The rest of an Access link's Connect without its type and file
+' (";PWD=..."), or "".
 Private Function ConnectRest(ByVal cn As String) As String
-    Dim p As Long
-    If Left$(cn, Len(DB_PREFIX)) <> DB_PREFIX Then Exit Function
-    p = InStr(Len(DB_PREFIX) + 1, cn, ";")
-    If p > 0 Then ConnectRest = Mid$(cn, p)
+    Dim parts() As String, i As Long
+    If Not IsAccessConnect(cn) Then Exit Function
+    parts = Split(cn, ";")
+    For i = 1 To UBound(parts)
+        If Len(parts(i)) > 0 And UCase$(Left$(parts(i), 9)) <> "DATABASE=" Then ConnectRest = ConnectRest & ";" & parts(i)
+    Next
+End Function
+
+' True for a link to an Access data file: its type part is "" or "MS Access"
+' (an ODBC link starts "ODBC;").
+Private Function IsAccessConnect(ByVal cn As String) As Boolean
+    Dim kind As String
+    If InStr(cn, ";") = 0 Then Exit Function
+    kind = Left$(cn, InStr(cn, ";") - 1)
+    IsAccessConnect = (Len(kind) = 0 Or StrComp(kind, "MS Access", vbTextCompare) = 0)
 End Function
