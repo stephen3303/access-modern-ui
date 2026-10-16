@@ -54,7 +54,7 @@ End Sub
 
 ' F1 opens the help on adding and changing people (KitHelp).
 Public Property Get HelpTopic() As String
-    HelpTopic = "personnel.person"
+    HelpTopic = "directory.person"
 End Property
 
 ' Empty boxes for the next person to add.

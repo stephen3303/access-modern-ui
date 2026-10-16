@@ -32,7 +32,7 @@ End Sub
 
 ' F1 opens the help on this page (KitHelp).
 Public Property Get HelpTopic() As String
-    HelpTopic = "personnel"
+    HelpTopic = "directory"
 End Property
 
 ' Fill the list with the people matching term, keeping the selected person
