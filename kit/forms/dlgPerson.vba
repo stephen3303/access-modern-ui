@@ -9,6 +9,21 @@ Option Explicit
 Private m_id As Long            ' 0 while adding
 Private m_saved As Boolean
 
+' Only an active Personnel admin may open this, whoever opens it: the
+' check is against the Personnel file now (PersonnelIsAdminNow). RunDialog
+' treats the cancelled open as not ok.
+Private Sub Form_Open(Cancel As Integer)
+    On Error GoTo Err_Handler
+    If Not PersonnelIsAdminNow() Then
+        KitMsgBox "Only an active Personnel admin can add or change people.", vbExclamation
+        Cancel = True
+    End If
+    Exit Sub
+Err_Handler:
+    Cancel = True
+    HandleError "dlgPerson.Form_Open"
+End Sub
+
 Private Sub Form_Load()
     On Error GoTo Err_Handler
     Dim rs As DAO.Recordset

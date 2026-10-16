@@ -53,7 +53,7 @@ Public Sub LoadHelpTopics(ByVal path As String)
     db.TableDefs.Delete HELP_TABLE
     On Error GoTo 0
     db.Execute "CREATE TABLE " & HELP_TABLE & " (topic_key TEXT(" & HELP_KEY_LEN & ") CONSTRAINT pk_" & HELP_TABLE & _
-        " PRIMARY KEY, title TEXT(" & HELP_TITLE_LEN & "), sort_order LONG, body MEMO)", dbFailOnError
+        " PRIMARY KEY, title TEXT(" & HELP_TITLE_LEN & "), sort_order LONG, body MEMO, search_text MEMO)", dbFailOnError
     Set rs = db.OpenRecordset(HELP_TABLE, dbOpenDynaset)
     For i = 0 To UBound(lines)
         s = CStr(lines(i))
@@ -84,8 +84,22 @@ Private Sub AddTopic(rs As DAO.Recordset, ByVal key As String, ByVal title As St
     rs!title = title
     rs!sort_order = n
     rs!body = body
+    rs!search_text = PlainHelpText(body)
     rs.Update
 End Sub
+
+' A topic's text as the reader sees it, for search: without the "# " and
+' "- " line markers or the ** around bold, so a search for * or # finds only
+' topics that show one.
+Private Function PlainHelpText(ByVal body As String) As String
+    Dim ln As Variant, s As String, out As String
+    For Each ln In Split(body, vbLf)
+        s = Trim$(CStr(ln))
+        If Left$(s, 2) = "# " Or Left$(s, 2) = "- " Then s = Mid$(s, 3)
+        out = out & Replace(s, "**", "") & vbLf
+    Next
+    PlainHelpText = out
+End Function
 
 Private Sub BadLine(ByVal i As Long, ByVal problem As String, ByVal s As String)
     Err.Raise 5, "modKitHelp.LoadHelpTopics", "Help file line " & (i + 1) & " " & problem & ": " & s
@@ -213,13 +227,14 @@ End Function
 
 ' Row source for the topic list: the key, then the title (indented under its
 ' parent). term narrows it to topics whose title or text contain it,
-' literally and ignoring case.
+' literally and ignoring case. The text searched is search_text, which
+' leaves out the help file's markup (PlainHelpText).
 Public Function HelpTopicsSql(Optional ByVal term As String = "") As String
     Dim where As String, t As String
     term = Trim$(term)
     If Len(term) > 0 Then
         t = SqlText("*" & LikeText(term) & "*")
-        where = " WHERE title LIKE " & t & " OR body LIKE " & t
+        where = " WHERE title LIKE " & t & " OR search_text LIKE " & t
     End If
     HelpTopicsSql = "SELECT topic_key, IIf(InStr(topic_key,'.')>0,'      ','') & title FROM " & HELP_TABLE & _
         where & " ORDER BY sort_order"

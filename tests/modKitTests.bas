@@ -899,8 +899,10 @@ Public Function TestKit(ByVal root As String) As String
     Check InStr(helpHtml, "<ul><li>one</li><li>two</li></ul>") > 0 And Right$(helpHtml, 5) = "</ul>", "Help bullets not listed, or trailing spacer kept"
     Check InStr(HelpBodyHtml("start", "BOLD"), "BACKGROUND-COLOR:") > 0, "Search term not marked in the topic"
     Check HelpRows("") = 3 And HelpRows("sign") = 1 And HelpRows("Sign ") = 1, "Help search does not match text ignoring case"
-    ' Literal matches: "*" in **bold** (start) and 5*2 (detail), "#" only in start's "# Steps".
-    Check HelpRows("*") = 2 And HelpRows("5*2") = 1 And HelpRows("[x") = 1 And HelpRows("0%") = 1 And HelpRows("#") = 1, "Help search treats wildcards as wildcards"
+    ' Literal matches: "*" only in 5*2 (detail); the ** around bold and the
+    ' "# " and "- " markers in start aren't text the reader sees.
+    Check HelpRows("*") = 1 And HelpRows("5*2") = 1 And HelpRows("[x") = 1 And HelpRows("0%") = 1, "Help search treats wildcards as wildcards"
+    Check HelpRows("#") = 0 And HelpRows("- one") = 0 And HelpRows("Steps") = 1 And HelpRows("bold &") = 1, "Help search matches the markup, not the text"
     Check HelpRows("o'b") = 0 And HelpRows("zzz") = 0, "Help search matched missing text"
     Set rows = CurrentDb.OpenRecordset(HelpTopicsSql())
     rows.MoveLast
