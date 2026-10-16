@@ -14,6 +14,7 @@ Private Sub Form_Load()
     Me.sfList.Form.RecordSource = "SELECT id, name, owner, status, Format(due_date,'dd mmm yyyy') AS due, due_date " & _
         "FROM demo_item ORDER BY due_date"
     RefreshPage
+    ShowOverdue
     Exit Sub
 Err_Handler:
     HandleError "pgList.Form_Load"
@@ -39,11 +40,24 @@ Public Function CanLeave() As Boolean
     CanLeave = SaveDetail(Me, "sfDetail")
 End Function
 
+' The header's alert (Alert): how many open items are past their due date,
+' or nothing when none are.
+Private Sub ShowOverdue()
+    Dim n As Long
+    n = DCount("*", "demo_item", "due_date < Date() And status Not In ('Complete','Cancelled')")
+    If n = 0 Then
+        HideAlert Me, "alOverdue"
+    Else
+        ShowAlert Me, "alOverdue", n & IIf(n = 1, " open item is", " open items are") & " past the due date.", "warning"
+    End If
+End Sub
+
 ' The detail panel saved an item: show the change in the list.
 Public Sub ItemSaved(ByVal id As Long)
     Me.sfList.Form.Requery
     Me.sfList.Form.txtSel = id
     RefreshCounts
+    ShowOverdue
 End Sub
 
 ' Status chip click: 0 is All.

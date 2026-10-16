@@ -62,6 +62,7 @@ Public Function TestKit(ByVal root As String) As String
     Txt "reqB", "", px(100), px(660), px(80), px(30)
     Toggle "tglTest", "", px(220), px(663), onChange:="ToggleChanged"
     Segmented "segTest", "", px(700), px(660), px(240), "day|Day;week|Week;month|Month", onChange:="SegmentChanged"
+    Alert "alTest", px(700), px(720), px(320), px(64), "warning", "Heads up", "Check the due date.", True
     SecretBox "secret", "", px(400), px(700), px(160), px(30)     ' clear of the ring, required and toggle fields
     SaveForm "frmTest", "testHost"
     DoCmd.OpenForm "frmTest"
@@ -276,6 +277,24 @@ Public Function TestKit(ByVal root As String) As String
     Check host.segTest_ring.Visible, "Focused segmented option shows no ring"
     host.txtFocusSink.SetFocus
     Check Not host.segTest_ring.Visible, "Segmented focus ring stayed after focus left"
+    ' Alert: built in its variant with a title; ShowAlert recolors it and moves an
+    ' untitled message up; the close mark hides every part; unknown variants fail.
+    Check host.alTest.BackColor = CLR_WARNING_BG And host.alTest_bar.BackColor = CLR_WARN_TEXT, "Alert is not in its variant's colors"
+    Check host.alTest_title.Visible And host.alTest_msg.Top > host.alTest_title.Top, "Alert message is not below its title"
+    Check AlertShown(host, "alTest"), "Alert does not show"
+    ShowAlert host, "alTest", "Saved.", "success"
+    Check host.alTest.BackColor = CLR_SUCCESS_BG And host.alTest_icon.ForeColor = CLR_GREEN_600, "ShowAlert did not recolor"
+    Check Not host.alTest_title.Visible And host.alTest_msg.Top = host.alTest.Top + AlertMsgTop(host.alTest.Height, False), "Untitled alert message did not move up"
+    Check host.alTest_msg.Caption = "Saved.", "ShowAlert did not set the message"
+    HideAlert host, "alTest"
+    Check Not AlertShown(host, "alTest") And Not host.alTest_x.Visible And Not host.alTest_bar.Visible, "HideAlert left parts showing"
+    ShowAlert host, "alTest", "Could not save.", "destructive", "Error"
+    Check AlertShown(host, "alTest") And host.alTest_title.Visible And host.alTest_x.Visible, "ShowAlert did not show it again"
+    Check host.alTest_msg.Top = host.alTest.Top + AlertMsgTop(host.alTest.Height, True) And AlertMsgTop(px(36), False) = px(10), "Titled alert message did not move down"
+    On Error Resume Next
+    ShowAlert host, "alTest", "x", "loud": badName = Err.Number: Err.Clear
+    On Error GoTo 0
+    Check badName = 5, "ShowAlert accepted an unknown variant"
     host.ringA.SetFocus
     Check host.ringA.BorderColor = CLR_PRIMARY, "Focused input lacks its focus ring"
     host.ringB.SetFocus
@@ -396,6 +415,12 @@ Public Function TestKit(ByVal root As String) As String
     Check badName = 5, "Segmented accepted one item"
     Check badScale = 5, "Segmented accepted a repeated key"
     Check badView = 5, "Segmented accepted options narrower than 40px"
+    NewForm "", 0, px(300), px(100)
+    On Error Resume Next
+    Alert "al", 0, 0, px(200), px(60), "loud": badName = Err.Number: Err.Clear
+    On Error GoTo 0
+    DoCmd.Close acForm, F.Name, acSaveNo
+    Check badName = 5, "Alert accepted an unknown variant"
     ' Splash: CloseSplash and SplashStatus do nothing without one, the footer clears the
     ' subtitle, and the bitmap that hides Access's splash is 58 bytes.
     CloseSplash

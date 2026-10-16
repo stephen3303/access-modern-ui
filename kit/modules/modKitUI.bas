@@ -947,6 +947,54 @@ Private Sub SegmentPaint(frm As Form, ByVal nm As String)
     Next
 End Sub
 
+' Show Alert nm with message msg (and title, "" for none) in variant vrnt
+' (info, success, warning, destructive), in the current palette. A title
+' moves the message below it; no title moves it up to the top. Raises error 5
+' for an unknown variant.
+Public Sub ShowAlert(frm As Form, ByVal nm As String, ByVal msg As String, _
+        Optional ByVal vrnt As String = "info", Optional ByVal title As String = "")
+    Dim k As Variant, pnl As Control, t As Control, m As Control
+    k = AlertColors(vrnt)
+    If IsEmpty(k) Then Err.Raise 5, , "Alert " & nm & " has an unknown variant: " & vrnt
+    Set pnl = frm.Controls(nm): Set t = frm.Controls(nm & "_title"): Set m = frm.Controls(nm & "_msg")
+    pnl.BackColor = Th(k(0))
+    pnl.Tag = LCase$(vrnt)
+    frm.Controls(nm & "_bar").BackColor = Th(k(1))
+    frm.Controls(nm & "_icon").ForeColor = Th(k(1))
+    frm.Controls(nm & "_icon").Caption = ChrW(k(2))
+    t.Caption = title
+    m.Caption = msg
+    m.Top = pnl.Top + AlertMsgTop(pnl.Height, Len(title) > 0)
+    m.Height = AlertMsgHeight(pnl.Height, Len(title) > 0)
+    AlertParts frm, nm, True
+    t.Visible = (Len(title) > 0)
+End Sub
+
+' Hide Alert nm, every part of it (an alert's close mark calls it).
+Public Function HideAlert(frm As Form, ByVal nm As String)
+    On Error GoTo Fail
+    AlertParts frm, nm, False
+    Exit Function
+Fail:
+    HandleError "modKitUI.HideAlert", nm
+End Function
+
+' True while Alert nm shows.
+Public Function AlertShown(frm As Form, ByVal nm As String) As Boolean
+    AlertShown = frm.Controls(nm).Visible
+End Function
+
+Private Sub AlertParts(frm As Form, ByVal nm As String, ByVal v As Boolean)
+    Dim s As Variant, c As Control
+    For Each s In Array("", "_bar", "_icon", "_title", "_msg", "_x")
+        Set c = Nothing
+        On Error Resume Next
+        Set c = frm.Controls(nm & s)
+        On Error GoTo 0
+        If Not c Is Nothing Then SetVisible c, v
+    Next
+End Sub
+
 ' ---------------------------------------------------------------------------
 ' Messages
 ' ---------------------------------------------------------------------------

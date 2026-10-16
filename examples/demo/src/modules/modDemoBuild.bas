@@ -271,7 +271,8 @@ Private Sub Build_pgTables()
 End Sub
 
 ' List and detail: the list card fills the width, the 360px detail card is
-' anchored right. Print and export the list as filtered.
+' anchored right. Print and export the list as filtered. A warning alert in
+' the header row counts the items past their due date.
 Private Sub Build_pgList()
     Dim c As Control, x As Long, y As Long, h As Long, lw As Long
     lw = ListW()
@@ -281,6 +282,8 @@ Private Sub Build_pgList()
     Set c = Btn("btnPrint", "Print", PAGE_W - CX - px(96), px(24), px(96), px(32), "outline"): Anchor c, 1, 0
     Set c = Btn("btnXlsx", "Export Excel", PAGE_W - CX - px(222), px(24), px(118), px(32), "outline"): Anchor c, 1, 0
     Set c = Btn("btnCsv", "Export CSV", PAGE_W - CX - px(338), px(24), px(108), px(32), "outline"): Anchor c, 1, 0
+    ' Compact (36px) alert in the header row, between the title and the buttons.
+    Alert "alOverdue", CX + px(200), px(22), px(440), px(36), "warning", dismiss:=True
     y = px(84)
     x = Chips(CX, y + px(1))
     SearchBox x + px(10), y, px(220)

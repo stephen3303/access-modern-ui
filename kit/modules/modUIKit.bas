@@ -820,6 +820,78 @@ Public Function Segmented(ByVal nm As String, ByVal src As String, ByVal x As Lo
     Set Segmented = v
 End Function
 
+' Inline alert (a web "callout"): a message that stays on the page, unlike a
+' toast, for something the user should know while working there ("This item
+' is past its due date", "Changes are saved when you leave the field"). A
+' tinted panel with a 4px accent bar on the left, the variant's icon, a bold
+' title and the message:
+'   info         CLR_INFO_BG, accent CLR_PRIMARY, icon Info
+'   success      CLR_SUCCESS_BG, accent CLR_GREEN_600, icon Completed
+'   warning      CLR_WARNING_BG, accent CLR_WARN_TEXT, icon Warning
+'   destructive  CLR_SEVA_BG, accent CLR_ERROR, icon Error
+' (the accents and icons are KitToast's, so a message looks the same either way).
+' title "" leaves the message alone at the top. The message wraps inside the
+' panel: give it room for the lines it may need (h 64px fits a title and two
+' lines; an untitled alert under 48px is compact, one line centered top to
+' bottom, for a page's header row). dismiss adds a close mark on the right that hides the alert
+' (HideAlert). Parts: <nm> the panel, <nm>_bar, <nm>_icon, <nm>_title, <nm>_msg
+' and <nm>_x when dismissible. Raises error 5 for an unknown variant. Change it
+' at run time with ShowAlert and HideAlert (modKitUI). Returns the panel.
+Public Function Alert(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
+        Optional ByVal vrnt As String = "info", Optional ByVal title As String = "", Optional ByVal msg As String = "", _
+        Optional ByVal dismiss As Boolean = False, Optional ByVal sec As Integer = acDetail, _
+        Optional ByVal parentCtl As String = "") As Control
+    Dim k As Variant, c As Control, pnl As Control, rPad As Long
+    k = AlertColors(vrnt)
+    If IsEmpty(k) Then Err.Raise 5, , "Alert " & nm & " has an unknown variant: " & vrnt
+    Set pnl = Box(nm, x, y, w, h, k(0), -1, sec, parentCtl)
+    pnl.Tag = LCase$(vrnt)
+    Box nm & "_bar", x, y, px(4), h, k(1), -1, sec, parentCtl
+    Set c = Lbl(nm & "_icon", ChrW(k(2)), x + px(16), y + AlertTop(h, px(20)), px(20), px(20), 12, False, k(1), sec, parentCtl)
+    c.FontName = "Segoe MDL2 Assets"
+    rPad = IIf(dismiss, px(44), px(16))
+    Set c = Lbl(nm & "_title", title, x + px(44), y + px(10), w - px(44) - rPad, px(22), 10, True, CLR_FG, sec, parentCtl)
+    c.Visible = (Len(title) > 0)
+    Set c = Lbl(nm & "_msg", msg, x + px(44), y + AlertMsgTop(h, Len(title) > 0), w - px(44) - rPad, 15, 9, False, CLR_FG, sec, parentCtl)
+    c.Height = AlertMsgHeight(h, Len(title) > 0)
+    c.TopMargin = 0
+    If dismiss Then
+        Set c = Link(nm & "_x", ChrW(&HE711), x + w - px(36), y + AlertTop(h, px(28)), px(28), px(28), _
+            "=HideAlert([Form],""" & nm & """)", 9, CLR_MUTED_FG, parentCtl)
+        c.FontName = "Segoe MDL2 Assets"
+        c.TextAlign = 2
+        c.ControlTipText = "Dismiss"
+    End If
+    Set Alert = pnl
+End Function
+
+' Where an Alert's parts sit, down from its top (twips): an item of height ih
+' (icon, close mark) is 12px down, or centered in a compact alert (under 48px);
+' the message is below the title, or level with the icon.
+Public Function AlertTop(ByVal h As Long, ByVal ih As Long) As Long
+    If h < px(48) Then AlertTop = (h - ih) \ 2 Else AlertTop = (px(24) - ih) \ 2 + px(10)
+End Function
+
+Public Function AlertMsgTop(ByVal h As Long, ByVal titled As Boolean) As Long
+    If titled Then AlertMsgTop = px(32) Else AlertMsgTop = AlertTop(h, px(18)) + px(1)
+End Function
+
+Public Function AlertMsgHeight(ByVal h As Long, ByVal titled As Boolean) As Long
+    AlertMsgHeight = h - AlertMsgTop(h, titled) - px(8)
+    If AlertMsgHeight < px(18) Then AlertMsgHeight = px(18)
+End Function
+
+' An Alert variant's colors and icon, Array(back, accent, glyph) in the build
+' palette (wrap the colors in Th() at run time), or Empty for an unknown one.
+Public Function AlertColors(ByVal vrnt As String) As Variant
+    Select Case LCase$(vrnt)
+        Case "info":        AlertColors = Array(CLR_INFO_BG, CLR_PRIMARY, &HE946&)
+        Case "success":     AlertColors = Array(CLR_SUCCESS_BG, CLR_GREEN_600, &HE930&)
+        Case "warning":     AlertColors = Array(CLR_WARNING_BG, CLR_WARN_TEXT, &HE7BA&)
+        Case "destructive": AlertColors = Array(CLR_SEVA_BG, CLR_ERROR, &HEA39&)
+    End Select
+End Function
+
 ' kind: primary | outline | ghost | destructive | nav
 Public Function Btn(ByVal nm As String, ByVal cap As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
         Optional ByVal kind As String = "primary", Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control

@@ -139,7 +139,7 @@ them, and the shell (`frmMain`) last.
 | modBuildUI, modBuildPages, modBuildPages2 | `Build_<form>` procedures, one per form, grouped by area |
 | modUI | Run-time UI helpers: `NavTo`, badges/pills painting, `ShowTip`, the app's hooks (`BadgeColors`, `StatusVariant`) |
 | modUIKit (kit) | Build-time control builders (section 6) |
-| modKitUI (kit) | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSwitch`, `ToggleFocus`, `SegmentClick`, `SetSegment`, `SegmentValue`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `KitToast`, `KitInputBox`, `CheckRequired`, `SetCount`, `StyleChip` |
+| modKitUI (kit) | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSwitch`, `ToggleFocus`, `SegmentClick`, `SetSegment`, `SegmentValue`, `ShowAlert`, `HideAlert`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `KitToast`, `KitInputBox`, `CheckRequired`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
 | modGridCols (kit) | Column chooser: `ChooseGridColumns`, `RestoreGridColumns`, `SetGridColumns`, and `BuildColumnsDialog` for `dlgColumns` |
 | modGridFilter (kit) | Header filters: `GridFilter`, `SetGridFilter`, `SetColumnFilter`, `ClearGridFilters`, `GridFilterWhere`, and `BuildFilterDialog` for `dlgFilter` |
@@ -751,6 +751,16 @@ Write app-specific helpers next to the builds that use them. Examples:
   and Space. The focus ring is the `Toggle`'s, around the whole track, so leave 4px clear.
   Act on a change in `onChange`; read the value with `SegmentValue` and set it with
   `SetSegment`, which calls no `onChange`. Single forms only.
+- **Inline alert**: `Alert` is a message that stays on the page while it applies (an item
+  past its due date, a read-only record, what a page's filter hides), where a toast would
+  fade before it is read and a message box would interrupt. A panel tinted in the variant's
+  soft color (`info`, `success`, `warning`, `destructive`) with a 4px accent bar and icon in
+  `KitToast`'s colors, a 10pt bold title and the 9pt message in `CLR_FG`, 16px in from the
+  left and 44px for the text. Give it the height of the lines it may need (64px fits a title
+  and two lines); an untitled alert under 48px is compact, one line centered, for a
+  page's header row. Set it at run time with `ShowAlert` (it repaints in the current palette)
+  and `HideAlert`; `dismiss:=True` adds a close mark that hides it. Keep one alert per
+  page area, and say what to do, not only what is wrong.
 - **Empty states**: a centered muted 10pt label shown in place of an empty list. Hide the
   list's subform while it shows (`SetVisible`): a subform always covers a label.
 - **Toasts** (`KitToast`, `dlgToast`): a 360px borderless pop-up on `CLR_SURFACE` with
