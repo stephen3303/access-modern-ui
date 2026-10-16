@@ -989,6 +989,26 @@ Public Function TestKit(ByVal root As String) As String
     Check DLookup("created_by", "test_stamp", "name='form2'") = "first" And DLookup("updated_by", "test_stamp", "name='form2'") = "second", "Changed record stamp wrong"
     DoCmd.Close acForm, "frmStamp", acSaveNo
     TempVars("Username") = Null
+    ' Keyboard shortcuts (modKitKeys).
+    Dim kf As Form
+    NewForm "SELECT * FROM test_rows ORDER BY id", 0, px(400), px(80)
+    Txt "txtDesc", "description", 0, 0, px(200), px(30)
+    Txt "txtSearch", "", px(210), 0, px(150), px(30)
+    SaveForm "frmKeys", "testKeys"
+    DoCmd.OpenForm "frmKeys"
+    Set kf = Forms("frmKeys")
+    kf.SetFocus
+    kf.txtDesc.SetFocus
+    Check KitShortcut(SHORTCUT_NEW) And kf.lastAction = "new", "Form's own Shortcut not asked"
+    kf.txtDesc = "Saved by Ctrl+S"
+    Check kf.Dirty, "Test record not changed"
+    Check KitShortcut(SHORTCUT_SAVE) And Not kf.Dirty And kf.lastAction = "save", "Ctrl+S did not save the changed record"
+    Check DCount("*", "test_rows", "description='Saved by Ctrl+S'") = 1, "Ctrl+S save not in the table"
+    Check KitShortcut(SHORTCUT_FIND) And Screen.ActiveControl.Name = "txtSearch", "Ctrl+F did not go to the search box"
+    Check Not KitShortcut("nothing"), "Unknown shortcut reported done"
+    DoCmd.Close acForm, "frmKeys", acSaveNo
+    BuildShortcutKeys
+    Check MacroExists("AutoKeys"), "Shortcut macro not written"
     g_Silent = False
     TestKit = checks & " kit checks passed"
 End Function
