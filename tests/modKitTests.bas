@@ -953,6 +953,42 @@ Public Function TestKit(ByVal root As String) As String
     Check DLookup("name", "test_conflict", "id=1") = "third" And DLookup("qty", "test_conflict", "id=1") = 9, "Write conflict after an own save lost a field"
     SetConflictAnswer 0
     DoCmd.Close acForm, "frmConflict", acSaveNo
+    ' Current user and record stamps (modKitUser).
+    Dim sf2 As Form, added As Long
+    Check Len(WinUser()) > 0 And StrComp(WinUser(), Environ$("USERNAME"), vbTextCompare) = 0, "WinUser is not the Windows account"
+    Check Len(WinComputer()) > 0 And StrComp(WinComputer(), Environ$("COMPUTERNAME"), vbTextCompare) = 0, "WinComputer is not this computer"
+    Check StrComp(WinAccount(), Environ$("USERDOMAIN") & "\" & Environ$("USERNAME"), vbTextCompare) = 0, "WinAccount is not DOMAIN\user"
+    Check WinSid() Like "S-1-5-*-*" And WinSid() = WinSid(), "WinSid is not this account's SID"
+    TempVars("Username") = Null
+    Check KitUser() = WinUser(), "KitUser without a sign-in is not the Windows account"
+    TempVars("Username") = "O'Neil"
+    Check KitUser() = "O'Neil", "KitUser ignores the signed-in user"
+    Check StampSql() = "updated_by='O''Neil', updated_at=Now()", "StampSql not quoted"
+    CurrentDb.Execute "CREATE TABLE test_stamp (id COUNTER PRIMARY KEY, name TEXT(60), created_by TEXT(150))"
+    added = AddStampFields("test_stamp")
+    Check added = 3 And AddStampFields("test_stamp") = 0, "AddStampFields did not add only the missing columns"
+    CurrentDb.Execute "INSERT INTO test_stamp (name, " & StampColumns() & ") VALUES ('sql', " & StampValues() & ")", dbFailOnError
+    Check DLookup("created_by", "test_stamp", "name='sql'") = "O'Neil" And Not IsNull(DLookup("updated_at", "test_stamp", "name='sql'")), "StampValues not written"
+    NewForm "test_stamp", 0, px(300), px(40)
+    F.AllowAdditions = True
+    Ev F, "BeforeUpdate"
+    Txt "txtName", "name", 0, 0, px(200), px(30)
+    SaveForm "frmStamp", "testStamp"
+    DoCmd.OpenForm "frmStamp"
+    Set sf2 = Forms("frmStamp")
+    DoCmd.GoToRecord acForm, "frmStamp", acNewRec
+    sf2.txtName = "form"
+    sf2.Dirty = False
+    Check DLookup("created_by", "test_stamp", "name='form'") = "O'Neil" And DLookup("updated_by", "test_stamp", "name='form'") = "O'Neil", "New record not stamped"
+    CurrentDb.Execute "UPDATE test_stamp SET created_by='first', updated_by='first' WHERE name='form'", dbFailOnError
+    sf2.Requery
+    sf2.Recordset.FindFirst "name='form'"
+    sf2.txtName = "form2"
+    TempVars("Username") = "second"
+    sf2.Dirty = False
+    Check DLookup("created_by", "test_stamp", "name='form2'") = "first" And DLookup("updated_by", "test_stamp", "name='form2'") = "second", "Changed record stamp wrong"
+    DoCmd.Close acForm, "frmStamp", acSaveNo
+    TempVars("Username") = Null
     g_Silent = False
     TestKit = checks & " kit checks passed"
 End Function

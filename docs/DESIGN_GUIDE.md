@@ -349,6 +349,17 @@ errors a single-user app never sees, and every app handles them the same way:
   shows the other user's version. Saves Access starts itself (moving off the record,
   closing) keep Access's own Write Conflict window.
 
+**Who did it** (kit modKitUser). Record people with `KitUser()`: the app's signed-in user,
+else the Windows account from `WinUser()`. Never read `Environ("USERNAME")` for this:
+anyone can change it before Access starts. Every table several users edit has
+`created_by`, `created_at`, `updated_by` and `updated_at` (`AddStampFields`), filled by
+`StampRecord Me` in the bound form's `BeforeUpdate` and by `StampSql()` or
+`StampColumns()`/`StampValues()` in SQL writes.
+On a form that also calls `KitNoteEdits` (modKitLocks), call `StampRecord Me` first, so a
+write conflict puts the stamps back with the user's changes.
+To recognise a person (sign-in, a person record), match `WinAccount()` (DOMAIN\user)
+or `WinSid()`, never the bare `WinUser()`: two domains can both have a jsmith.
+
 ---
 
 ## 6. Form design system
