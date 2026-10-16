@@ -101,7 +101,9 @@ P = {
 }
 
 # Colors that are the same in every palette: status band pills (a band always
-# reads the same) and the
+# reads the same), classification banners (a marking convention: the standard
+# banner color for each level, CLR_CLASS_INK is the dark text on the two light
+# ones) and the
 # destructive button's hover shades. They are written as constants in
 # modTheme and reserved: build colors must differ from these so a palette
 # switch never repaints them.
@@ -112,6 +114,13 @@ FIXED = {
     "CLR_BAND_BELOW":          (245, 158, 11),   # amber-500
     "CLR_BAND_SIG_BELOW":      (185, 28, 28),    # red-700
     "CLR_BAND_NE":             (107, 114, 128),  # gray-500, Not Evaluated
+    "CLR_CLASS_UNCLASSIFIED":  (0, 122, 51),     # green, UNCLASSIFIED
+    "CLR_CLASS_CUI":           (80, 43, 133),    # purple, CUI
+    "CLR_CLASS_CONFIDENTIAL":  (0, 51, 160),     # blue, CONFIDENTIAL
+    "CLR_CLASS_SECRET":        (200, 16, 46),    # red, SECRET
+    "CLR_CLASS_TOP_SECRET":    (255, 103, 31),   # orange, TOP SECRET
+    "CLR_CLASS_SCI":           (252, 232, 58),   # yellow, TOP SECRET//SCI
+    "CLR_CLASS_INK":           (16, 16, 16),     # text on the orange and yellow banners
     "CLR_DESTRUCTIVE_HOVER":   (185, 28, 28),
     "CLR_DESTRUCTIVE_PRESSED": (153, 27, 27),
 }
@@ -345,6 +354,12 @@ PAIRS = [("CLR_FG", "CLR_BG"), ("CLR_FG", "CLR_SURFACE"), ("CLR_MUTED_FG", "CLR_
          ("CLR_NAV_ACTIVE_FG", "CLR_NAV_ACTIVE_BG"), ("CLR_SUCCESS_FG", "CLR_SUCCESS_BG"),
          ("CLR_WARNING_FG", "CLR_WARNING_BG"), ("CLR_INFO_FG", "CLR_INFO_BG"),
          ("CLR_SEVA_FG", "CLR_SEVA_BG"), ("CLR_SEVB_FG", "CLR_SEVB_BG")]
+# Banner text must read on its fill: white on the first four, ink on the last two.
+CLASS_PAIRS = [(WHITE, "CLR_CLASS_UNCLASSIFIED"), (WHITE, "CLR_CLASS_CUI"), (WHITE, "CLR_CLASS_CONFIDENTIAL"),
+               (WHITE, "CLR_CLASS_SECRET"), ("CLR_CLASS_INK", "CLR_CLASS_TOP_SECRET"), ("CLR_CLASS_INK", "CLR_CLASS_SCI")]
+low = [f"{bg} {ratio(FIXED[fg] if isinstance(fg, str) else fg, FIXED[bg]):.1f}" for fg, bg in CLASS_PAIRS
+       if ratio(FIXED[fg] if isinstance(fg, str) else fg, FIXED[bg]) < 4.5]
+print("contrast classification banners: " + ("ok" if not low else "below 4.5: " + ", ".join(low)))
 for p in PALETTES:
     need = 7.0 if p["key"] == "contrast" else 4.5
     low = [f"{fg}/{bg} {ratio(p['c'][fg], p['c'][bg]):.1f}" for fg, bg in PAIRS

@@ -1341,6 +1341,46 @@ Public Function TestKit(ByVal root As String) As String
     Check HasControl(aiFrm, "cboProvider") And HasControl(aiFrm, "txtKey") And HasControl(aiFrm, "chkPart" & AIUiPartRows()), "AI settings dialog lacks its controls"
     Check aiFrm.txtKey.InputMask = SECRET_MASK, "AI session key not masked"
     DoCmd.Close acForm, "dlgAISettings", acSaveNo
+    ' Classification banner (modKitClassification): markings, levels, colors, the permitted
+    ' list, and the banner on a form.
+    Dim clProblem As String, clFrm As Form
+    Check ClassNormalize("  top secret // sci ") = "TOP SECRET//SCI" And ClassNormalize("secret//noforn") = "SECRET//NOFORN", "Marking not put in standard form"
+    Check ClassNormalize("TS") = "" And ClassNormalize("") = "" And ClassNormalize("SECRET//ORCON") = "", "A marking not on the list was accepted"
+    Check ClassRank("UNCLASSIFIED") = 0 And ClassRank("CUI") = 1 And ClassRank("CONFIDENTIAL") = 2 And ClassRank("SECRET") = 3 And ClassRank("TOP SECRET") = 4 And ClassRank("TOP SECRET//SCI") = 5, "Classification levels out of order"
+    Check ClassRank("SECRET//NOFORN") = ClassRank("SECRET") And ClassRank("TOP SECRET//SCI//NOFORN") = 5 And ClassRank("x") = -1, "A dissemination control changed a level, or an unknown marking had one"
+    For i = 2 To CLASS_COUNT
+        Check ClassRank(ClassLabel(i)) >= ClassRank(ClassLabel(i - 1)), "The marking list is not lowest level first at " & ClassLabel(i)
+    Next
+    Check ClassBack("SECRET") = CLR_CLASS_SECRET And ClassBack("CUI") = CLR_CLASS_CUI And ClassBack("TOP SECRET//SCI") = CLR_CLASS_SCI And ClassBack("UNCLASSIFIED") = CLR_CLASS_UNCLASSIFIED, "Banner colors wrong"
+    Check ClassBack("TOP SECRET") = CLR_CLASS_TOP_SECRET And ClassBack("CONFIDENTIAL") = CLR_CLASS_CONFIDENTIAL And ClassBack("") = CLR_BAND_NE, "Banner colors wrong"
+    Check ClassFore("SECRET") = CLR_WHITE And ClassFore("TOP SECRET") = CLR_CLASS_INK And ClassFore("TOP SECRET//SCI") = CLR_CLASS_INK, "Banner text colors wrong"
+    Check PaletteOf(CLR_CLASS_SECRET, 2) = CLR_CLASS_SECRET And PaletteOf(CLR_CLASS_SCI, 3) = CLR_CLASS_SCI, "A palette repainted a banner color"
+    Check AppClassification() = "" And PermittedClassLabels() = "UNCLASSIFIED" And Not ClassLabelPermitted("CUI"), "An unset classification permitted more than UNCLASSIFIED"
+    Check Not CheckClassLabel("SECRET", clProblem) And InStr(clProblem, "not been set") > 0, "An unset classification accepted SECRET"
+    SetAppClassification "secret"
+    Check AppClassification() = "SECRET", "Classification not saved"
+    Check PermittedClassLabels() = "UNCLASSIFIED;CUI;CONFIDENTIAL;SECRET;SECRET//NOFORN", "Permitted list wrong for SECRET: " & PermittedClassLabels()
+    Check ClassLabelPermitted("confidential") And ClassLabelPermitted("secret // noforn") And Not ClassLabelPermitted("TOP SECRET") And Not ClassLabelPermitted("TOP SECRET//SCI"), "SECRET app permitted the wrong labels"
+    Check CheckClassLabel("cui", clProblem) And clProblem = "", "A permitted label was refused"
+    Check Not CheckClassLabel("TOP SECRET", clProblem) And InStr(clProblem, "above") > 0 And InStr(clProblem, "SECRET") > 0, "A label above the app was accepted"
+    Check Not CheckClassLabel("nonsense", clProblem) And InStr(clProblem, "list") > 0, "A label not on the list was accepted"
+    peErr = 0: On Error Resume Next: SetAppClassification "ULTRA": peErr = Err.Number: On Error GoTo 0
+    Check peErr = 5 And AppClassification() = "SECRET", "An unknown classification was saved"
+    SetAppClassification "TOP SECRET//SCI"
+    Check ClassLabelPermitted("TOP SECRET//SCI//NOFORN") And PermittedClassLabels() = "UNCLASSIFIED;CUI;CONFIDENTIAL;SECRET;SECRET//NOFORN;TOP SECRET;TOP SECRET//NOFORN;TOP SECRET//SCI;TOP SECRET//SCI//NOFORN", "TOP SECRET//SCI app didn't permit everything"
+    SetAppClassification "secret"
+    NewForm "", 0, px(300), px(60)
+    ClassBanner "banTop", 0, px(300), 0
+    ClassBanner "banBottom", px(40), px(300), 1
+    SaveForm "frmClassTest"
+    DoCmd.OpenForm "frmClassTest", acDesign
+    Set clFrm = Forms("frmClassTest")
+    Check clFrm.banTop.Caption = "SECRET" And clFrm.banTop.BackColor = CLR_CLASS_SECRET And clFrm.banTop.ForeColor = CLR_WHITE And clFrm.banTop.Height = px(20), "Banner not built in the app's classification"
+    Check clFrm.banTop.Tag = CLASS_BANNER_TAG And clFrm.banBottom.VerticalAnchor = 1, "Banner not tagged or not anchored to the bottom"
+    SetAppClassification "TOP SECRET//SCI"
+    ClassApplyBanners clFrm
+    Check clFrm.banTop.Caption = "TOP SECRET//SCI" And clFrm.banBottom.BackColor = CLR_CLASS_SCI And clFrm.banBottom.ForeColor = CLR_CLASS_INK, "Banners not updated when the classification changed"
+    DoCmd.Close acForm, "frmClassTest", acSaveNo
     TestKit = checks & " kit checks passed"
 End Function
 
