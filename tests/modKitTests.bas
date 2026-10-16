@@ -69,6 +69,9 @@ Public Function TestKit(ByVal root As String) As String
     Accordion "acc", px(1100), px(40), px(300), False, "General|Form.subRing|60|open", "Advanced|Form.subRing|60", "Notes||40"
     Accordion "acs", px(1450), px(40), px(300), True, "One||40|open", "Two||40"
     Avatar "avTest", "=""Ada Lovelace""", px(1100), px(500)
+    StatTile "kpi", "Open items", "=12", px(1100), px(560), px(240), , "=-3.5", "vs last week", "E8F4", "#,##0", False
+    EmptyState "emp", px(1100), px(700), px(300), "E721", "No items match", "Try another search.", "Clear search", "", True
+    SearchBox "srch", px(1450), px(560), px(240), "SearchTyped"
     SecretBox "secret", "", px(400), px(700), px(160), px(30)     ' clear of the ring, required and toggle fields
     SaveForm "frmTest", "testHost"
     DoCmd.OpenForm "frmTest"
@@ -367,6 +370,33 @@ Public Function TestKit(ByVal root As String) As String
     Check host.avTest = "AL" And host.avTest.FormatConditions.Count = 5, "Avatar does not show its initials"
     Check InStr(Nz(host.avTest_bg.Properties("ControlSource").Value, ""), "PillPng(Choose(AvatarTone(") > 0, "Avatar circle is not drawn by tone"
     Check host.avTest_bg.Width = px(32) And host.avTest.Width = px(32) And host.avTest.FontSize = 10, "Avatar is not 32px with 10pt initials"
+    ' Stat tile: change badge text and tone, the built value and badge.
+    Check StatDelta(8) = ChrW(&H25B2) & " 8%" And StatDelta(-3.5) = ChrW(&H25BC) & " 3.5%", "Stat change text differs"
+    Check StatDelta(0) = "0%" And StatDelta(Null) = "" And StatDelta("x") = "", "Flat or empty stat change differs"
+    Check StatTone(5, True) = 0 And StatTone(5, False) = 1 And StatTone(-2, True) = 1 And StatTone(0, True) = 2 And StatTone(Null, True) = 2, "Stat tone differs"
+    ' (Comparing the badge's Value to a ChrW string inside a longer And chain
+    ' crashed VBA 7 on 64-bit Access, so each part is read on its own.)
+    text = Nz(host.kpi_d.Value, "")
+    Check host.kpi.Value = 12, "Stat tile does not show its value"
+    Check text = ChrW(&H25BC) & " 3.5%", "Stat tile does not show its change"
+    Check host.kpi_d.FormatConditions.Count = 2, "Stat tile badge has no tone formats"
+    Check host.kpi_ico.Caption = ChrW(&HE8F4) And host.kpi_cap.Left > host.kpi_dbg.Left + host.kpi_dbg.Width, "Stat tile icon or caption misplaced"
+    ' Empty state: shown as built, hidden and shown again with a new title.
+    Check host.emp_t.Visible And host.emp_b.Visible And host.emp_bg.Visible, "Empty state built shown is hidden"
+    ShowEmpty host, "emp", False
+    Check Not host.emp_t.Visible And Not host.emp_b.Visible And Not host.emp_ico.Visible And Not host.emp.Visible, "ShowEmpty left parts showing"
+    ShowEmpty host, "emp", True, "Nothing here"
+    Check host.emp_t.Visible And host.emp_t.Caption = "Nothing here" And host.emp_m.Caption = "Try another search.", "ShowEmpty did not show the new title"
+    ' Search box: text in code calls the handler and shows the clear mark; the
+    ' mark empties it, focuses it and calls the handler with ""; ring on the frame.
+    Check Not host.srch_x.Visible, "Empty search box shows its clear mark"
+    SetSearch host, "srch", "pump"
+    Check host.lastSearch = "pump" And host.srch_x.Visible And SearchText(host, "srch") = "pump", "SetSearch did not search"
+    SearchClear host, "srch"
+    Check host.lastSearch = "" And Not host.srch_x.Visible And IsNull(host.srch.Value) And host.ActiveControl.Name = "srch", "Clear mark did not empty the search"
+    Check host.srch_f.BorderColor = CLR_PRIMARY, "Focused search box lacks its ring"
+    host.txtFocusSink.SetFocus
+    Check host.srch_f.BorderColor = CLR_INPUT_BORDER, "Search box kept its ring"
     ' Dropdown menu: placed under its button (right-aligned or above when it would
     ' run off), sized to its items, separators and disabled items skipped by the
     ' keys, a pick returns the key and closes it, Esc returns nothing.
