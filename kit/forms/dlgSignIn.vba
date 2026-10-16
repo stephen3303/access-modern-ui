@@ -84,7 +84,7 @@ Private Function ChooseFirstPassword(ByVal user As String) As Boolean
     If IsNull(p1) Then Exit Function
     p2 = KitInputBox("Type the same password again.", "Choose a password", , True)
     If IsNull(p2) Then Exit Function
-    If p1 <> p2 Then Me.lblError.Caption = "The two passwords don't match. Try again.": Exit Function
+    If StrComp(p1, p2, vbBinaryCompare) <> 0 Then Me.lblError.Caption = "The two passwords don't match. Try again.": Exit Function
     problem = PersonnelSetPassword(PersonIdFor(user), p1)
     If Len(problem) > 0 Then Me.lblError.Caption = problem: Exit Function
     Me.txtPwd = p1

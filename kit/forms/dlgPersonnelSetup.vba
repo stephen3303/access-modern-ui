@@ -130,7 +130,7 @@ Private Sub btnCreateGo_Click()
     Me.btnCreateGo.SetFocus                     ' commits the box being typed in
     firstName = Trim$(Nz(Me.txtFirst, "")): lastName = Trim$(Nz(Me.txtLast, "")): pwd = Nz(Me.txtPwd, "")
     If Len(firstName) = 0 Or Len(lastName) = 0 Then KitMsgBox "Type your first and last name.", vbExclamation: Exit Sub
-    If pwd <> Nz(Me.txtPwd2, "") Then KitMsgBox "The two passwords don't match.", vbExclamation: Exit Sub
+    If StrComp(pwd, Nz(Me.txtPwd2, ""), vbBinaryCompare) <> 0 Then KitMsgBox "The two passwords don't match.", vbExclamation: Exit Sub
     If Len(pwd) < 8 Then KitMsgBox "Use at least 8 characters for your password.", vbExclamation: Exit Sub
     path = Nz(Me.txtFolder, "")
     If Right$(path, 1) <> "\" Then path = path & "\"
