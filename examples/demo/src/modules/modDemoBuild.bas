@@ -3,8 +3,9 @@ Option Explicit
 
 ' Kit Demo - BuildAll and the Build_<form> procedures. Each page shows a
 ' group of kit features: pgCards (Card, Progress), pgTables (BuildGrid
-' options, GridFit, the column chooser, tabs and chips with counts) and
-' pgList (the list/detail pattern, PrintGrid and ExportGrid). frmMain is the
+' options, GridFit, the column chooser, tabs and chips with counts),
+' pgList (the list/detail pattern, PrintGrid and ExportGrid, Alert, Breadcrumb)
+' and pgSteps (Stepper, Accordion). frmMain is the
 ' shell.
 
 Public Const PAGE_W As Long = 15840             ' 1056 px
@@ -100,6 +101,8 @@ Private Sub BuildUserInterface()
     Build_pgCards
     Build_pgTables
     Build_pgList
+    Build_subAbout
+    Build_pgSteps
     Build_dlgAppearance
     BuildMessageDialog             ' the kit's dlgMessage, for KitMsgBox
     BuildInputDialog               ' the kit's dlgInput, for KitInputBox
@@ -107,6 +110,7 @@ Private Sub BuildUserInterface()
     BuildToast                     ' the kit's dlgToast, for KitToast
     BuildColumnsDialog             ' the kit's dlgColumns, for ChooseGridColumns
     BuildFilterDialog              ' the kit's dlgFilter, for the header funnels (GridFilter)
+    BuildMenuDialog                ' the kit's dlgMenu, for KitMenu (the detail card's More button)
     BuildSplash "frmMain", "access-modern-ui demo"   ' the kit's frmSplash, the startup form
     Build_frmMain
 End Sub
@@ -175,7 +179,8 @@ Private Sub Build_subItem()
     FieldLbl "lblName", "ITEM", 0, 0, px(328)
     Txt "txtName", "name", 0, px(18), px(328), px(30)
     FieldLbl "lblOwner", "OWNER", 0, px(56), px(328)
-    Txt "txtOwner", "owner", 0, px(74), px(328), px(30)
+    Txt "txtOwner", "owner", 0, px(74), px(288), px(30)
+    Avatar "avOwner", "owner", px(297), px(73), px(31)   ' the owner's initials, beside the field
     FieldLbl "lblStatus", "STATUS", 0, px(112), hw
     Cbo "cboStatus", "status", "Not started;In progress;Blocked;Complete;Cancelled", 0, px(130), hw, px(30)
     FieldLbl "lblPct", "PERCENT DONE", x2, px(112), hw
@@ -200,7 +205,8 @@ End Sub
 ' Cards and progress: rounded cards, the square fallback, progress capsules
 ' at 0, 37 and 100 percent, and a table inside a rounded card. The rounded
 ' card's Primary button shows a message (KitMsgBox) and Outline a toast
-' (KitToast), a different variant each click.
+' (KitToast), a different variant each click. A segmented control (All, Open,
+' Done) beside the table's title filters it.
 Private Sub Build_pgCards()
     Dim c As Control, x As Long, y As Long, w As Long, h As Long, i As Long, pct As Variant
     NewForm "", 0, PAGE_W, PAGE_H
@@ -233,6 +239,7 @@ Private Sub Build_pgCards()
 
     y = px(250): h = PAGE_H - y - px(16)
     Card "Items", "Items in a rounded card", CX, y, CW(), h, , 2, 2
+    Segmented "segShow", "", CX + px(220), y + px(6), px(210), "all|All;open|Open;done|Done", px(28), "ShowChanged"
     GridHeaders "hdrItems", CardCols(), CX + px(16), y + px(40), w:=CW() - px(32)
     Set c = SubF("sfItems", "subGridCards", CX + px(16), y + px(62), CW() - px(32), h - px(78)): Anchor c, 2, 2
     SaveForm "pgCards"
@@ -269,7 +276,9 @@ Private Sub Build_pgTables()
 End Sub
 
 ' List and detail: the list card fills the width, the 360px detail card is
-' anchored right. Print and export the list as filtered.
+' anchored right. Print and export the list as filtered. A warning alert in
+' the header row counts the items past their due date, and a breadcrumb
+' below the title shows where the open item sits.
 Private Sub Build_pgList()
     Dim c As Control, x As Long, y As Long, h As Long, lw As Long
     lw = ListW()
@@ -279,6 +288,10 @@ Private Sub Build_pgList()
     Set c = Btn("btnPrint", "Print", PAGE_W - CX - px(96), px(24), px(96), px(32), "outline"): Anchor c, 1, 0
     Set c = Btn("btnXlsx", "Export Excel", PAGE_W - CX - px(222), px(24), px(118), px(32), "outline"): Anchor c, 1, 0
     Set c = Btn("btnCsv", "Export CSV", PAGE_W - CX - px(338), px(24), px(108), px(32), "outline"): Anchor c, 1, 0
+    ' Compact (36px) alert in the header row, between the title and the buttons.
+    Alert "alOverdue", CX + px(200), px(22), px(440), px(36), "warning", dismiss:=True
+    ' Breadcrumb in the subtitle's place: All items > the chip's status > the open item.
+    Breadcrumb "crumb", CX, px(54), px(620), 3, "CrumbGo", "c0|All items"
     y = px(84)
     x = Chips(CX, y + px(1))
     SearchBox x + px(10), y, px(220)
@@ -290,12 +303,46 @@ Private Sub Build_pgList()
     c.TextAlign = 2: c.Visible = False: Anchor c, 2, 0
     x = CX + lw + px(12)
     Card "Detail", "Details", x, y, DETAIL_W, h, , 1, 2
+    ' More: the open item's actions in a dropdown menu (KitMenu).
+    Set c = Btn("btnMore", ChrW(&HE712), x + DETAIL_W - px(44), y + px(6), px(32), px(28), "ghost")
+    c.FontName = "Segoe MDL2 Assets": c.FontWeight = 400: c.ControlTipText = "More actions"
+    Anchor c, 1, 0
     Set c = SubF("sfDetail", "", x + px(16), y + px(40), DETAIL_W - px(32), h - px(56)): Anchor c, 1, 2
     c.Visible = False
     Set c = Lbl("lblDetailEmpty", "Select an item to see its details.", x + px(16), y + px(120), DETAIL_W - px(32), px(20), _
         10, False, CLR_MUTED_FG)
     c.TextAlign = 2: Anchor c, 1, 0
     SaveForm "pgList"
+End Sub
+
+' A short text body for the accordion's closed-by-default sections.
+Private Sub Build_subAbout()
+    NewForm "", 0, CW() - px(32), px(56)
+    F.Section(acDetail).BackColor = CLR_BG
+    F.Section(acDetail).AlternateBackColor = CLR_BG
+    Lbl "lblAbout", "A section body is a subform, so it can hold anything a form can. Opening a section pushes the " & _
+        "ones below it down; closing it lets them back up.", px(4), 0, CW() - px(40), px(48), 9, False, CLR_MUTED_FG
+    SaveForm "subAbout"
+End Sub
+
+' Steps and sections: a step indicator (Stepper) in a card with Back and
+' Next, and an accordion of three sections below it, the first holding the
+' items table.
+Private Sub Build_pgSteps()
+    Dim c As Control, y As Long
+    NewForm "", 0, PAGE_W, PAGE_H
+    Ev F, "OnLoad"
+    PageHeader "Steps and sections", "A step indicator (Stepper) and an accordion (Accordion). " & _
+        "Back and Next move the steps; click a check mark to go back. Click a section's header to open or close it.", CX
+    y = px(84)
+    Card "Wizard", "New item", CX, y, CW(), px(160), , 2, 0
+    Stepper "steps", CX + px(16), y + px(44), CW() - px(32), 1, "StepBack", "Details", "Owner", "Review", "Submit"
+    Lbl "lblStepBody", "", CX + px(16), y + px(112), CW() - px(260), px(36), 9, False, CLR_MUTED_FG
+    Set c = Btn("btnBack", "Back", CX + CW() - px(224), y + px(116), px(96), px(28), "outline")
+    Set c = Btn("btnNext", "Next", CX + CW() - px(112), y + px(116), px(96), px(28))
+    Accordion "acc", CX, y + px(176), CW(), True, "Items|subGridCards|150|open", "About sections|subAbout|56", _
+        "One open at a time|subAbout|56"
+    SaveForm "pgSteps"
 End Sub
 
 ' Shell: sidebar with the pages, Folder trust (the kit's trust page) and
@@ -309,7 +356,7 @@ Private Sub Build_frmMain()
     Lbl "lblBrand", APP_NAME, px(20), px(20), px(160), px(26), 13, True, CLR_WHITE
     Lbl "lblBrandSub", "access-modern-ui", px(20), px(46), px(160), px(18), 8, False, CLR_NAV_MUTED
     Box "boxSideLine", px(16), px(76), px(168), px(1), CLR_SIDEBAR_LINE
-    pages = Array("cards|Cards and progress", "tables|Tables", "list|List and detail")
+    pages = Array("cards|Cards and progress", "tables|Tables", "list|List and detail", "steps|Steps and sections")
     y = px(90)
     For i = 0 To UBound(pages)
         Set c = Link("nt_" & Split(pages(i), "|")(0), Split(pages(i), "|")(1), px(12), y, px(176), px(34), _

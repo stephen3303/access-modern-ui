@@ -724,6 +724,372 @@ Public Function Toggle(ByVal nm As String, ByVal src As String, ByVal x As Long,
     Set Toggle = c
 End Function
 
+' Segmented control: two to six options side by side on a rounded track, one
+' of them picked, like a web "toggle group" or iOS segmented control (Week |
+' Month | Year, List | Board). The picked option sits on a raised CLR_SURFACE
+' thumb in CLR_FG bold; the others are CLR_MUTED_FG on the CLR_SECONDARY_BG
+' track. Use it for a short, fixed choice that changes what the page shows;
+' a long or data-driven list is a combo box.
+' items are "key|Caption" pairs separated by ";", "week|Week;month|Month".
+' Keys are text without quotes, "|" or ";". src is the field it shows and
+' changes (text or number: a number field takes the key as its value), or ""
+' for an unbound control that starts on the first item. w x h is the track,
+' 32px tall by default; the options share its width equally.
+' Access has no such control, so it is built from plain ones (i from 0):
+'   <nm>_val   a hidden text box bound to src: the value (SegmentValue, or
+'              read Me!<nm>_val); its Tag lists the keys
+'   <nm>_ring  a CLR_PRIMARY focus ring 2px outside the track, shown while an
+'              option has the focus
+'   <nm>_bg    the track image
+'   <nm>_th<i> option i's thumb image, drawn only while i is picked: its
+'              expression reads <nm>_val, so moving to another record moves
+'              the thumb with no code
+'   <nm>_t<i>  option i's caption, bold CLR_FG by a conditional format while
+'              i is picked
+'   <nm>_b<i>  a transparent button over option i that takes its clicks, a
+'              Tab stop and Space (SegmentClick in modKitUI)
+' onChange names a Public Sub in the form's code-behind, called with no
+' arguments after the user picks another option (not on a click on the picked
+' one, and not for SetSegment). Single forms only, like Toggle: raises error 5
+' on a continuous form, for fewer than 2 or more than 6 items, a bad or repeated
+' key, or options narrower than 40px. Returns the value box <nm>_val.
+Public Function Segmented(ByVal nm As String, ByVal src As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, _
+        ByVal items As String, Optional ByVal h As Long = 480, Optional ByVal onChange As String = "", _
+        Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control
+    Const PAD As Long = 3                ' px between the track's edge and a thumb
+    Dim parts() As String, p() As String, keys() As String, caps() As String
+    Dim n As Long, i As Long, j As Long, segPx As Long, hPx As Long, trackPx As Long, thPx As Long
+    Dim c As Control, v As Control, sx As Long, cond As String
+    If F.DefaultView <> 0 Then Err.Raise 5, , "Segmented " & nm & " needs a single-record form: one thumb would show on every row"
+    parts = Split(items, ";")
+    n = UBound(parts) + 1
+    If n < 2 Or n > 6 Then Err.Raise 5, , "Segmented " & nm & " takes 2 to 6 items: " & items
+    ReDim keys(n - 1): ReDim caps(n - 1)
+    For i = 0 To n - 1
+        p = Split(parts(i), "|")
+        If UBound(p) <> 1 Then Err.Raise 5, , "Segmented " & nm & " item is not key|Caption: " & parts(i)
+        keys(i) = Trim$(p(0)): caps(i) = p(1)
+        If Len(keys(i)) = 0 Or InStr(keys(i), """") > 0 Then Err.Raise 5, , "Segmented " & nm & " has a bad key: " & parts(i)
+        For j = 0 To i - 1
+            If keys(j) = keys(i) Then Err.Raise 5, , "Segmented " & nm & " repeats the key " & keys(i)
+        Next
+    Next
+    hPx = h \ 15
+    segPx = (w \ 15 - 2 * PAD) \ n
+    If segPx < 40 Then Err.Raise 5, , "Segmented " & nm & " is too narrow: each option needs 40px"
+    trackPx = 2 * PAD + n * segPx
+    thPx = hPx - 2 * PAD
+    Set v = Mk(acTextBox, nm & "_val", x, y, px(13), px(13), sec, parentCtl)
+    If Len(src) > 0 Then v.ControlSource = src Else v.DefaultValue = """" & keys(0) & """"
+    v.Visible = False
+    v.TabStop = False
+    v.Tag = Join(keys, ";")
+    ' Created back to front: ring, track, thumbs, captions, then the buttons.
+    Set c = Mk(acImage, nm & "_ring", x - px(4), y - px(4), px(trackPx + 8), px(hPx + 8), sec, parentCtl)
+    ImageProps c
+    c.Properties("ControlSource") = "=RingPng(" & CLR_PRIMARY & "," & trackPx + 8 & "," & hPx + 8 & ")"
+    c.Visible = False
+    Set c = Mk(acImage, nm & "_bg", x, y, px(trackPx), px(hPx), sec, parentCtl)
+    ImageProps c
+    c.Properties("ControlSource") = "=PillPng(" & CLR_SECONDARY_BG & "," & trackPx & "," & hPx & ")"
+    For i = 0 To n - 1
+        sx = x + px(PAD + i * segPx)
+        cond = "Nz([" & nm & "_val],"""") & """"=""" & keys(i) & """"
+        Set c = Mk(acImage, nm & "_th" & i, sx, y + px(PAD), px(segPx), px(thPx), sec, parentCtl)
+        ImageProps c
+        c.Properties("ControlSource") = "=IIf(" & cond & ",PillPng(" & CLR_SURFACE & "," & segPx & "," & thPx & "),Null)"
+    Next
+    For i = 0 To n - 1
+        sx = x + px(PAD + i * segPx)
+        Set c = RO(nm & "_t" & i, "=""" & Replace(caps(i), """", """""") & """", sx, y + px(PAD), px(segPx), px(thPx), 9, False, CLR_MUTED_FG, sec, parentCtl)
+        c.TextAlign = 2
+        CF c, cond, -1, CLR_FG, True
+    Next
+    For i = 0 To n - 1
+        sx = x + px(PAD + i * segPx)
+        Set c = Mk(acCommandButton, nm & "_b" & i, sx, y, px(segPx), h, sec, parentCtl)
+        c.Transparent = True
+        c.Tag = onChange
+        c.ControlTipText = caps(i)
+        ' A command button raises Click for both halves of a double click, so
+        ' OnDblClick stays empty (a second click on the picked option is ignored).
+        c.OnClick = "=SegmentClick([Form],""" & nm & """,""" & keys(i) & """)"
+        c.OnGotFocus = "=ToggleFocus([Form],""" & nm & """,True)"
+        c.OnLostFocus = "=ToggleFocus([Form],""" & nm & """,False)"
+    Next
+    Set Segmented = v
+End Function
+
+' Inline alert (a web "callout"): a message that stays on the page, unlike a
+' toast, for something the user should know while working there ("This item
+' is past its due date", "Changes are saved when you leave the field"). A
+' tinted panel with a 4px accent bar on the left, the variant's icon, a bold
+' title and the message:
+'   info         CLR_INFO_BG, accent CLR_PRIMARY, icon Info
+'   success      CLR_SUCCESS_BG, accent CLR_GREEN_600, icon Completed
+'   warning      CLR_WARNING_BG, accent CLR_WARN_TEXT, icon Warning
+'   destructive  CLR_SEVA_BG, accent CLR_ERROR, icon Error
+' (the accents and icons are KitToast's, so a message looks the same either way).
+' title "" leaves the message alone at the top. The message wraps inside the
+' panel: give it room for the lines it may need (h 64px fits a title and two
+' lines; an untitled alert under 48px is compact, one line centered top to
+' bottom, for a page's header row). dismiss adds a close mark on the right that hides the alert
+' (HideAlert). Parts: <nm> the panel, <nm>_bar, <nm>_icon, <nm>_title, <nm>_msg
+' and <nm>_x when dismissible. Raises error 5 for an unknown variant. Change it
+' at run time with ShowAlert and HideAlert (modKitUI). Returns the panel.
+Public Function Alert(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
+        Optional ByVal vrnt As String = "info", Optional ByVal title As String = "", Optional ByVal msg As String = "", _
+        Optional ByVal dismiss As Boolean = False, Optional ByVal sec As Integer = acDetail, _
+        Optional ByVal parentCtl As String = "") As Control
+    Dim k As Variant, c As Control, pnl As Control, rPad As Long
+    k = AlertColors(vrnt)
+    If IsEmpty(k) Then Err.Raise 5, , "Alert " & nm & " has an unknown variant: " & vrnt
+    Set pnl = Box(nm, x, y, w, h, k(0), -1, sec, parentCtl)
+    pnl.Tag = LCase$(vrnt)
+    Box nm & "_bar", x, y, px(4), h, k(1), -1, sec, parentCtl
+    Set c = Lbl(nm & "_icon", ChrW(k(2)), x + px(16), y + AlertTop(h, px(20)), px(20), px(20), 12, False, k(1), sec, parentCtl)
+    c.FontName = "Segoe MDL2 Assets"
+    rPad = IIf(dismiss, px(44), px(16))
+    Set c = Lbl(nm & "_title", title, x + px(44), y + px(10), w - px(44) - rPad, px(22), 10, True, CLR_FG, sec, parentCtl)
+    c.Visible = (Len(title) > 0)
+    Set c = Lbl(nm & "_msg", msg, x + px(44), y + AlertMsgTop(h, Len(title) > 0), w - px(44) - rPad, 15, 9, False, CLR_FG, sec, parentCtl)
+    c.Height = AlertMsgHeight(h, Len(title) > 0)
+    c.TopMargin = 0
+    If dismiss Then
+        Set c = Link(nm & "_x", ChrW(&HE711), x + w - px(36), y + AlertTop(h, px(28)), px(28), px(28), _
+            "=HideAlert([Form],""" & nm & """)", 9, CLR_MUTED_FG, parentCtl)
+        c.FontName = "Segoe MDL2 Assets"
+        c.TextAlign = 2
+        c.ControlTipText = "Dismiss"
+    End If
+    Set Alert = pnl
+End Function
+
+' Breadcrumb trail: where the user is, as a path of links ("Items > Pump
+' overhaul > History"). Each crumb but the last is a CLR_MUTED_FG link that
+' calls handler (a Public Sub or Function on the form taking the crumb's key)
+' with its key; the last is the current page, in CLR_FG, and does nothing.
+' Chevrons separate them. items are "key|Caption" from the root down; the
+' trail is set again at run time with SetBreadcrumb, so build as many slots as
+' the deepest path needs (2 to 12). A path wider than w folds the crumbs after
+' the first into one ellipsis (its tooltip names them; a click goes to the
+' deepest of them). Parts: <prefix> an invisible frame holding the trail's
+' place and width, <prefix><i> the crumbs and <prefix>_s<i> the chevrons
+' before them. Raises error 5 for a bad slot count or more items than slots.
+Public Sub Breadcrumb(ByVal prefix As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal slots As Long, _
+        ByVal handler As String, ParamArray items() As Variant)
+    Dim i As Long, c As Control, path As Variant
+    If slots < 2 Or slots > 12 Then Err.Raise 5, , "Breadcrumb " & prefix & " takes 2 to 12 slots: " & slots
+    If UBound(items) + 1 > slots Then Err.Raise 5, , "Breadcrumb " & prefix & " has more items than slots"
+    Set c = Box(prefix, x, y, w, px(20), -1)
+    c.Tag = handler & "|0|" & slots
+    For i = 0 To slots - 1
+        If i > 0 Then
+            Set c = Lbl(prefix & "_s" & i, ChrW(&HE76C), x, y, px(16), px(20), 7, False, CLR_MUTED_FG)
+            c.FontName = "Segoe MDL2 Assets"
+            c.TextAlign = 2
+            c.Visible = False
+        End If
+        Set c = Link(prefix & i, "", x, y, px(40), px(20), "=CrumbClick([Form],""" & prefix & """," & i & ")", 9, CLR_MUTED_FG)
+        c.Visible = False
+    Next
+    path = items
+    LayoutCrumbs F, prefix, path
+End Sub
+
+' Step indicator for a task done in steps (a wizard, an approval route): a
+' numbered circle per step with its caption below, joined by connectors.
+' Steps before the current one are done: a CLR_PRIMARY circle with a check
+' mark and a CLR_PRIMARY connector after it. The current step is a CLR_PRIMARY
+' circle with its number and a bold CLR_FG caption; later steps are a
+' CLR_INPUT_BORDER ring with a CLR_MUTED_FG number and caption. current is
+' 1-based; steps + 1 shows every step done. handler names a Public Sub or
+' Function on the form taking the step number, called when the user clicks a
+' done step (to go back to it); "" makes no step clickable. Change the step
+' with SetStep. The steps share w equally (at least 64px each) and take 56px
+' down. Parts: <prefix> an invisible frame (its Tag keeps the state),
+' <prefix>_f<i> and _r<i> the filled and ringed circles, _n<i> the number,
+' _l<i> the caption and _c<i> the connector after step i (i from 1).
+' Raises error 5 for fewer than 2 or more than 8 steps or too little width.
+Public Sub Stepper(ByVal prefix As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal current As Long, _
+        ByVal handler As String, ParamArray captions() As Variant)
+    Const D As Long = 28                 ' circle diameter (px)
+    Dim n As Long, i As Long, slot As Long, cx As Long, c As Control, click As String
+    n = UBound(captions) + 1
+    If n < 2 Or n > 8 Then Err.Raise 5, , "Stepper " & prefix & " takes 2 to 8 steps"
+    slot = w \ n
+    If slot < px(64) Then Err.Raise 5, , "Stepper " & prefix & " is too narrow: each step needs 64px"
+    Set c = Box(prefix, x, y, w, px(56), -1)
+    c.Tag = handler & "|" & current & "|" & n
+    For i = 1 To n
+        cx = x + (i - 1) * slot + slot \ 2
+        If i < n Then
+            Box prefix & "_c" & i, cx + px(D \ 2 + 8), y + px(D \ 2 - 1), slot - px(D + 16), px(2), CLR_INPUT_BORDER
+        End If
+        Set c = Mk(acImage, prefix & "_f" & i, cx - px(D \ 2), y, px(D), px(D), acDetail, "")
+        ImageProps c
+        c.Properties("ControlSource") = "=PillPng(" & CLR_PRIMARY & "," & D & "," & D & ")"
+        Set c = Mk(acImage, prefix & "_r" & i, cx - px(D \ 2), y, px(D), px(D), acDetail, "")
+        ImageProps c
+        c.Properties("ControlSource") = "=RingPng(" & CLR_INPUT_BORDER & "," & D & "," & D & ")"
+        click = "=StepClick([Form],""" & prefix & """," & i & ")"
+        Set c = Lbl(prefix & "_n" & i, CStr(i), cx - px(D \ 2), y, px(D), px(D), 9, True, CLR_MUTED_FG)
+        c.TextAlign = 2
+        c.OnClick = click
+        Set c = Lbl(prefix & "_l" & i, CStr(captions(i - 1)), x + (i - 1) * slot + px(4), y + px(D + 8), slot - px(8), px(18), 9, False, CLR_MUTED_FG)
+        c.TextAlign = 2
+        c.OnClick = click
+    Next
+    StepPaint F, prefix
+End Sub
+
+' Accordion: sections stacked down the page, each a 40px header (a 10pt
+' semibold title and a chevron, with a hairline below) over a body subform
+' that the header shows and hides; the sections below move up or down to
+' close the gap, like a web accordion. Use it for a long form or settings page
+' split into parts the user opens one or a few at a time. sections are
+' "Title|sourceObject|body height px|open" ("open" shows the body at first;
+' sourceObject may be "" for one set at run time). oneOpen:=True keeps one
+' section open at a time. Put the accordion last in its column: only its own
+' parts move. The form's section is made tall enough for every body open at
+' once (the tallest, with oneOpen), since Access raises error 2100 for a control moved past its bottom. Parts (i from 1): <prefix> an invisible frame (its Tag keeps
+' single and the body heights), <prefix>_h<i> a transparent header button
+' (click, Tab stop and Space), _t<i> the title, _v<i> the chevron, _u<i> the
+' rule and _b<i> the body subform. Raises error 5 for no section or a bad one.
+Public Sub Accordion(ByVal prefix As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal oneOpen As Boolean, _
+        ParamArray sections() As Variant)
+    Dim n As Long, i As Long, p() As String, hs As String, c As Control, yy As Long, allOpen As Long, tallest As Long
+    n = UBound(sections) + 1
+    If n < 1 Then Err.Raise 5, , "Accordion " & prefix & " has no sections"
+    Set c = Box(prefix, x, y, w, px(40) * n, -1)
+    yy = y
+    For i = 1 To n
+        p = Split(CStr(sections(i - 1)), "|")
+        If UBound(p) < 2 Then Err.Raise 5, , "Accordion " & prefix & " section is not Title|sourceObject|height: " & sections(i - 1)
+        If Not IsNumeric(p(2)) Then Err.Raise 5, , "Accordion " & prefix & " section height is not a number: " & sections(i - 1)
+        hs = hs & IIf(i > 1, ",", "") & px(CLng(p(2)))
+        allOpen = allOpen + px(41) + px(15) + px(CLng(p(2)))
+        If px(CLng(p(2))) > tallest Then tallest = px(CLng(p(2)))
+        Set c = Lbl(prefix & "_t" & i, p(0), x + px(4), yy, w - px(36), px(40), 10, True)
+        VCenter c, px(40), 10, True
+        Set c = Lbl(prefix & "_v" & i, ChrW(&HE76C), x + w - px(28), yy, px(24), px(40), 9, False, CLR_MUTED_FG)
+        c.FontName = "Segoe MDL2 Assets"
+        c.TextAlign = 2
+        VCenter c, px(40), 9, True
+        Rule prefix & "_u" & i, x, yy + px(40), w, 0, CLR_BORDER
+        Set c = SubF(prefix & "_b" & i, p(1), x, yy + px(48), w, px(CLng(p(2))))
+        c.Visible = (UBound(p) >= 3 And LCase$(Trim$(p(UBound(p)))) = "open")
+        Set c = Mk(acCommandButton, prefix & "_h" & i, x, yy, w, px(40), acDetail, "")
+        c.Transparent = True
+        c.OnClick = "=AccordionClick([Form],""" & prefix & """," & i & ")"
+        yy = yy + px(41)
+    Next
+    F.Controls(prefix).Tag = IIf(oneOpen, "single", "") & "|" & hs
+    AccordionLayout F, prefix
+    If oneOpen Then allOpen = n * px(41) + px(15) + tallest
+    If F.Section(acDetail).Height < y + allOpen Then F.Section(acDetail).Height = y + allOpen
+End Sub
+
+' Avatar: a person's initials in a circle (a web avatar), for an owner or
+' assignee field, in a detail panel or on every row of a continuous form.
+' src is the field (owner, [owner]) or an expression (=[first] & " " &
+' [last]). Each name keeps one of six soft badge tones (AvatarTone): the
+' badge pairs CLR_INFO_BG/_FG, CLR_SUCCESS_, CLR_WARNING_, CLR_SEVA_, CLR_SEVB_
+' and CLR_SECONDARY_ (an empty name), which keep their contrast in every
+' palette. d is the diameter, 32px by default. Parts: <nm>_bg the circle
+' image and <nm> the initials (AvatarInitials), a read-only text box whose
+' conditional formats color the initials with the tone. Returns the initials.
+Public Function Avatar(ByVal nm As String, ByVal src As String, ByVal x As Long, ByVal y As Long, _
+        Optional ByVal d As Long = 480, Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control
+    Dim c As Control, e As String, k As Long, backs As Variant, fores As Variant, list As String, size As Integer
+    If Left$(src, 1) = "=" Then
+        e = "(" & Mid$(src, 2) & ")"
+    ElseIf Left$(src, 1) = "[" Then
+        e = src
+    Else
+        e = "[" & src & "]"
+    End If
+    backs = AvatarTones(True): fores = AvatarTones(False)
+    For k = 0 To 5
+        list = list & "," & backs(k)
+    Next
+    Set c = Mk(acImage, nm & "_bg", x, y, d, d, sec, parentCtl)
+    ImageProps c
+    c.Properties("ControlSource") = "=PillPng(Choose(AvatarTone(" & e & ")+1" & list & ")," & d \ 15 & "," & d \ 15 & ")"
+    size = CInt((d \ 15) * 0.3 + 0.5)
+    If size < 7 Then size = 7
+    Set c = RO(nm, "=AvatarInitials(" & e & ")", x, y, d, d, size, True, fores(5), sec, parentCtl)
+    c.TextAlign = 2
+    VCenter c, d, size, True
+    For k = 0 To 4
+        CF c, "AvatarTone(" & e & ")=" & k, -1, fores(k), True
+    Next
+    Set Avatar = c
+End Function
+
+' The six avatar tones' circle (back) or initials (fore) colors, in the build
+' palette; tone 5 is the empty name's.
+Public Function AvatarTones(ByVal back As Boolean) As Variant
+    If back Then
+        AvatarTones = Array(CLR_INFO_BG, CLR_SUCCESS_BG, CLR_WARNING_BG, CLR_SEVA_BG, CLR_SEVB_BG, CLR_SECONDARY_BG)
+    Else
+        AvatarTones = Array(CLR_INFO_FG, CLR_SUCCESS_FG, CLR_WARNING_FG, CLR_SEVA_FG, CLR_SEVB_FG, CLR_SECONDARY_FG)
+    End If
+End Function
+
+' An avatar's tone for name v, 0 to 4, the same every time for the same name
+' (ignoring case and spaces at the ends); 5 for an empty one.
+Public Function AvatarTone(ByVal v As Variant) As Long
+    Dim s As String, i As Long, h As Long
+    s = UCase$(Trim$(Nz(v, "")))
+    If Len(s) = 0 Then AvatarTone = 5: Exit Function
+    For i = 1 To Len(s)
+        h = (h * 31 + AscW(Mid$(s, i, 1))) Mod 9973
+    Next
+    AvatarTone = h Mod 5
+End Function
+
+' Initials for name v: the first letters of its first and last words ("ETN1
+' Rivera" is ER), the first letter of a one-word name, "" for an empty one.
+Public Function AvatarInitials(ByVal v As Variant) As String
+    Dim w() As String, s As String
+    s = Trim$(Nz(v, ""))
+    Do While InStr(s, "  ") > 0
+        s = Replace(s, "  ", " ")
+    Loop
+    If Len(s) = 0 Then Exit Function
+    w = Split(s, " ")
+    AvatarInitials = UCase$(Left$(w(0), 1))
+    If UBound(w) > 0 Then AvatarInitials = AvatarInitials & UCase$(Left$(w(UBound(w)), 1))
+End Function
+
+' Where an Alert's parts sit, down from its top (twips): an item of height ih
+' (icon, close mark) is 12px down, or centered in a compact alert (under 48px);
+' the message is below the title, or level with the icon.
+Public Function AlertTop(ByVal h As Long, ByVal ih As Long) As Long
+    If h < px(48) Then AlertTop = (h - ih) \ 2 Else AlertTop = (px(24) - ih) \ 2 + px(10)
+End Function
+
+Public Function AlertMsgTop(ByVal h As Long, ByVal titled As Boolean) As Long
+    If titled Then AlertMsgTop = px(32) Else AlertMsgTop = AlertTop(h, px(18)) + px(1)
+End Function
+
+Public Function AlertMsgHeight(ByVal h As Long, ByVal titled As Boolean) As Long
+    AlertMsgHeight = h - AlertMsgTop(h, titled) - px(8)
+    If AlertMsgHeight < px(18) Then AlertMsgHeight = px(18)
+End Function
+
+' An Alert variant's colors and icon, Array(back, accent, glyph) in the build
+' palette (wrap the colors in Th() at run time), or Empty for an unknown one.
+Public Function AlertColors(ByVal vrnt As String) As Variant
+    Select Case LCase$(vrnt)
+        Case "info":        AlertColors = Array(CLR_INFO_BG, CLR_PRIMARY, &HE946&)
+        Case "success":     AlertColors = Array(CLR_SUCCESS_BG, CLR_GREEN_600, &HE930&)
+        Case "warning":     AlertColors = Array(CLR_WARNING_BG, CLR_WARN_TEXT, &HE7BA&)
+        Case "destructive": AlertColors = Array(CLR_SEVA_BG, CLR_ERROR, &HEA39&)
+    End Select
+End Function
+
 ' kind: primary | outline | ghost | destructive | nav
 Public Function Btn(ByVal nm As String, ByVal cap As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
         Optional ByVal kind As String = "primary", Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control

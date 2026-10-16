@@ -139,7 +139,7 @@ them, and the shell (`frmMain`) last.
 | modBuildUI, modBuildPages, modBuildPages2 | `Build_<form>` procedures, one per form, grouped by area |
 | modUI | Run-time UI helpers: `NavTo`, badges/pills painting, `ShowTip`, the app's hooks (`BadgeColors`, `StatusVariant`) |
 | modUIKit (kit) | Build-time control builders (section 6) |
-| modKitUI (kit) | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSwitch`, `ToggleFocus`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `KitToast`, `KitInputBox`, `CheckRequired`, `SetCount`, `StyleChip` |
+| modKitUI (kit) | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSwitch`, `ToggleFocus`, `SegmentClick`, `SetSegment`, `SegmentValue`, `ShowAlert`, `HideAlert`, `SetBreadcrumb`, `CrumbClick`, `SetStep`, `CurrentStep`, `OpenSection`, `SectionOpen`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `KitToast`, `KitInputBox`, `CheckRequired`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
 | modGridCols (kit) | Column chooser: `ChooseGridColumns`, `RestoreGridColumns`, `SetGridColumns`, and `BuildColumnsDialog` for `dlgColumns` |
 | modGridFilter (kit) | Header filters: `GridFilter`, `SetGridFilter`, `SetColumnFilter`, `ClearGridFilters`, `GridFilterWhere`, and `BuildFilterDialog` for `dlgFilter` |
@@ -406,6 +406,9 @@ End Sub
   - `Toggle nm, src, x, y, [w], [h], [onChange]`: an on/off switch for a yes/no field
     (section 6.6). Use it for settings and flags that take effect at once; keep `Chk`
     for a choice saved with the rest of a form.
+  - `Segmented nm, src, x, y, w, items, [h], [onChange]`: a segmented control for one of
+    2 to 6 short options that changes what the page shows (section 6.6). Use a combo box
+    for a longer or data-driven list.
   - `Btn ... kind`: `primary`, `outline`, `ghost`, `destructive` or `nav`, each with
     themed hover and pressed colors and `Shape = 1` for rounded corners.
   - `Link`: clickable label.
@@ -736,6 +739,67 @@ Write app-specific helpers next to the builds that use them. Examples:
   Hide it with `SetVisible` on `<nm>`, and the track goes too; `SetEnabled` on `<nm>`
   stops clicks and the Tab stop but doesn't dim the track. Use it on single forms only:
   in a continuous form the ring shows on every row.
+- **Segmented control**: `Segmented` lays 2 to 6 options side by side on a capsule track
+  in `CLR_SECONDARY_BG`, 32px tall by default (28px beside a card title), sharing its width
+  equally; give each option at least 40px, and its caption room at 9pt. The picked option sits on a
+  `CLR_SURFACE` capsule thumb inset 3px, its caption bold `CLR_FG`; the others are
+  `CLR_MUTED_FG`, like a web toggle group. It is a hidden text box `<nm>_val` holding the picked key
+  (bound to a text or number field, or unbound and starting on the first item), the track
+  image, one thumb image per option whose expression shows it only while that option is picked,
+  so a bound control follows the record with no code, the captions with a conditional
+  format, and a transparent button per option (`SegmentClick`) that takes clicks, a Tab stop
+  and Space. The focus ring is the `Toggle`'s, around the whole track, so leave 4px clear.
+  Act on a change in `onChange`; read the value with `SegmentValue` and set it with
+  `SetSegment`, which calls no `onChange`. Single forms only.
+- **Inline alert**: `Alert` is a message that stays on the page while it applies (an item
+  past its due date, a read-only record, what a page's filter hides), where a toast would
+  fade before it is read and a message box would interrupt. A panel tinted in the variant's
+  soft color (`info`, `success`, `warning`, `destructive`) with a 4px accent bar and icon in
+  `KitToast`'s colors, a 10pt bold title and the 9pt message in `CLR_FG`, 16px in from the
+  left and 44px for the text. Give it the height of the lines it may need (64px fits a title
+  and two lines); an untitled alert under 48px is compact, one line centered, for a
+  page's header row. Set it at run time with `ShowAlert` (it repaints in the current palette)
+  and `HideAlert`; `dismiss:=True` adds a close mark that hides it. Keep one alert per
+  page area, and say what to do, not only what is wrong.
+- **Breadcrumb**: `Breadcrumb` shows where a page sits (All items > In progress > Pump
+  overhaul) on one 20px line, in the subtitle's place under the page title: 9pt
+  `CLR_MUTED_FG` links, 7pt chevrons (MDL2 E76C) 16px wide between them, and the current
+  page last in `CLR_FG`, not a link. Use it where a page is reached by going down levels;
+  a page reached from the sidebar needs none. Build as many slots as the deepest path and set
+  the path with `SetBreadcrumb` whenever the page's place changes. A path wider than the
+  trail keeps its first and last crumbs and folds the middle into an ellipsis, as web
+  breadcrumbs do.
+- **Step indicator**: `Stepper` shows progress through a task done in steps (a new-record
+  wizard, an approval route) above the step's own content, usually in a card with Back and
+  Next at the bottom right. 28px circles centered in equal slots, 9pt captions 8px below,
+  2px connectors 8px clear of the circles. Done steps are filled `CLR_PRIMARY` with a check
+  mark (MDL2 E73E) and fill the connector after them; the current step is filled with its
+  number and a bold `CLR_FG` caption; later steps are a 2px `CLR_INPUT_BORDER` ring with a
+  `CLR_MUTED_FG` number. A click on a done step goes back to it (the `handler`); later steps
+  can't be skipped to. Keep captions to one or two words.
+- **Accordion**: `Accordion` splits a long page into sections the user opens as needed:
+  40px headers with a 10pt semibold title and a chevron at the right (right when closed,
+  down when open), a `CLR_BORDER` hairline under each, and the open section's body (a
+  subform) 7px below its header and 8px above the next. Opening or closing moves the
+  sections below, so keep the accordion last in its column. Use `oneOpen` when the sections
+  are alternatives; leave it off when the user may compare them. Open the section most
+  users need at first.
+- **Avatar**: `Avatar` shows who owns or is assigned a record as their initials in a 32px
+  circle (24px in a dense row), bold at 30% of the diameter in points, beside or instead of
+  the name. The tone comes from the name, so a person keeps one color on every page; tones
+  are the soft badge pairs, so they read in every palette. Initials are the first letters of
+  the first and last words (ETN1 Rivera is ER). It is bound, so it follows the record on a
+  continuous form with no code.
+- **Dropdown menu**: `KitMenu` puts a record's or page's secondary actions (Duplicate,
+  Archive, Delete) behind one ghost button, the MDL2 More glyph (E712, 32 x 28px) at the
+  right of a card's title row, instead of a row of buttons. The menu is a `CLR_DIALOG`
+  pop-up with a `CLR_INPUT_BORDER` hairline, 160 to 320px wide to fit its captions, 32px
+  rows with a 10pt MDL2 icon and a 9pt caption, `CLR_OUT_HOVER` behind the row under the
+  mouse or keys, and 9px separator rows with a `CLR_BORDER` line. It opens 4px under the
+  button, left edges lined up, and flips right-aligned or above to stay on the monitor. Put
+  destructive actions last, after a separator, as `!Caption` (`CLR_DESTRUCTIVE`), and
+  confirm them with `KitMsgBox`; show an action that doesn't apply as disabled (`~key`)
+  rather than leaving it out, so the menu keeps its shape. Keep it to about seven items.
 - **Empty states**: a centered muted 10pt label shown in place of an empty list. Hide the
   list's subform while it shows (`SetVisible`): a subform always covers a label.
 - **Toasts** (`KitToast`, `dlgToast`): a 360px borderless pop-up on `CLR_SURFACE` with

@@ -27,6 +27,7 @@ Public Function TestKit(ByVal root As String) As String
     Btn "ringSave", "Save", px(110), 0, px(80), px(30)
     SaveForm "subRing"
     BuildToast
+    BuildMenuDialog
     NewForm "test_rows", 0, px(300), px(40)
     Ev F, "BeforeUpdate"
     Txt "txtDesc", "description", 0, 0, px(280), px(30)
@@ -61,6 +62,13 @@ Public Function TestKit(ByVal root As String) As String
     Txt "reqA", "", 0, px(660), px(80), px(30)
     Txt "reqB", "", px(100), px(660), px(80), px(30)
     Toggle "tglTest", "", px(220), px(663), onChange:="ToggleChanged"
+    Segmented "segTest", "", px(700), px(660), px(240), "day|Day;week|Week;month|Month", onChange:="SegmentChanged"
+    Alert "alTest", px(700), px(720), px(320), px(64), "warning", "Heads up", "Check the due date.", True
+    Breadcrumb "bc", px(700), px(800), px(320), 5, "CrumbPicked", "home|Home", "items|Items", "i42|Pump overhaul"
+    Stepper "st", px(700), px(840), px(360), 2, "StepPicked", "Details", "Review", "Done"
+    Accordion "acc", px(1100), px(40), px(300), False, "General|Form.subRing|60|open", "Advanced|Form.subRing|60", "Notes||40"
+    Accordion "acs", px(1450), px(40), px(300), True, "One||40|open", "Two||40"
+    Avatar "avTest", "=""Ada Lovelace""", px(1100), px(500)
     SecretBox "secret", "", px(400), px(700), px(160), px(30)     ' clear of the ring, required and toggle fields
     SaveForm "frmTest", "testHost"
     DoCmd.OpenForm "frmTest"
@@ -248,6 +256,153 @@ Public Function TestKit(ByVal root As String) As String
     Check Not host.tglTest_ring.Visible, "Focus ring stayed after focus left"
     host.ringA.SetFocus: host.tglTest.SetFocus
     Check host.ringA.BorderColor = CLR_INPUT_BORDER, "Input kept its focus ring while the switch had the focus"
+    ' Segmented control: starts on the first item, a click picks and calls onChange
+    ' once, the picked item and a locked control ignore clicks, SetSegment is quiet.
+    Check SegmentValue(host, "segTest") = "day", "Unbound segmented control did not start on its first item"
+    Check host.segTest_th1.Left = host.segTest_th0.Left + host.segTest_th0.Width, "Segmented options are not side by side"
+    Check host.segTest_b2.Left + host.segTest_b2.Width <= host.segTest_bg.Left + host.segTest_bg.Width, "Segmented option overruns its track"
+    Check InStr(Nz(host.segTest_th1.Properties("ControlSource").Value, ""), "PillPng(") > 0, "Segmented thumb is not drawn"
+    Check host.segTest_t0.FormatConditions.Count = 1, "Segmented caption has no picked format"
+    SegmentClick host, "segTest", "week"
+    Check SegmentValue(host, "segTest") = "week", "Segmented click did not pick its item"
+    Check host.segmentChanges = 1, "Segmented onChange did not run"
+    SegmentClick host, "segTest", "week"
+    Check host.segmentChanges = 1, "Click on the picked item ran onChange"
+    SetSegment host, "segTest", "month"
+    Check SegmentValue(host, "segTest") = "month" And host.segmentChanges = 1, "SetSegment did not pick quietly"
+    On Error Resume Next
+    SetSegment host, "segTest", "year": badName = Err.Number: Err.Clear
+    On Error GoTo 0
+    Check badName = 5 And SegmentValue(host, "segTest") = "month", "SetSegment accepted an unknown item"
+    host.segTest_val.Locked = True
+    SegmentClick host, "segTest", "day"
+    Check SegmentValue(host, "segTest") = "month" And host.segmentChanges = 1, "Locked segmented control changed"
+    host.segTest_val.Locked = False
+    Check Not host.segTest_ring.Visible, "Segmented focus ring shows without focus"
+    host.segTest_b1.SetFocus
+    Check host.segTest_ring.Visible, "Focused segmented option shows no ring"
+    host.txtFocusSink.SetFocus
+    Check Not host.segTest_ring.Visible, "Segmented focus ring stayed after focus left"
+    ' Alert: built in its variant with a title; ShowAlert recolors it and moves an
+    ' untitled message up; the close mark hides every part; unknown variants fail.
+    Check host.alTest.BackColor = CLR_WARNING_BG And host.alTest_bar.BackColor = CLR_WARN_TEXT, "Alert is not in its variant's colors"
+    Check host.alTest_title.Visible And host.alTest_msg.Top > host.alTest_title.Top, "Alert message is not below its title"
+    Check AlertShown(host, "alTest"), "Alert does not show"
+    ShowAlert host, "alTest", "Saved.", "success"
+    Check host.alTest.BackColor = CLR_SUCCESS_BG And host.alTest_icon.ForeColor = CLR_GREEN_600, "ShowAlert did not recolor"
+    Check Not host.alTest_title.Visible And host.alTest_msg.Top = host.alTest.Top + AlertMsgTop(host.alTest.Height, False), "Untitled alert message did not move up"
+    Check host.alTest_msg.Caption = "Saved.", "ShowAlert did not set the message"
+    HideAlert host, "alTest"
+    Check Not AlertShown(host, "alTest") And Not host.alTest_x.Visible And Not host.alTest_bar.Visible, "HideAlert left parts showing"
+    ShowAlert host, "alTest", "Could not save.", "destructive", "Error"
+    Check AlertShown(host, "alTest") And host.alTest_title.Visible And host.alTest_x.Visible, "ShowAlert did not show it again"
+    Check host.alTest_msg.Top = host.alTest.Top + AlertMsgTop(host.alTest.Height, True) And AlertMsgTop(px(36), False) = px(10), "Titled alert message did not move down"
+    On Error Resume Next
+    ShowAlert host, "alTest", "x", "loud": badName = Err.Number: Err.Clear
+    On Error GoTo 0
+    Check badName = 5, "ShowAlert accepted an unknown variant"
+    ' Breadcrumb: built path in order, the last crumb current and not a link, a
+    ' path wider than the trail folds its middle into an ellipsis, too many fail.
+    Check host.bc0.Visible And host.bc2.Visible And Not host.bc3.Visible And Not host.bc_s3.Visible, "Breadcrumb shows the wrong crumbs"
+    Check host.bc1.Left = host.bc_s1.Left + px(16) And host.bc_s1.Left = host.bc0.Left + host.bc0.Width, "Breadcrumb crumbs are not in a row"
+    Check host.bc2.ForeColor = CLR_FG And host.bc0.ForeColor = CLR_MUTED_FG, "Breadcrumb current page is not set apart"
+    CrumbClick host, "bc", 0
+    Check host.lastCrumb = "home", "Breadcrumb click did not call its handler with the key"
+    CrumbClick host, "bc", 2
+    Check host.lastCrumb = "home", "Click on the current page's crumb called the handler"
+    SetBreadcrumb host, "bc", "a|Alpha root", "b|Beta section", "c|Gamma subsection", "d|Delta page", "e|Epsilon detail"
+    Check Not host.bc1.Visible And Not host.bc2.Visible And host.bc3.Visible And host.bc4.Visible, "Wide breadcrumb did not fold its middle"
+    Check host.bc3.Caption = ChrW(&H2026) And host.bc3.Tag = "d" And host.bc3.ControlTipText = "Beta section > Gamma subsection > Delta page", "Folded crumbs are not named by the ellipsis"
+    Check host.bc4.Left + host.bc4.Width <= host.bc.Left + host.bc.Width, "Folded breadcrumb overruns its width"
+    CrumbClick host, "bc", 3
+    Check host.lastCrumb = "d", "Ellipsis click did not go to the deepest folded crumb"
+    SetBreadcrumb host, "bc", "x|One", "y|Two"
+    Check host.bc1.Visible And Not host.bc2.Visible And host.bc1.Caption = "Two" And host.bc1.ForeColor = CLR_FG, "Shorter breadcrumb path left old crumbs"
+    On Error Resume Next
+    SetBreadcrumb host, "bc", "1|1", "2|2", "3|3", "4|4", "5|5", "6|6": badName = Err.Number: Err.Clear
+    On Error GoTo 0
+    Check badName = 5, "Breadcrumb took more items than slots"
+    ' Stepper: done, current and later steps drawn apart; a done step's click goes
+    ' back to it, later ones do nothing; SetStep moves it and rejects bad steps.
+    Check host.st_f1.Visible And Not host.st_r1.Visible And host.st_n1.Caption = ChrW(&HE73E), "Done step is not checked"
+    Check host.st_f2.Visible And host.st_n2.Caption = "2" And host.st_l2.FontWeight = 600 And host.st_l2.ForeColor = CLR_FG, "Current step is not set apart"
+    Check host.st_r3.Visible And Not host.st_f3.Visible And host.st_l3.ForeColor = CLR_MUTED_FG, "Later step is not a ring"
+    Check host.st_c1.BackColor = CLR_PRIMARY And host.st_c2.BackColor = CLR_INPUT_BORDER, "Step connectors are not colored by progress"
+    Check host.st_c1.Left > host.st_f1.Left + host.st_f1.Width And host.st_c1.Left + host.st_c1.Width < host.st_f2.Left, "Step connector touches its circles"
+    StepClick host, "st", 1
+    Check host.lastStep = 1, "Done step click did not call the handler"
+    StepClick host, "st", 3
+    Check host.lastStep = 1, "Later step click called the handler"
+    SetStep host, "st", 4
+    Check CurrentStep(host, "st") = 4 And host.st_f3.Visible And host.st_n3.Caption = ChrW(&HE73E) And host.st_c2.BackColor = CLR_PRIMARY, "Stepper did not show every step done"
+    SetStep host, "st", 1
+    Check host.st_n1.Caption = "1" And host.st_r2.Visible And host.st_c1.BackColor = CLR_INPUT_BORDER, "Stepper did not go back to the first step"
+    On Error Resume Next
+    SetStep host, "st", 5: badName = Err.Number: Err.Clear
+    On Error GoTo 0
+    Check badName = 5 And CurrentStep(host, "st") = 1, "SetStep accepted a step out of range"
+    ' Accordion: open and closed sections stacked, a header click opens or closes
+    ' and moves the sections below, a one-open accordion closes the others.
+    Check SectionOpen(host, "acc", 1) And Not SectionOpen(host, "acc", 2), "Accordion did not start with its open section"
+    Check host.acc_v1.Caption = ChrW(&HE70D) And host.acc_v2.Caption = ChrW(&HE76C), "Accordion chevrons do not show open and closed"
+    Check host.acc_b1.Top = host.acc.Top + px(48) And host.acc_h2.Top = host.acc_b1.Top + px(68), "Accordion sections are not stacked"
+    AccordionClick host, "acc", 2
+    Check SectionOpen(host, "acc", 2) And host.acc_h3.Top = host.acc_b2.Top + px(68) And host.acc_v2.Caption = ChrW(&HE70D), "Opened section did not push the next one down"
+    AccordionClick host, "acc", 1
+    Check Not SectionOpen(host, "acc", 1) And host.acc_h2.Top = host.acc.Top + px(41) And host.acc_u1.Top = host.acc.Top + px(40), "Closed section did not let the next one up"
+    Check host.acc.Height = host.acc_b2.Top + px(68) + px(41) - host.acc.Top, "Accordion frame is not its sections' height"
+    OpenSection host, "acs", 2, True
+    Check SectionOpen(host, "acs", 2) And Not SectionOpen(host, "acs", 1), "One-open accordion left another section open"
+    On Error Resume Next
+    OpenSection host, "acc", 4, True: badName = Err.Number: Err.Clear
+    On Error GoTo 0
+    Check badName = 5, "OpenSection accepted a missing section"
+    ' Avatar: initials from the first and last words, a stable tone per name, the
+    ' empty name's own tone, and the built circle and initials.
+    Check AvatarInitials("ETN1 Rivera") = "ER" And AvatarInitials("  ada   byron  lovelace ") = "AL", "Avatar initials differ"
+    Check AvatarInitials("Plato") = "P" And AvatarInitials(Null) = "" And AvatarInitials("   ") = "", "One-word or empty avatar initials differ"
+    Check AvatarTone("Ada Lovelace") = AvatarTone(" ada lovelace ") And AvatarTone("Ada Lovelace") <= 4, "Avatar tone is not stable"
+    Check AvatarTone(Null) = 5 And AvatarTone("") = 5, "Empty name has no tone of its own"
+    host.Recalc
+    Check host.avTest = "AL" And host.avTest.FormatConditions.Count = 5, "Avatar does not show its initials"
+    Check InStr(Nz(host.avTest_bg.Properties("ControlSource").Value, ""), "PillPng(Choose(AvatarTone(") > 0, "Avatar circle is not drawn by tone"
+    Check host.avTest_bg.Width = px(32) And host.avTest.Width = px(32) And host.avTest.FontSize = 10, "Avatar is not 32px with 10pt initials"
+    ' Dropdown menu: placed under its button (right-aligned or above when it would
+    ' run off), sized to its items, separators and disabled items skipped by the
+    ' keys, a pick returns the key and closes it, Esc returns nothing.
+    Dim mx As Long, my As Long, key As Integer
+    MenuSpot 100, 100, 130, 130, 200, 150, 0, 0, 1000, 800, 4, mx, my
+    Check mx = 100 And my = 134, "Menu is not under its button"
+    MenuSpot 900, 100, 930, 130, 200, 150, 0, 0, 1000, 800, 4, mx, my
+    Check mx = 730 And my = 134, "Menu at the right edge is not right-aligned"
+    MenuSpot 100, 700, 130, 730, 200, 150, 0, 0, 1000, 800, 4, mx, my
+    Check mx = 100 And my = 546, "Menu at the bottom is not above its button"
+    Check MenuOpen(host.tglTest, Array("edit|Edit R&D|E70F", "-", "~arch|Archive", "del|!Delete|E74D")), "Menu did not open"
+    Check IsFormOpen("dlgMenu"), "Menu form is not open"
+    With Forms("dlgMenu")
+        Check .Controls("lblCap0").Caption = "Edit R&&D" And .Controls("lblIcon0").Caption = ChrW(&HE70F), "Menu item caption or icon differs"
+        Check .Controls("ruleSep1").Visible And Not .Controls("lblCap1").Visible, "Menu separator is not a line"
+        Check .Controls("lblCap2").ForeColor = CLR_MUTED_FG And .Controls("lblCap3").ForeColor = CLR_DESTRUCTIVE, "Disabled or destructive item colors differ"
+        Check Not .Controls("lblCap4").Visible, "Menu shows unused rows"
+        Check .InsideHeight = px(4 + 32 + 9 + 32 + 32 + 4), "Menu is not sized to its items"
+        key = vbKeyDown: MenuKey Forms("dlgMenu"), key
+        Check .Controls("boxRow0").Visible, "Down did not light the first item"
+        key = vbKeyDown: MenuKey Forms("dlgMenu"), key
+        Check .Controls("boxRow3").Visible And Not .Controls("boxRow0").Visible, "Down did not skip the separator and the disabled item"
+        MenuPick Forms("dlgMenu"), 2
+        Check IsFormOpen("dlgMenu"), "Disabled item closed the menu"
+    End With
+    key = vbKeyReturn: MenuKey Forms("dlgMenu"), key
+    Check Not IsFormOpen("dlgMenu") And MenuResult() = "del", "Enter did not pick the lit item"
+    Check MenuOpen(host.tglTest, Array("a|Alpha", "b|Beta")), "Menu did not open again"
+    key = vbKeyEscape: MenuKey Forms("dlgMenu"), key
+    Check Not IsFormOpen("dlgMenu") And MenuResult() = "", "Esc did not close the menu with nothing picked"
+    On Error Resume Next
+    MenuOpen host.tglTest, Array("a|A", "b|B", "c|C", "d|D", "e|E", "f|F", "g|G", "h|H", "i|I", "j|J", "k|K"): badName = Err.Number: Err.Clear
+    MenuOpen host.tglTest, Array("nokey"): badScale = Err.Number: Err.Clear
+    On Error GoTo 0
+    Check badName = 5 And badScale = 5 And Not IsFormOpen("dlgMenu"), "Menu took too many items or a bad one"
+    DoCmd.SelectObject acForm, "frmTest"        ' the menu was the active window
     host.ringA.SetFocus
     Check host.ringA.BorderColor = CLR_PRIMARY, "Focused input lacks its focus ring"
     host.ringB.SetFocus
@@ -352,6 +507,49 @@ Public Function TestKit(ByVal root As String) As String
     On Error GoTo 0
     DoCmd.Close acForm, F.Name, acSaveNo
     Check badView = 5, "SecretBox accepted a continuous form"
+    NewForm "", 1, px(300), px(100)
+    On Error Resume Next
+    Segmented "seg", "", 0, 0, px(200), "a|A;b|B": badView = Err.Number: Err.Clear
+    On Error GoTo 0
+    DoCmd.Close acForm, F.Name, acSaveNo
+    Check badView = 5, "Segmented accepted a continuous form"
+    NewForm "", 0, px(300), px(100)
+    On Error Resume Next
+    Segmented "seg1", "", 0, 0, px(200), "a|A": badName = Err.Number: Err.Clear
+    Segmented "seg2", "", 0, 0, px(200), "a|A;a|Again": badScale = Err.Number: Err.Clear
+    Segmented "seg3", "", 0, 0, px(100), "a|A;b|B;c|C": badView = Err.Number: Err.Clear
+    On Error GoTo 0
+    DoCmd.Close acForm, F.Name, acSaveNo
+    Check badName = 5, "Segmented accepted one item"
+    Check badScale = 5, "Segmented accepted a repeated key"
+    Check badView = 5, "Segmented accepted options narrower than 40px"
+    NewForm "", 0, px(300), px(100)
+    On Error Resume Next
+    Alert "al", 0, 0, px(200), px(60), "loud": badName = Err.Number: Err.Clear
+    On Error GoTo 0
+    DoCmd.Close acForm, F.Name, acSaveNo
+    Check badName = 5, "Alert accepted an unknown variant"
+    NewForm "", 0, px(300), px(100)
+    On Error Resume Next
+    Breadcrumb "bc", 0, 0, px(200), 1, "x": badName = Err.Number: Err.Clear
+    On Error GoTo 0
+    DoCmd.Close acForm, F.Name, acSaveNo
+    Check badName = 5, "Breadcrumb accepted one slot"
+    NewForm "", 0, px(300), px(100)
+    On Error Resume Next
+    Stepper "st1", 0, 0, px(300), 1, "", "Only": badName = Err.Number: Err.Clear
+    Stepper "st2", 0, 0, px(150), 1, "", "A", "B", "C": badScale = Err.Number: Err.Clear
+    On Error GoTo 0
+    DoCmd.Close acForm, F.Name, acSaveNo
+    Check badName = 5, "Stepper accepted one step"
+    Check badScale = 5, "Stepper accepted steps under 64px"
+    NewForm "", 0, px(300), px(100)
+    On Error Resume Next
+    Accordion "ac1", 0, 0, px(300), False, "Title only": badName = Err.Number: Err.Clear
+    Accordion "ac2", 0, 0, px(300), False, "Title||tall": badScale = Err.Number: Err.Clear
+    On Error GoTo 0
+    DoCmd.Close acForm, F.Name, acSaveNo
+    Check badName = 5 And badScale = 5, "Accordion accepted a bad section"
     ' Splash: CloseSplash and SplashStatus do nothing without one, the footer clears the
     ' subtitle, and the bitmap that hides Access's splash is 58 bytes.
     CloseSplash

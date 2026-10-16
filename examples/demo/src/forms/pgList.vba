@@ -14,6 +14,7 @@ Private Sub Form_Load()
     Me.sfList.Form.RecordSource = "SELECT id, name, owner, status, Format(due_date,'dd mmm yyyy') AS due, due_date " & _
         "FROM demo_item ORDER BY due_date"
     RefreshPage
+    ShowOverdue
     Exit Sub
 Err_Handler:
     HandleError "pgList.Form_Load"
@@ -28,6 +29,7 @@ Public Sub GridClick(ByVal grid As String, ByVal dbl As Boolean)
         Me.sfList.Form.txtSel = Me.sfDetail.Form!id
         Me.sfList.Form.Recalc
     End If
+    ShowCrumbs
     Exit Sub
 Err_Handler:
     HandleError "pgList.GridClick"
@@ -39,11 +41,84 @@ Public Function CanLeave() As Boolean
     CanLeave = SaveDetail(Me, "sfDetail")
 End Function
 
+' The header's alert (Alert): how many open items are past their due date,
+' or nothing when none are.
+Private Sub ShowOverdue()
+    Dim n As Long
+    n = DCount("*", "demo_item", "due_date < Date() And status Not In ('Complete','Cancelled')")
+    If n = 0 Then
+        HideAlert Me, "alOverdue"
+    Else
+        ShowAlert Me, "alOverdue", n & IIf(n = 1, " open item is", " open items are") & " past the due date.", "warning"
+    End If
+End Sub
+
+' The breadcrumb: All items, the chip's status when one is picked, and the
+' open item (the current page).
+Private Sub ShowCrumbs()
+    Dim nm As String
+    If Me.sfDetail.Visible Then nm = Nz(Me.sfDetail.Form!name, "")
+    If m_chip = 0 And Len(nm) = 0 Then
+        SetBreadcrumb Me, "crumb", "c0|All items"
+    ElseIf m_chip = 0 Then
+        SetBreadcrumb Me, "crumb", "c0|All items", "item|" & nm
+    ElseIf Len(nm) = 0 Then
+        SetBreadcrumb Me, "crumb", "c0|All items", "c" & m_chip & "|" & Me("chip" & m_chip).Tag
+    Else
+        SetBreadcrumb Me, "crumb", "c0|All items", "c" & m_chip & "|" & Me("chip" & m_chip).Tag, "item|" & nm
+    End If
+End Sub
+
+' A breadcrumb click: All items, or a status, as its chip would.
+Public Sub CrumbGo(ByVal key As String)
+    On Error GoTo Err_Handler
+    If Left$(key, 1) = "c" Then Chip CLng(Mid$(key, 2))
+    Exit Sub
+Err_Handler:
+    HandleError "pgList.CrumbGo"
+End Sub
+
+' More (the detail card's menu button): the open item's actions.
+Private Sub btnMore_Click()
+    Dim id As Long, flagged As Boolean, k As String
+    On Error GoTo Err_Handler
+    If Not Me.sfDetail.Visible Then Exit Sub
+    If Not SaveDetail(Me, "sfDetail") Then Exit Sub
+    id = Me.sfDetail.Form!id
+    flagged = Nz(Me.sfDetail.Form!flagged, False)
+    k = KitMenu(Me.btnMore, "done|Mark complete|E73E", "flag|" & IIf(flagged, "Remove flag", "Flag for review") & "|E7C1", _
+        "-", "del|!Delete item|E74D")
+    Select Case k
+        Case "done"
+            CurrentDb.Execute "UPDATE demo_item SET status='Complete', percent_done=100 WHERE id=" & id, dbFailOnError
+            Me.sfDetail.Form.Requery
+            ItemSaved id
+            KitToast "Marked complete.", "success"
+        Case "flag"
+            CurrentDb.Execute "UPDATE demo_item SET flagged=" & IIf(flagged, "False", "True") & " WHERE id=" & id, dbFailOnError
+            Me.sfDetail.Form.Requery
+            KitToast IIf(flagged, "Flag removed.", "Flagged for review."), "info"
+        Case "del"
+            If KitMsgBox("Delete """ & Me.sfDetail.Form!name & """? This can't be undone.", vbYesNo + vbExclamation + vbDefaultButton2, _
+                "Delete item") = vbYes Then
+                CurrentDb.Execute "DELETE FROM demo_item WHERE id=" & id, dbFailOnError
+                RefreshPage
+                ShowOverdue
+                KitToast "Item deleted.", "destructive"
+            End If
+    End Select
+    Exit Sub
+Err_Handler:
+    HandleError "pgList.btnMore_Click"
+End Sub
+
 ' The detail panel saved an item: show the change in the list.
 Public Sub ItemSaved(ByVal id As Long)
     Me.sfList.Form.Requery
     Me.sfList.Form.txtSel = id
     RefreshCounts
+    ShowOverdue
+    ShowCrumbs
 End Sub
 
 ' Status chip click: 0 is All.
@@ -119,6 +194,7 @@ Private Sub RefreshPage()
     ' txtSearch_Change, which only runs once the focus has left the panel)
     ' has already saved the open item.
     If IsNull(SelectFirstRow(Me.sfList)) Then ClearDetail Me, "sfDetail"
+    ShowCrumbs
 End Sub
 
 Private Sub RefreshCounts()

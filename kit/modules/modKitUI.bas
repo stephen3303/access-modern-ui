@@ -5,7 +5,8 @@ Option Explicit
 ' scale their columns (GridFit), list/detail pages (SelectFirstRow,
 ' ShowDetail, ClearDetail), search matches marked in tables (GridHighlight),
 ' tabs and filter chips with counts (SetCount, StyleChip), focus rings on
-' inputs (FocusRing), toggle switches (ToggleSwitch, ToggleFocus), the splash
+' inputs (FocusRing), toggle switches (ToggleSwitch, ToggleFocus), segmented
+' controls (SegmentClick, SetSegment, SegmentValue), the splash
 ' screen's status line (SplashStatus) and messages and questions in the kit's
 ' look (KitMsgBox, KitInputBox, and KitToast for ones that fade on their own).
 ' Colors set here go through Th() so they follow the palette.
@@ -894,6 +895,312 @@ Public Function ToggleFocus(frm As Form, ByVal nm As String, ByVal hasFocus As B
 Fail:
     LogError "modKitUI.ToggleFocus", nm
 End Function
+
+' A Segmented option's click (set by the builder): pick option key, move the
+' thumb and bold its caption, then call the control's onChange. Does nothing
+' when key is already picked, while the value is disabled or locked, or on a
+' read-only form.
+Public Function SegmentClick(frm As Form, ByVal nm As String, ByVal key As String)
+    Dim v As Control, onChange As String
+    On Error GoTo Fail
+    Set v = frm.Controls(nm & "_val")
+    If Not v.Enabled Or v.Locked Then Exit Function
+    ' Nested, so an unbound settings form never reads NewRecord.
+    If Not frm.AllowEdits Then
+        If Not (frm.NewRecord And frm.AllowAdditions) Then Exit Function
+    End If
+    If Nz(v.Value, "") & "" = key Then Exit Function
+    v.Value = key
+    SegmentPaint frm, nm
+    onChange = Nz(frm.Controls(nm & "_b0").Tag, "")
+    If Len(onChange) > 0 Then CallByName frm, onChange, VbMethod
+    Exit Function
+Fail:
+    HandleError "modKitUI.SegmentClick", nm
+End Function
+
+' Pick option key of Segmented control nm in code, without calling its
+' onChange (as a value set in code fires no AfterUpdate). Raises error 5 for a
+' key the control doesn't have. A bound control follows its field on its own:
+' call this only to change the value.
+Public Sub SetSegment(frm As Form, ByVal nm As String, ByVal key As String)
+    Dim v As Control
+    Set v = frm.Controls(nm & "_val")
+    If InStr(";" & v.Tag & ";", ";" & key & ";") = 0 Then Err.Raise 5, , "Segmented " & nm & " has no option " & key
+    v.Value = key
+    SegmentPaint frm, nm
+End Sub
+
+' The picked key of Segmented control nm, as text ("" when none is).
+Public Function SegmentValue(frm As Form, ByVal nm As String) As String
+    SegmentValue = Nz(frm.Controls(nm & "_val").Value, "") & ""
+End Function
+
+' Redraw a Segmented control after its value changed in code: an unbound
+' image and a calculated caption only recalculate when asked.
+Private Sub SegmentPaint(frm As Form, ByVal nm As String)
+    Dim i As Long, n As Long
+    n = UBound(Split(frm.Controls(nm & "_val").Tag, ";")) + 1
+    For i = 0 To n - 1
+        frm.Controls(nm & "_th" & i).Requery
+        frm.Controls(nm & "_t" & i).Requery
+    Next
+End Sub
+
+' Show Alert nm with message msg (and title, "" for none) in variant vrnt
+' (info, success, warning, destructive), in the current palette. A title
+' moves the message below it; no title moves it up to the top. Raises error 5
+' for an unknown variant.
+Public Sub ShowAlert(frm As Form, ByVal nm As String, ByVal msg As String, _
+        Optional ByVal vrnt As String = "info", Optional ByVal title As String = "")
+    Dim k As Variant, pnl As Control, t As Control, m As Control
+    k = AlertColors(vrnt)
+    If IsEmpty(k) Then Err.Raise 5, , "Alert " & nm & " has an unknown variant: " & vrnt
+    Set pnl = frm.Controls(nm): Set t = frm.Controls(nm & "_title"): Set m = frm.Controls(nm & "_msg")
+    pnl.BackColor = Th(k(0))
+    pnl.Tag = LCase$(vrnt)
+    frm.Controls(nm & "_bar").BackColor = Th(k(1))
+    frm.Controls(nm & "_icon").ForeColor = Th(k(1))
+    frm.Controls(nm & "_icon").Caption = ChrW(k(2))
+    t.Caption = title
+    m.Caption = msg
+    m.Top = pnl.Top + AlertMsgTop(pnl.Height, Len(title) > 0)
+    m.Height = AlertMsgHeight(pnl.Height, Len(title) > 0)
+    AlertParts frm, nm, True
+    t.Visible = (Len(title) > 0)
+End Sub
+
+' Hide Alert nm, every part of it (an alert's close mark calls it).
+Public Function HideAlert(frm As Form, ByVal nm As String)
+    On Error GoTo Fail
+    AlertParts frm, nm, False
+    Exit Function
+Fail:
+    HandleError "modKitUI.HideAlert", nm
+End Function
+
+' True while Alert nm shows.
+Public Function AlertShown(frm As Form, ByVal nm As String) As Boolean
+    AlertShown = frm.Controls(nm).Visible
+End Function
+
+Private Sub AlertParts(frm As Form, ByVal nm As String, ByVal v As Boolean)
+    Dim s As Variant, c As Control
+    For Each s In Array("", "_bar", "_icon", "_title", "_msg", "_x")
+        Set c = Nothing
+        On Error Resume Next
+        Set c = frm.Controls(nm & s)
+        On Error GoTo 0
+        If Not c Is Nothing Then SetVisible c, v
+    Next
+End Sub
+
+' Show path items ("key|Caption", root first) on Breadcrumb prefix: the last
+' is the current page. Raises error 5 for more items than the trail has slots.
+Public Sub SetBreadcrumb(frm As Form, ByVal prefix As String, ParamArray items() As Variant)
+    Dim path As Variant
+    path = items
+    LayoutCrumbs frm, prefix, path
+End Sub
+
+' A breadcrumb's click (set by the builder): call the trail's handler with the
+' crumb's key, unless it is the current page (the last crumb).
+Public Function CrumbClick(frm As Form, ByVal prefix As String, ByVal i As Long)
+    Dim t() As String
+    On Error GoTo Fail
+    t = Split(frm.Controls(prefix).Tag, "|")
+    If i >= CLng(t(1)) - 1 Then Exit Function
+    CallByName frm, t(0), VbMethod, CStr(frm.Controls(prefix & i).Tag)
+    Exit Function
+Fail:
+    HandleError "modKitUI.CrumbClick", prefix & i
+End Function
+
+' Lay a breadcrumb path out on its slots, in a form open in design view (the
+' builder) or form view (SetBreadcrumb). Crumbs are as wide as their text;
+' when the path is wider than the frame, crumbs from the second on fold into
+' one ellipsis slot, as few as make it fit (the first and last always show).
+Public Sub LayoutCrumbs(frm As Object, ByVal prefix As String, path As Variant)
+    Dim frame As Control, c As Control, t() As String, p() As String
+    Dim n As Long, slots As Long, i As Long, j As Long, fold As Long, x As Long, sepW As Long
+    Dim total As Long, keys() As String, caps() As String, widths() As Long, folded As String, ELLIPSIS As String
+    ELLIPSIS = ChrW(&H2026)
+    Set frame = frm.Controls(prefix)
+    t = Split(frame.Tag, "|")
+    slots = CLng(t(2))
+    n = 0
+    If IsArray(path) Then n = UBound(path) - LBound(path) + 1
+    If n > slots Then Err.Raise 5, , "Breadcrumb " & prefix & " has " & slots & " slots, not " & n
+    frame.Tag = t(0) & "|" & n & "|" & slots
+    sepW = px(16)
+    If n > 0 Then
+        ReDim keys(n - 1): ReDim caps(n - 1): ReDim widths(n - 1)
+        For i = 0 To n - 1
+            p = Split(CStr(path(LBound(path) + i)), "|")
+            keys(i) = p(0)
+            caps(i) = IIf(UBound(p) >= 1, p(UBound(p)), p(0))
+            widths(i) = CrumbWidth(caps(i))
+            total = total + widths(i) + IIf(i > 0, sepW, 0)
+        Next
+    End If
+    ' Fold crumbs 1..fold into slot fold, shown as an ellipsis, until the path fits.
+    If total > frame.Width And n > 2 Then
+        For fold = 1 To n - 2
+            total = widths(0) + CrumbWidth(ELLIPSIS) + 2 * sepW
+            For j = fold + 1 To n - 1
+                total = total + widths(j) + sepW
+            Next
+            If total <= frame.Width Then Exit For
+        Next
+        If fold > n - 2 Then fold = n - 2
+    End If
+    x = frame.Left
+    For i = 0 To slots - 1
+        Set c = frm.Controls(prefix & i)
+        If i >= n Or (i >= 1 And i < fold) Then
+            c.Visible = False
+            If i > 0 Then frm.Controls(prefix & "_s" & i).Visible = False
+        Else
+            If i > 0 Then
+                With frm.Controls(prefix & "_s" & i)
+                    .Left = x: .Top = frame.Top: .Visible = True
+                End With
+                x = x + sepW
+            End If
+            c.Tag = keys(i)
+            If i = fold And fold > 0 Then
+                folded = ""
+                For j = 1 To fold
+                    folded = folded & IIf(j > 1, " > ", "") & caps(j)
+                Next
+                c.Caption = ELLIPSIS
+                c.ControlTipText = folded
+                c.Width = CrumbWidth(ELLIPSIS)
+            Else
+                c.Caption = Replace(caps(i), "&", "&&")
+                c.ControlTipText = ""
+                c.Width = widths(i)
+            End If
+            c.Left = x: c.Top = frame.Top
+            c.ForeColor = Th(IIf(i = n - 1, CLR_FG, CLR_MUTED_FG))
+            c.Visible = True
+            x = x + c.Width
+        End If
+    Next
+End Sub
+
+' Width of a crumb with caption s (9pt, with a little room for Access's margins).
+Private Function CrumbWidth(ByVal s As String) As Long
+    CrumbWidth = MeasureText(s, 9, 400) + px(6)
+End Function
+
+' Make step current (1-based; steps + 1 shows every step done) on Stepper
+' prefix. Raises error 5 for a step out of range.
+Public Sub SetStep(frm As Form, ByVal prefix As String, ByVal current As Long)
+    Dim t() As String
+    t = Split(frm.Controls(prefix).Tag, "|")
+    If current < 1 Or current > CLng(t(2)) + 1 Then Err.Raise 5, , "Stepper " & prefix & " has no step " & current
+    frm.Controls(prefix).Tag = t(0) & "|" & current & "|" & t(2)
+    StepPaint frm, prefix
+End Sub
+
+' The current step of Stepper prefix.
+Public Function CurrentStep(frm As Form, ByVal prefix As String) As Long
+    CurrentStep = CLng(Split(frm.Controls(prefix).Tag, "|")(1))
+End Function
+
+' A step's click (set by the builder): call the handler with a done step's
+' number. The current step and later ones do nothing.
+Public Function StepClick(frm As Form, ByVal prefix As String, ByVal i As Long)
+    Dim t() As String
+    On Error GoTo Fail
+    t = Split(frm.Controls(prefix).Tag, "|")
+    If Len(t(0)) = 0 Or i >= CLng(t(1)) Then Exit Function
+    CallByName frm, t(0), VbMethod, i
+    Exit Function
+Fail:
+    HandleError "modKitUI.StepClick", prefix & i
+End Function
+
+' Paint a Stepper's steps for its current step, in a form open in design view
+' (the builder) or form view (SetStep).
+Public Sub StepPaint(frm As Object, ByVal prefix As String)
+    Dim t() As String, n As Long, cur As Long, i As Long, done As Boolean, numLbl As Control, capLbl As Control
+    t = Split(frm.Controls(prefix).Tag, "|")
+    cur = CLng(t(1)): n = CLng(t(2))
+    For i = 1 To n
+        done = (i < cur)
+        Set numLbl = frm.Controls(prefix & "_n" & i)
+        Set capLbl = frm.Controls(prefix & "_l" & i)
+        frm.Controls(prefix & "_f" & i).Visible = (i <= cur)
+        frm.Controls(prefix & "_r" & i).Visible = (i > cur)
+        If done Then
+            numLbl.FontName = "Segoe MDL2 Assets": numLbl.Caption = ChrW(&HE73E)
+        Else
+            numLbl.FontName = FONT_UI: numLbl.Caption = CStr(i)
+        End If
+        numLbl.ForeColor = Th(IIf(i <= cur, CLR_BTN_FG, CLR_MUTED_FG))
+        capLbl.ForeColor = Th(IIf(i = cur, CLR_FG, CLR_MUTED_FG))
+        capLbl.FontWeight = IIf(i = cur, 600, 400)
+        If i < n Then frm.Controls(prefix & "_c" & i).BackColor = Th(IIf(done, CLR_PRIMARY, CLR_INPUT_BORDER))
+    Next
+End Sub
+
+' An Accordion header's click (set by the builder): open the section if
+' closed, close it if open (in a single accordion, opening one closes the
+' others).
+Public Function AccordionClick(frm As Form, ByVal prefix As String, ByVal i As Long)
+    On Error GoTo Fail
+    OpenSection frm, prefix, i, Not SectionOpen(frm, prefix, i)
+    Exit Function
+Fail:
+    HandleError "modKitUI.AccordionClick", prefix & i
+End Function
+
+' Open or close section i of Accordion prefix and move the sections below.
+Public Sub OpenSection(frm As Form, ByVal prefix As String, ByVal i As Long, ByVal isOpen As Boolean)
+    Dim t() As String, j As Long, n As Long
+    t = Split(frm.Controls(prefix).Tag, "|")
+    n = UBound(Split(t(1), ",")) + 1
+    If i < 1 Or i > n Then Err.Raise 5, , "Accordion " & prefix & " has no section " & i
+    If isOpen And t(0) = "single" Then
+        For j = 1 To n
+            If j <> i Then SetVisible frm.Controls(prefix & "_b" & j), False
+        Next
+    End If
+    ' A body that has the focus can't be hidden: SetVisible moves it first.
+    SetVisible frm.Controls(prefix & "_b" & i), isOpen
+    AccordionLayout frm, prefix
+End Sub
+
+' True while section i of Accordion prefix is open.
+Public Function SectionOpen(frm As Form, ByVal prefix As String, ByVal i As Long) As Boolean
+    SectionOpen = frm.Controls(prefix & "_b" & i).Visible
+End Function
+
+' Stack an Accordion's sections from its top: each header, then its body when
+' open, with 8px below it; the chevron points down on an open section. Works
+' in design view (the builder) and form view (OpenSection).
+Public Sub AccordionLayout(frm As Object, ByVal prefix As String)
+    Dim frame As Control, hs() As String, i As Long, y As Long, b As Control
+    Set frame = frm.Controls(prefix)
+    hs = Split(Split(frame.Tag, "|")(1), ",")
+    y = frame.Top
+    For i = 1 To UBound(hs) + 1
+        Set b = frm.Controls(prefix & "_b" & i)
+        frm.Controls(prefix & "_h" & i).Top = y
+        frm.Controls(prefix & "_t" & i).Top = y
+        frm.Controls(prefix & "_v" & i).Top = y
+        frm.Controls(prefix & "_v" & i).Caption = ChrW(IIf(b.Visible, &HE70D, &HE76C))
+        frm.Controls(prefix & "_u" & i).Top = y + px(40)
+        y = y + px(41)
+        If b.Visible Then
+            b.Top = y + px(7)
+            y = y + px(7) + CLng(hs(i - 1)) + px(8)
+        End If
+    Next
+    frame.Height = y - frame.Top
+End Sub
 
 ' ---------------------------------------------------------------------------
 ' Messages
