@@ -210,8 +210,8 @@ Private Sub Build_dlgPersonnelSetup()
     y = y + px(18)
     Txt("txtKey", "", x, y, w, px(30)).Tag = "create"                   ' btnCreate_Click fills in a new random key
     y = y + px(30) + px(4)
-    Lbl("lblKeyHint", "Locks the Personnel file. It's saved as " & PERSONNEL_KEY_FILE & " in that folder, where every app reads it, " & _
-        "so nobody has to type it. Keep the suggested one unless your site has its own.", _
+    Lbl("lblKeyHint", "Saved as " & PERSONNEL_KEY_FILE & " beside the file for every app. " & _
+        "Keep it unless your site has one.", _
         x, y, w, px(32), 9, False, CLR_MUTED_FG).Tag = "create"
     y = y + px(32) + gap
     FieldLabel "lblPwd", "Your app password", x, y, half, "create"
