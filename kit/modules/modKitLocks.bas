@@ -47,6 +47,8 @@ Private Const LOCK_RAISE As String = "Another user is saving the same records ri
 Private Declare PtrSafe Sub Sleep Lib "kernel32" (ByVal ms As Long)
 
 Private m_testAnswer As Long    ' tests only: the conflict answer, 0 to ask
+Private m_saving As Boolean     ' KitSaveRecord is saving: KitFormError leaves locks to it
+Private m_formLock As Long      ' the lock error KitFormError passed on to KitSaveRecord
 
 ' True for the errors a moment's wait can clear (see the top of the module).
 Public Function IsLockError(ByVal errNum As Long) As Boolean
@@ -97,23 +99,32 @@ End Function
 ' (its BeforeUpdate cancelled), the user chose in KitFormError, or the lock
 ' didn't clear (the user is told). Other errors are raised.
 Public Function KitSaveRecord(frm As Form) As Boolean
-    Dim attempt As Long
+    Dim attempt As Long, num As Long
 TryAgain:
     On Error GoTo Fail
+    m_saving = True
+    m_formLock = 0
     If frm.Dirty Then frm.Dirty = False
+    m_saving = False
     KitSaveRecord = True
     Exit Function
 Fail:
-    Select Case Err.Number
-        Case 2101, 2115, 2169, 3020     ' refused by BeforeUpdate or Form_Error: it has said why
-            Exit Function
-    End Select
-    If LockWait(Err.Number, attempt) Then Resume TryAgain
-    If IsLockError(Err.Number) Then
+    m_saving = False
+    num = Err.Number
+    ' A form wired to KitFormError gets the lock in Form_Error first; it
+    ' notes it and stays quiet, and the save fails here as refused (2101 etc.).
+    If m_formLock <> 0 Then num = m_formLock
+    m_formLock = 0
+    If LockWait(num, attempt) Then Resume TryAgain
+    If IsLockError(num) Then
         LogError "modKitLocks.KitSaveRecord", frm.Name & " locked after " & LOCK_TRIES & " retries"
         KitMsgBox LOCK_MSG, vbExclamation
         Exit Function
     End If
+    Select Case num
+        Case 2101, 2115, 2169, 3020     ' refused by BeforeUpdate or Form_Error: it has said why
+            Exit Function
+    End Select
     RaiseAgain "modKitLocks.KitSaveRecord", frm.Name
 End Function
 
@@ -129,7 +140,11 @@ Public Sub KitFormError(frm As Form, ByVal DataErr As Integer, Response As Integ
         Case Else
             If IsLockError(DataErr) Then
                 Response = acDataErrContinue
-                KitMsgBox LOCK_MSG, vbExclamation
+                If m_saving Then
+                    m_formLock = DataErr        ' KitSaveRecord retries, and tells the user if it can't
+                Else
+                    KitMsgBox LOCK_MSG, vbExclamation
+                End If
             End If
     End Select
     Exit Sub
@@ -184,7 +199,7 @@ Private Sub ChangedFields(frm As Form, names As Collection, fields As Collection
     Dim c As Control, src As String
     For Each c In frm.Controls
         Select Case c.ControlType
-            Case acTextBox, acComboBox, acCheckBox, acListBox, acOptionGroup
+            Case acTextBox, acComboBox, acCheckBox, acToggleButton, acListBox, acOptionGroup
                 src = c.ControlSource
                 If Len(src) > 0 And Left$(src, 1) <> "=" Then
                     If Not SameValue(c.Value, c.OldValue) Then
