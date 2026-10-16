@@ -872,6 +872,9 @@ Write app-specific helpers next to the builds that use them. Examples:
   Ctrl+N in its `Shortcut` function; name the search box `txtSearch` so Ctrl+F finds it;
   put the key in the button's tooltip ("Save (Ctrl+S)"). These keys replace Access's own
   Ctrl+S (save the object's design), Ctrl+N (new database) and Ctrl+F (Find dialog).
+- **Files**: never ask users to type a path. Use `KitSaveAs`, `KitPickFile` or `KitPickFolder`
+  (Windows' own windows, starting in the folder last used for the same purpose), and
+  `ExportGridAs` for a table's Export button.
 - **Hierarchical trees and wrapped rows**:
   - A continuous form gives every row the same height, so build rows tall enough for
     2–3 lines.
