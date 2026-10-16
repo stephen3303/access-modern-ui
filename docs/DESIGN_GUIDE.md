@@ -31,6 +31,10 @@ app that shows every builder working.
   per-user scratch tables) linked to one shared back-end data file. Version checks keep the
   two in step (`KitVersionProblem`), and `KitEnsureBackend` at startup reconnects a copy whose
   data file has moved, with one Open window instead of a broken app.
+- **One Personnel directory for every app.** People live once, in a shared, encrypted
+  `Personnel_be.accdb` in its own restricted folder (`modPersonnel`), never in an app's data
+  file. Apps link to it, sign the Windows user in with no questions, and keep only their own
+  roles, linked by `person_id`. No SSN or DoD ID.
 - **Keep the kit separate from the app.** Reusable modules go in `kit/`. App modules go in
   `src/` and provide a few named hooks the kit calls.
 
