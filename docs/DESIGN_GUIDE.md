@@ -244,8 +244,9 @@ Write documentation in three layers, all in plain, direct prose:
      - `# Heading`, `- bullet`, `**bold**`.
      - A blank line ends a paragraph.
    - The kit's modKitHelp loads it (`LoadHelpTopics`), builds the window
-     (`BuildHelpDialog`) and the F1 key (`BuildHelpKey`, an `AutoKeys` macro running
-     `KitHelp()`).
+     (`BuildHelpDialog`) and the F1 key: `BuildShortcutKeys` (modKitKeys) writes the
+     `AutoKeys` macro with F1 running `KitHelp()` beside Ctrl+S, Ctrl+N and Ctrl+F;
+     `BuildHelpKey` writes F1 alone.
    - Topic keys match page keys, so Help (`=KitHelp()`), F1 and the sign-in Help link open
      the topic for whatever is on screen. A dialog, or a page with tabs, names its own
      topic with a `Public Property Get HelpTopic() As String` in its code-behind.
@@ -1143,7 +1144,8 @@ The Appearance dialog grows by itself, because it is built from `PALETTE_COUNT`.
    `BuildToast` (for `KitToast`),
    `BuildInputDialog` (for `KitInputBox`),
    `BuildDatePicker` (for date fields), and the help window: `LoadHelpTopics` with
-   `help.txt`, `BuildHelpDialog` and `BuildHelpKey` for F1. Optionally add the splash screen with `BuildSplash` and
+   `help.txt`, `BuildHelpDialog`, and `BuildShortcutKeys` in the startup step for Ctrl+S, Ctrl+N,
+   Ctrl+F and F1 (`BuildHelpKey` instead for F1 alone). Optionally add the splash screen with `BuildSplash` and
    `HideAccessSplash`, and pass `frmSplash` to `BuildTrustCheck` as the startup form.
 8. Write `README.md` and `DEVELOPING.md` using the structure in section 4, linking to the
    kit's README for the builder catalog.
