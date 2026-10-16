@@ -1141,7 +1141,7 @@ Public Function TestKit(ByVal root As String) As String
     peErr = 0: On Error Resume Next: PersonnelSaveWindowsAccount: peErr = Err.Number: On Error GoTo 0
     Check peErr = 5, "Windows account saved with nobody signed in"
     ' Personnel screens (modPersonnelUI): built, and open in their first state.
-    Dim peFrm As Form
+    Dim peFrm As Form, peCtl As Control, peLow As Long
     Check PersonnelCanSetFirstPassword("alee") = False And PersonIdFor("alee") = pe2 And WindowsAccountKnown(), "First-password or account rules wrong"
     Check InStr(PersonnelAdminNote(), WinAccount()) > 0 And InStr(PersonnelAdminNote(), APP_NAME) > 0, "Admin note lacks the account or app"
     Check KitCopyText("kit copy test"), "Text not put on the clipboard"
@@ -1149,7 +1149,11 @@ Public Function TestKit(ByVal root As String) As String
     DoCmd.OpenForm SETUP_FORM
     Set peFrm = Forms(SETUP_FORM)
     Check peFrm.btnFind.Visible And peFrm.btnCreate.Visible And Not peFrm.txtFirst.Visible And Not peFrm.txtAsk.Visible, "Setup did not open on its choices"
-    Check peFrm.Section(acDetail).Height < peFrm.btnCreateGo.Top, "Setup not fitted to its choices"
+    peLow = 0
+    For Each peCtl In peFrm.Controls
+        If peCtl.Visible And peCtl.Top + peCtl.Height > peLow Then peLow = peCtl.Top + peCtl.Height
+    Next
+    Check peFrm.Section(acDetail).Height = peLow + peFrm.lblTitle.Top, "Setup not fitted to its choices"
     DoCmd.Close acForm, SETUP_FORM, acSaveNo
     DoCmd.OpenForm SIGNIN_FORM
     Set peFrm = Forms(SIGNIN_FORM)

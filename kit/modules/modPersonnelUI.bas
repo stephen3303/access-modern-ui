@@ -123,10 +123,10 @@ Private Sub Build_dlgPersonnelSetup()
     y = pad
     Lbl "lblTitle", "Set up the Personnel directory", x, y, w, px(26), 13, True
     y = y + px(26) + gap
-    Set c = Lbl("lblWhy", "", x, y, w, px(56))            ' filled in by Form_Load
+    Set c = Lbl("lblWhy", "", x, y, w, px(72))            ' filled in by Form_Load; 4 lines for a long path
     c.Tag = "choice"
     ' choice
-    y = y + px(56) + gap
+    y = y + px(72) + gap
     ChoiceRow "Find", "Find the Personnel file", _
         "When Personnel is already set up and you know where its file is.", x, y, w
     ChoiceRow "Create", "Create a new Personnel file", _
@@ -156,12 +156,14 @@ Private Sub Build_dlgPersonnelSetup()
     Lbl("lblFolderHint", "Only Personnel admins should be able to change this folder. Ask IT to restrict it.", _
         x, y, w, px(18), 9, False, CLR_MUTED_FG).Tag = "create"
     y = y + px(18) + gap
-    FieldLabel "lblPwd", "Your app password (8 or more characters)", x, y, half, "create"
+    FieldLabel "lblPwd", "Your app password", x, y, half, "create"
     FieldLabel "lblPwd2", "Type it again", x + half + Sp(SP_ITEM_GAP), y, half, "create"
     y = y + px(18)
     Set c = Txt("txtPwd", "", x, y, half, px(30)): c.InputMask = SECRET_MASK: c.Tag = "create"
     Set c = Txt("txtPwd2", "", x + half + Sp(SP_ITEM_GAP), y, half, px(30)): c.InputMask = SECRET_MASK: c.Tag = "create"
-    y = y + px(30) + Sp(SP_DIALOG)
+    y = y + px(30) + px(4)
+    Lbl("lblPwdHint", "8 or more characters. Capitals count.", x, y, w, px(18), 9, False, CLR_MUTED_FG).Tag = "create"
+    y = y + px(18) + Sp(SP_DIALOG)
     Set c = Btn("btnCreateGo", "Create", x + w - 2 * btnW - Sp(SP_ITEM_GAP), y, btnW, px(32)): c.Tag = "create"
     Set c = Btn("btnBack", "Back", x + w - btnW, y, btnW, px(32), "outline"): c.Tag = "create"
     ' ask: starts under the title
@@ -169,11 +171,11 @@ Private Sub Build_dlgPersonnelSetup()
     Lbl("lblAsk", "Send this to your Personnel admin. They can find the file, or set Personnel up.", _
         x, y, w, px(36)).Tag = "ask"
     y = y + px(36) + gap
-    Set c = RO("txtAsk", "", x, y, w, px(110), 9)
+    Set c = RO("txtAsk", "", x, y, w, px(140), 9)
     c.BackStyle = 1: c.BackColor = CLR_SURFACE: c.BorderStyle = 1: c.BorderColor = CLR_BORDER
     c.LeftMargin = px(8): c.TopMargin = px(6): c.RightMargin = px(8)
     c.Tag = "ask"
-    y = y + px(110) + Sp(SP_DIALOG)
+    y = y + px(140) + Sp(SP_DIALOG)
     Set c = Btn("btnCopy", "Copy", x + w - 2 * btnW - Sp(SP_ITEM_GAP), y, btnW, px(32), "outline"): c.Tag = "ask"
     Set c = Btn("btnCloseApp", "Close app", x + w - btnW, y, btnW, px(32)): c.Tag = "ask"
     ' Tall enough for the tallest panel; Form_Load fits it to the one shown.
@@ -217,8 +219,8 @@ Private Sub Build_dlgSignIn()
     y = y + px(26) + gap
     ' Row "why": this Windows account isn't set up.
     Lbl("lblWhy", "This Windows account isn't set up in Personnel yet. Ask a Personnel admin to add it, " & _
-        "or sign in with your sign-in name and app password.", x, y, w, px(36), 9).Tag = "why"
-    y = y + px(36) + px(4)
+        "or sign in with your sign-in name and app password.", x, y, w, px(52), 9).Tag = "why"
+    y = y + px(52) + px(4)
     Set c = RO("txtAccount", "", x, y, w - px(72) - Sp(SP_ITEM_GAP), px(28), 9)
     c.BackStyle = 1: c.BackColor = CLR_SURFACE: c.BorderStyle = 1: c.BorderColor = CLR_BORDER
     c.LeftMargin = px(8): c.Tag = "why"

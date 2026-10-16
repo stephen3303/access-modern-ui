@@ -7,48 +7,68 @@ Option Explicit
 ' Personnel file is linked: found, or created with the current Windows user
 ' signed in as its first admin. Closing any other way leaves the app to quit.
 
+Private m_tops As Object          ' each tagged control's designed Top, by name
+Private m_fullHeight As Long      ' the designed Detail height (the tallest panel)
+
 Private Sub Form_Load()
     On Error GoTo Err_Handler
-    Dim lost As Boolean
+    Dim lost As Boolean, c As Control
+    Set m_tops = CreateObject("Scripting.Dictionary")
+    For Each c In Me.Controls
+        If Len(c.Tag) > 0 Then m_tops(c.Name) = c.Top
+    Next
+    m_fullHeight = Me.Section(acDetail).Height
     lost = (PersonnelUiSetupMode() = PERSONNEL_LOST)
     If lost Then
         Me.lblTitle.Caption = "The Personnel file can't be reached"
-        Me.lblWhy.Caption = APP_NAME & " signs people in from the shared Personnel file, which isn't at " & _
-            PersonnelPath() & " any more. If it has moved, find it. Otherwise ask your admin."
+        Me.lblWhy.Caption = APP_NAME & " can't reach its Personnel file at " & PersonnelPath() & _
+            ". If it has moved, find it. Otherwise ask your admin."
+        ' Never offer a second directory while one is linked: Create leaves
+        ' every panel, and I'm not the admin takes its place.
+        Me.btnCreate.Tag = "never": Me.lblCreateHint.Tag = "never"
+        m_tops("btnNotAdmin") = m_tops("btnCreate")
+        m_tops("lblNotAdminHint") = m_tops("lblCreateHint")
     Else
         Me.lblWhy.Caption = APP_NAME & " signs people in from a shared Personnel file, and it can't find one. " & _
             "If Personnel is already set up for another app, find its file."
     End If
-    ShowPanel "choice"
-    If lost Then
-        ' Never offer a second directory while one is linked.
-        SetVisible Me.btnCreate, False
-        SetVisible Me.lblCreateHint, False
-        Me.btnNotAdmin.Top = Me.btnCreate.Top
-        Me.lblNotAdminHint.Top = Me.lblCreateHint.Top
-        FitToPanel "choice"
-    End If
     Me.txtFolder = Left$(PersonnelDefaultPath(PersonnelUiAppTable()), InStrRev(PersonnelDefaultPath(PersonnelUiAppTable()), "\") - 1)
     Me.txtAsk = PersonnelAdminNote()
-    CenterOnApp Me
+    ShowPanel "choice"
     Exit Sub
 Err_Handler:
     LogError "dlgPersonnelSetup.Form_Load"
 End Sub
 
-' Show the controls tagged panel (and the untagged title), hide the rest,
-' and fit the dialog to them.
+' F1 opens the help on this screen (KitHelp).
+Public Property Get HelpTopic() As String
+    HelpTopic = "personnel.setup"
+End Property
+
+' Show the controls tagged panel (and the untagged title) at their designed
+' places, hide the rest, and fit the dialog to the panel. Access won't make
+' the Detail shorter than its lowest control, hidden or not, so hidden
+' controls move to the top first; the Detail grows back to its designed
+' height before the shown ones return to their places.
 Private Sub ShowPanel(ByVal panel As String)
     Dim c As Control
+    Me.Section(acDetail).Height = m_fullHeight
     For Each c In Me.Controls
         If Len(c.Tag) > 0 Then
-            If c.Tag = panel Then SetVisible c, True
+            If c.Tag <> panel Then
+                SetVisible c, False
+                c.Top = 0
+            End If
         End If
     Next
     For Each c In Me.Controls
-        If Len(c.Tag) > 0 And c.Tag <> panel Then SetVisible c, False
+        If c.Tag = panel Then
+            c.Top = m_tops(c.Name)
+            SetVisible c, True
+        End If
     Next
     FitToPanel panel
+    Me.Repaint                                  ' no trace of the last panel's text
 End Sub
 
 ' Height to the lowest visible control of panel, plus the dialog padding.
@@ -155,7 +175,7 @@ End Sub
 
 Private Sub btnCopy_Click()
     On Error GoTo Err_Handler
-    If KitCopyText(Nz(Me.txtAsk, "")) Then KitToast "Copied", "success"
+    If KitCopyText(Nz(Me.txtAsk, "")) Then KitToast "Copied", "success" Else KitToast "Couldn't copy. Try again.", "warning"
     Exit Sub
 Err_Handler:
     HandleError "dlgPersonnelSetup.btnCopy_Click"

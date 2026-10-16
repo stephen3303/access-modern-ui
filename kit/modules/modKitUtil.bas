@@ -32,6 +32,7 @@ Private Declare PtrSafe Function OpenClipboard Lib "user32" (ByVal hWnd As LongP
 Private Declare PtrSafe Function EmptyClipboard Lib "user32" () As Long
 Private Declare PtrSafe Function SetClipboardData Lib "user32" (ByVal uFormat As Long, ByVal hMem As LongPtr) As LongPtr
 Private Declare PtrSafe Function CloseClipboard Lib "user32" () As Long
+Private Declare PtrSafe Sub Sleep Lib "kernel32" (ByVal ms As Long)
 Private Declare PtrSafe Function GlobalAlloc Lib "kernel32" (ByVal uFlags As Long, ByVal dwBytes As LongPtr) As LongPtr
 Private Declare PtrSafe Function GlobalLock Lib "kernel32" (ByVal hMem As LongPtr) As LongPtr
 Private Declare PtrSafe Function GlobalUnlock Lib "kernel32" (ByVal hMem As LongPtr) As Long
@@ -272,10 +273,11 @@ Public Function CenteredStart(ByVal lo As Long, ByVal hi As Long, ByVal size As 
     CenteredStart = p
 End Function
 
-' Put s on the clipboard as text (a Copy button). True when it is there.
+' Put s on the clipboard as text (a Copy button). True when it is there;
+' False when another program kept the clipboard (the caller says so).
 Public Function KitCopyText(ByVal s As String) As Boolean
-    Const CF_UNICODETEXT As Long = 13, GMEM_MOVEABLE As Long = 2
-    Dim hMem As LongPtr, p As LongPtr, n As LongPtr
+    Const CF_UNICODETEXT As Long = 13, GMEM_MOVEABLE As Long = 2, TRIES As Long = 20
+    Dim hMem As LongPtr, p As LongPtr, n As LongPtr, i As Long, opened As Boolean
     n = (Len(s) + 1) * 2
     hMem = GlobalAlloc(GMEM_MOVEABLE, n)
     If hMem = 0 Then Exit Function
@@ -283,7 +285,15 @@ Public Function KitCopyText(ByVal s As String) As Boolean
     If p = 0 Then GlobalFree hMem: Exit Function
     CopyMemoryW p, StrPtr(s & vbNullChar), n
     GlobalUnlock hMem
-    If OpenClipboard(Application.hWndAccessApp) = 0 Then GlobalFree hMem: Exit Function
+    ' Another program (a remote desktop's clipboard sync, a clipboard
+    ' manager) can hold the clipboard for a moment: try for about a second,
+    ' letting Windows run between tries so it can let go.
+    For i = 1 To TRIES
+        If OpenClipboard(Application.hWndAccessApp) <> 0 Then opened = True: Exit For
+        DoEvents
+        Sleep 50
+    Next
+    If Not opened Then GlobalFree hMem: Exit Function
     EmptyClipboard
     If SetClipboardData(CF_UNICODETEXT, hMem) = 0 Then GlobalFree hMem Else KitCopyText = True   ' Windows owns it once set
     CloseClipboard

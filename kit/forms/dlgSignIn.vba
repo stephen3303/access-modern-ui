@@ -93,7 +93,7 @@ End Function
 
 Private Sub btnCopyAccount_Click()
     On Error GoTo Err_Handler
-    If KitCopyText(WinAccount()) Then KitToast "Copied", "success"
+    If KitCopyText(WinAccount()) Then KitToast "Copied", "success" Else KitToast "Couldn't copy. Try again.", "warning"
     Exit Sub
 Err_Handler:
     HandleError "dlgSignIn.btnCopyAccount_Click"
