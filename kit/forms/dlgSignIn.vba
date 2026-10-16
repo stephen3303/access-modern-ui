@@ -26,6 +26,11 @@ Public Property Get HelpTopic() As String
     HelpTopic = "directory.signin"
 End Property
 
+' F1 opens this dialog's help even during startup (PersonnelF1).
+Private Sub Form_KeyDown(KeyCode As Integer, Shift As Integer)
+    PersonnelF1 KeyCode
+End Sub
+
 ' Hide the controls tagged row and move everything under them up by the
 ' space they took, then shrink the dialog by the same amount.
 Private Sub CollapseRow(ByVal row As String)

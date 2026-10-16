@@ -59,6 +59,11 @@ Public Property Get HelpTopic() As String
     HelpTopic = "directory.person"
 End Property
 
+' F1 opens this dialog's help even during startup (PersonnelF1).
+Private Sub Form_KeyDown(KeyCode As Integer, Shift As Integer)
+    PersonnelF1 KeyCode
+End Sub
+
 ' Empty boxes for the next person to add.
 Private Sub StartNew()
     Dim nm As Variant

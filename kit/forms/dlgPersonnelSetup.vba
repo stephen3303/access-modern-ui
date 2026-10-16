@@ -46,6 +46,11 @@ Public Property Get HelpTopic() As String
     HelpTopic = "directory.setup"
 End Property
 
+' F1 opens this dialog's help even during startup (PersonnelF1).
+Private Sub Form_KeyDown(KeyCode As Integer, Shift As Integer)
+    PersonnelF1 KeyCode
+End Sub
+
 ' Show the controls tagged panel (and the untagged title) at their designed
 ' places, hide the rest, and fit the dialog to the panel. Access won't make
 ' the Detail shorter than its lowest control, hidden or not, so hidden

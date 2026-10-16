@@ -1264,6 +1264,7 @@ Public Function TestKit(ByVal root As String) As String
     DoCmd.OpenForm PERSONNEL_FORM
     Set peFrm = Forms(PERSONNEL_FORM)
     Check peFrm.OnOpen = "[Event Procedure]" And peFrm.lstPeople.Visible, "Personnel page's admin check not wired to Open"
+    Check peFrm.KeyPreview And peFrm.OnKeyDown = "[Event Procedure]", "Personnel page doesn't catch F1 itself"
     Check peFrm.lstPeople.ListCount = DCount("*", PERSON_TABLE) + 1 And Not peFrm.lblNone.Visible, "Personnel page doesn't list everyone"
     DoCmd.Close acForm, PERSONNEL_FORM, acSaveNo
     DoCmd.OpenForm PERSON_FORM, , , , , , "new"
