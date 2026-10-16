@@ -63,6 +63,7 @@ Public Function TestKit(ByVal root As String) As String
     Toggle "tglTest", "", px(220), px(663), onChange:="ToggleChanged"
     Segmented "segTest", "", px(700), px(660), px(240), "day|Day;week|Week;month|Month", onChange:="SegmentChanged"
     Alert "alTest", px(700), px(720), px(320), px(64), "warning", "Heads up", "Check the due date.", True
+    Breadcrumb "bc", px(700), px(800), px(320), 5, "CrumbPicked", "home|Home", "items|Items", "i42|Pump overhaul"
     SecretBox "secret", "", px(400), px(700), px(160), px(30)     ' clear of the ring, required and toggle fields
     SaveForm "frmTest", "testHost"
     DoCmd.OpenForm "frmTest"
@@ -295,6 +296,27 @@ Public Function TestKit(ByVal root As String) As String
     ShowAlert host, "alTest", "x", "loud": badName = Err.Number: Err.Clear
     On Error GoTo 0
     Check badName = 5, "ShowAlert accepted an unknown variant"
+    ' Breadcrumb: built path in order, the last crumb current and not a link, a
+    ' path wider than the trail folds its middle into an ellipsis, too many fail.
+    Check host.bc0.Visible And host.bc2.Visible And Not host.bc3.Visible And Not host.bc_s3.Visible, "Breadcrumb shows the wrong crumbs"
+    Check host.bc1.Left = host.bc_s1.Left + px(16) And host.bc_s1.Left = host.bc0.Left + host.bc0.Width, "Breadcrumb crumbs are not in a row"
+    Check host.bc2.ForeColor = CLR_FG And host.bc0.ForeColor = CLR_MUTED_FG, "Breadcrumb current page is not set apart"
+    CrumbClick host, "bc", 0
+    Check host.lastCrumb = "home", "Breadcrumb click did not call its handler with the key"
+    CrumbClick host, "bc", 2
+    Check host.lastCrumb = "home", "Click on the current page's crumb called the handler"
+    SetBreadcrumb host, "bc", "a|Alpha root", "b|Beta section", "c|Gamma subsection", "d|Delta page", "e|Epsilon detail"
+    Check Not host.bc1.Visible And Not host.bc2.Visible And host.bc3.Visible And host.bc4.Visible, "Wide breadcrumb did not fold its middle"
+    Check host.bc3.Caption = ChrW(&H2026) And host.bc3.Tag = "d" And host.bc3.ControlTipText = "Beta section > Gamma subsection > Delta page", "Folded crumbs are not named by the ellipsis"
+    Check host.bc4.Left + host.bc4.Width <= host.bc.Left + host.bc.Width, "Folded breadcrumb overruns its width"
+    CrumbClick host, "bc", 3
+    Check host.lastCrumb = "d", "Ellipsis click did not go to the deepest folded crumb"
+    SetBreadcrumb host, "bc", "x|One", "y|Two"
+    Check host.bc1.Visible And Not host.bc2.Visible And host.bc1.Caption = "Two" And host.bc1.ForeColor = CLR_FG, "Shorter breadcrumb path left old crumbs"
+    On Error Resume Next
+    SetBreadcrumb host, "bc", "1|1", "2|2", "3|3", "4|4", "5|5", "6|6": badName = Err.Number: Err.Clear
+    On Error GoTo 0
+    Check badName = 5, "Breadcrumb took more items than slots"
     host.ringA.SetFocus
     Check host.ringA.BorderColor = CLR_PRIMARY, "Focused input lacks its focus ring"
     host.ringB.SetFocus
@@ -421,6 +443,12 @@ Public Function TestKit(ByVal root As String) As String
     On Error GoTo 0
     DoCmd.Close acForm, F.Name, acSaveNo
     Check badName = 5, "Alert accepted an unknown variant"
+    NewForm "", 0, px(300), px(100)
+    On Error Resume Next
+    Breadcrumb "bc", 0, 0, px(200), 1, "x": badName = Err.Number: Err.Clear
+    On Error GoTo 0
+    DoCmd.Close acForm, F.Name, acSaveNo
+    Check badName = 5, "Breadcrumb accepted one slot"
     ' Splash: CloseSplash and SplashStatus do nothing without one, the footer clears the
     ' subtitle, and the bitmap that hides Access's splash is 58 bytes.
     CloseSplash

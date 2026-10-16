@@ -272,7 +272,8 @@ End Sub
 
 ' List and detail: the list card fills the width, the 360px detail card is
 ' anchored right. Print and export the list as filtered. A warning alert in
-' the header row counts the items past their due date.
+' the header row counts the items past their due date, and a breadcrumb
+' below the title shows where the open item sits.
 Private Sub Build_pgList()
     Dim c As Control, x As Long, y As Long, h As Long, lw As Long
     lw = ListW()
@@ -284,6 +285,8 @@ Private Sub Build_pgList()
     Set c = Btn("btnCsv", "Export CSV", PAGE_W - CX - px(338), px(24), px(108), px(32), "outline"): Anchor c, 1, 0
     ' Compact (36px) alert in the header row, between the title and the buttons.
     Alert "alOverdue", CX + px(200), px(22), px(440), px(36), "warning", dismiss:=True
+    ' Breadcrumb in the subtitle's place: All items > the chip's status > the open item.
+    Breadcrumb "crumb", CX, px(54), px(620), 3, "CrumbGo", "c0|All items"
     y = px(84)
     x = Chips(CX, y + px(1))
     SearchBox x + px(10), y, px(220)

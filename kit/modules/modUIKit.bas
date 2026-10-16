@@ -865,6 +865,38 @@ Public Function Alert(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVa
     Set Alert = pnl
 End Function
 
+' Breadcrumb trail: where the user is, as a path of links ("Items > Pump
+' overhaul > History"). Each crumb but the last is a CLR_MUTED_FG link that
+' calls handler (a Public Sub or Function on the form taking the crumb's key)
+' with its key; the last is the current page, in CLR_FG, and does nothing.
+' Chevrons separate them. items are "key|Caption" from the root down; the
+' trail is set again at run time with SetBreadcrumb, so build as many slots as
+' the deepest path needs (2 to 12). A path wider than w folds the crumbs after
+' the first into one ellipsis (its tooltip names them; a click goes to the
+' deepest of them). Parts: <prefix> an invisible frame holding the trail's
+' place and width, <prefix><i> the crumbs and <prefix>_s<i> the chevrons
+' before them. Raises error 5 for a bad slot count or more items than slots.
+Public Sub Breadcrumb(ByVal prefix As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal slots As Long, _
+        ByVal handler As String, ParamArray items() As Variant)
+    Dim i As Long, c As Control, path As Variant
+    If slots < 2 Or slots > 12 Then Err.Raise 5, , "Breadcrumb " & prefix & " takes 2 to 12 slots: " & slots
+    If UBound(items) + 1 > slots Then Err.Raise 5, , "Breadcrumb " & prefix & " has more items than slots"
+    Set c = Box(prefix, x, y, w, px(20), -1)
+    c.Tag = handler & "|0|" & slots
+    For i = 0 To slots - 1
+        If i > 0 Then
+            Set c = Lbl(prefix & "_s" & i, ChrW(&HE76C), x, y, px(16), px(20), 7, False, CLR_MUTED_FG)
+            c.FontName = "Segoe MDL2 Assets"
+            c.TextAlign = 2
+            c.Visible = False
+        End If
+        Set c = Link(prefix & i, "", x, y, px(40), px(20), "=CrumbClick([Form],""" & prefix & """," & i & ")", 9, CLR_MUTED_FG)
+        c.Visible = False
+    Next
+    path = items
+    LayoutCrumbs F, prefix, path
+End Sub
+
 ' Where an Alert's parts sit, down from its top (twips): an item of height ih
 ' (icon, close mark) is 12px down, or centered in a compact alert (under 48px);
 ' the message is below the title, or level with the icon.

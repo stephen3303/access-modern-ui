@@ -995,6 +995,105 @@ Private Sub AlertParts(frm As Form, ByVal nm As String, ByVal v As Boolean)
     Next
 End Sub
 
+' Show path items ("key|Caption", root first) on Breadcrumb prefix: the last
+' is the current page. Raises error 5 for more items than the trail has slots.
+Public Sub SetBreadcrumb(frm As Form, ByVal prefix As String, ParamArray items() As Variant)
+    Dim path As Variant
+    path = items
+    LayoutCrumbs frm, prefix, path
+End Sub
+
+' A breadcrumb's click (set by the builder): call the trail's handler with the
+' crumb's key, unless it is the current page (the last crumb).
+Public Function CrumbClick(frm As Form, ByVal prefix As String, ByVal i As Long)
+    Dim t() As String
+    On Error GoTo Fail
+    t = Split(frm.Controls(prefix).Tag, "|")
+    If i >= CLng(t(1)) - 1 Then Exit Function
+    CallByName frm, t(0), VbMethod, CStr(frm.Controls(prefix & i).Tag)
+    Exit Function
+Fail:
+    HandleError "modKitUI.CrumbClick", prefix & i
+End Function
+
+' Lay a breadcrumb path out on its slots, in a form open in design view (the
+' builder) or form view (SetBreadcrumb). Crumbs are as wide as their text;
+' when the path is wider than the frame, crumbs from the second on fold into
+' one ellipsis slot, as few as make it fit (the first and last always show).
+Public Sub LayoutCrumbs(frm As Object, ByVal prefix As String, path As Variant)
+    Dim frame As Control, c As Control, t() As String, p() As String
+    Dim n As Long, slots As Long, i As Long, j As Long, fold As Long, x As Long, sepW As Long
+    Dim total As Long, keys() As String, caps() As String, widths() As Long, folded As String, ELLIPSIS As String
+    ELLIPSIS = ChrW(&H2026)
+    Set frame = frm.Controls(prefix)
+    t = Split(frame.Tag, "|")
+    slots = CLng(t(2))
+    n = 0
+    If IsArray(path) Then n = UBound(path) - LBound(path) + 1
+    If n > slots Then Err.Raise 5, , "Breadcrumb " & prefix & " has " & slots & " slots, not " & n
+    frame.Tag = t(0) & "|" & n & "|" & slots
+    sepW = px(16)
+    If n > 0 Then
+        ReDim keys(n - 1): ReDim caps(n - 1): ReDim widths(n - 1)
+        For i = 0 To n - 1
+            p = Split(CStr(path(LBound(path) + i)), "|")
+            keys(i) = p(0)
+            caps(i) = IIf(UBound(p) >= 1, p(UBound(p)), p(0))
+            widths(i) = CrumbWidth(caps(i))
+            total = total + widths(i) + IIf(i > 0, sepW, 0)
+        Next
+    End If
+    ' Fold crumbs 1..fold into slot fold, shown as an ellipsis, until the path fits.
+    If total > frame.Width And n > 2 Then
+        For fold = 1 To n - 2
+            total = widths(0) + CrumbWidth(ELLIPSIS) + 2 * sepW
+            For j = fold + 1 To n - 1
+                total = total + widths(j) + sepW
+            Next
+            If total <= frame.Width Then Exit For
+        Next
+        If fold > n - 2 Then fold = n - 2
+    End If
+    x = frame.Left
+    For i = 0 To slots - 1
+        Set c = frm.Controls(prefix & i)
+        If i >= n Or (i >= 1 And i < fold) Then
+            c.Visible = False
+            If i > 0 Then frm.Controls(prefix & "_s" & i).Visible = False
+        Else
+            If i > 0 Then
+                With frm.Controls(prefix & "_s" & i)
+                    .Left = x: .Top = frame.Top: .Visible = True
+                End With
+                x = x + sepW
+            End If
+            c.Tag = keys(i)
+            If i = fold And fold > 0 Then
+                folded = ""
+                For j = 1 To fold
+                    folded = folded & IIf(j > 1, " > ", "") & caps(j)
+                Next
+                c.Caption = ELLIPSIS
+                c.ControlTipText = folded
+                c.Width = CrumbWidth(ELLIPSIS)
+            Else
+                c.Caption = Replace(caps(i), "&", "&&")
+                c.ControlTipText = ""
+                c.Width = widths(i)
+            End If
+            c.Left = x: c.Top = frame.Top
+            c.ForeColor = Th(IIf(i = n - 1, CLR_FG, CLR_MUTED_FG))
+            c.Visible = True
+            x = x + c.Width
+        End If
+    Next
+End Sub
+
+' Width of a crumb with caption s (9pt, with a little room for Access's margins).
+Private Function CrumbWidth(ByVal s As String) As Long
+    CrumbWidth = MeasureText(s, 9, 400) + px(6)
+End Function
+
 ' ---------------------------------------------------------------------------
 ' Messages
 ' ---------------------------------------------------------------------------

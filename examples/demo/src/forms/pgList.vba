@@ -29,6 +29,7 @@ Public Sub GridClick(ByVal grid As String, ByVal dbl As Boolean)
         Me.sfList.Form.txtSel = Me.sfDetail.Form!id
         Me.sfList.Form.Recalc
     End If
+    ShowCrumbs
     Exit Sub
 Err_Handler:
     HandleError "pgList.GridClick"
@@ -52,12 +53,38 @@ Private Sub ShowOverdue()
     End If
 End Sub
 
+' The breadcrumb: All items, the chip's status when one is picked, and the
+' open item (the current page).
+Private Sub ShowCrumbs()
+    Dim nm As String
+    If Me.sfDetail.Visible Then nm = Nz(Me.sfDetail.Form!name, "")
+    If m_chip = 0 And Len(nm) = 0 Then
+        SetBreadcrumb Me, "crumb", "c0|All items"
+    ElseIf m_chip = 0 Then
+        SetBreadcrumb Me, "crumb", "c0|All items", "item|" & nm
+    ElseIf Len(nm) = 0 Then
+        SetBreadcrumb Me, "crumb", "c0|All items", "c" & m_chip & "|" & Me("chip" & m_chip).Tag
+    Else
+        SetBreadcrumb Me, "crumb", "c0|All items", "c" & m_chip & "|" & Me("chip" & m_chip).Tag, "item|" & nm
+    End If
+End Sub
+
+' A breadcrumb click: All items, or a status, as its chip would.
+Public Sub CrumbGo(ByVal key As String)
+    On Error GoTo Err_Handler
+    If Left$(key, 1) = "c" Then Chip CLng(Mid$(key, 2))
+    Exit Sub
+Err_Handler:
+    HandleError "pgList.CrumbGo"
+End Sub
+
 ' The detail panel saved an item: show the change in the list.
 Public Sub ItemSaved(ByVal id As Long)
     Me.sfList.Form.Requery
     Me.sfList.Form.txtSel = id
     RefreshCounts
     ShowOverdue
+    ShowCrumbs
 End Sub
 
 ' Status chip click: 0 is All.
@@ -133,6 +160,7 @@ Private Sub RefreshPage()
     ' txtSearch_Change, which only runs once the focus has left the panel)
     ' has already saved the open item.
     If IsNull(SelectFirstRow(Me.sfList)) Then ClearDetail Me, "sfDetail"
+    ShowCrumbs
 End Sub
 
 Private Sub RefreshCounts()
