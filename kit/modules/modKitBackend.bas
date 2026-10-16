@@ -142,37 +142,58 @@ End Function
 
 ' Startup: make sure the linked tables reach their data file (see the top
 ' of the module). backendFile is the data file's name, looked for next to
-' the front end when the linked path is gone. Returns False, having told
-' the user, when no data file was found or the user cancelled.
+' the front end when the linked path is gone. A picked file that isn't the
+' data file is explained and the window offered again. Returns False,
+' having told the user, when they cancel.
 Public Function KitEnsureBackend(ByVal probeTable As String, ByVal backendFile As String) As Boolean
-    Dim candidate As String
+    Dim candidate As String, oldPath As String, problem As String
     On Error GoTo Fail
     If KitBackendReachable(probeTable) Then KitEnsureBackend = True: Exit Function
-    If Len(KitBackendPath(probeTable)) = 0 And HasTableDef(CurrentDb, probeTable) Then
-        KitEnsureBackend = True                 ' a local table: a single-file copy, nothing to reconnect
-        Exit Function
+    oldPath = KitBackendPath(probeTable)
+    If Len(oldPath) = 0 Then
+        If HasTableDef(CurrentDb, probeTable) Then
+            KitEnsureBackend = True             ' a local table: a single-file copy, nothing to reconnect
+            Exit Function
+        End If
+        Err.Raise 5, "modKitBackend", "The app has no " & probeTable & " table to check its data file with."
     End If
     candidate = CurrentProject.Path & "\" & backendFile
-    If Not FileExists(candidate) Then
-        KitMsgBox "The " & APP_NAME & " data file can't be found where it was:" & vbCrLf & _
-            KitBackendPath(probeTable) & vbCrLf & vbCrLf & _
-            "Find " & backendFile & " in the next window to reconnect.", vbInformation
+    If FileExists(candidate) Then
+        If Len(TryRelink(candidate, oldPath, probeTable)) = 0 Then KitEnsureBackend = True: Exit Function
+    End If
+    KitMsgBox "The " & APP_NAME & " data file can't be found where it was:" & vbCrLf & oldPath & vbCrLf & vbCrLf & _
+        "Find " & backendFile & " in the next window to reconnect.", vbInformation
+    Do
         candidate = KitPickFile("Find " & backendFile, "Access database|*.accdb", "backend")
         If Len(candidate) = 0 Then
             KitMsgBox APP_NAME & " can't open without its data file. Ask your administrator where " & backendFile & _
                 " is kept.", vbExclamation
             Exit Function
         End If
-    End If
-    DoCmd.Hourglass True
-    KitRelinkAll candidate, KitBackendPath(probeTable)
-    DoCmd.Hourglass False
-    KitEnsureBackend = KitBackendReachable(probeTable)
-    If Not KitEnsureBackend Then KitMsgBox "That file isn't the " & APP_NAME & " data file, or it can't be opened.", vbExclamation
-    Exit Function
+        problem = TryRelink(candidate, oldPath, probeTable)
+        If Len(problem) = 0 Then KitEnsureBackend = True: Exit Function
+        KitMsgBox problem & vbCrLf & vbCrLf & "Pick " & backendFile & " in the next window, or Cancel to close " & _
+            APP_NAME & ".", vbExclamation
+    Loop
 Fail:
     DoCmd.Hourglass False
     HandleError "modKitBackend.KitEnsureBackend", candidate, "The data file couldn't be reconnected."
+End Function
+
+' Relink oldPath's tables to candidate. Returns "" when probeTable then
+' reaches its data, else what to tell the user (links unchanged when the
+' file was refused). Errors other than a refusal are raised.
+Private Function TryRelink(ByVal candidate As String, ByVal oldPath As String, ByVal probeTable As String) As String
+    On Error GoTo Refused
+    DoCmd.Hourglass True
+    KitRelinkAll candidate, oldPath
+    DoCmd.Hourglass False
+    If Not KitBackendReachable(probeTable) Then TryRelink = "That file isn't the " & APP_NAME & " data file, or it can't be opened."
+    Exit Function
+Refused:
+    If Err.Number <> 5 Then RaiseAgain "modKitBackend.TryRelink", candidate   ' the caller's handler clears the hourglass
+    TryRelink = Err.Description
+    DoCmd.Hourglass False
 End Function
 
 ' Why this front end can't be used with its data file, or "" when it can.
