@@ -170,6 +170,7 @@ Public Function AddStampFields(ByVal table As String, Optional db As DAO.Databas
     Dim cols As Variant, i As Long, td As DAO.TableDef
     On Error GoTo Fail
     If db Is Nothing Then Set db = CurrentDb
+    db.TableDefs.Refresh                        ' a Database kept by the caller may not list columns added since
     cols = Array(STAMP_CREATED_BY & " TEXT(" & STAMP_USER_LEN & ")", STAMP_CREATED_AT & " DATETIME", _
         STAMP_UPDATED_BY & " TEXT(" & STAMP_USER_LEN & ")", STAMP_UPDATED_AT & " DATETIME")
     Set td = db.TableDefs(table)
