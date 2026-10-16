@@ -112,6 +112,17 @@ Public Function PersonnelUiSignInWhy() As String
     PersonnelUiSignInWhy = m_signInWhy
 End Function
 
+' F1 in a Personnel dialog (its Form_KeyDown): open the kit help on the
+' dialog's topic. The dialogs can open from the startup form's Open, before
+' Access has read the AutoKeys macro, when F1 would show Access's own help.
+' KitHelp is called by name, so an app without modKitHelp still compiles.
+Public Sub PersonnelF1(KeyCode As Integer)
+    If KeyCode <> vbKeyF1 Then Exit Sub
+    KeyCode = 0
+    On Error Resume Next                        ' no modKitHelp: F1 does nothing
+    Application.Run "KitHelp"
+End Sub
+
 ' dlgPersonnelSetup: the Personnel file was created (not found), so
 ' KitPersonnelStart opens Add person next.
 Public Sub PersonnelUiCreated()
@@ -149,7 +160,8 @@ End Sub
 '           Find the Personnel file, Create a new Personnel file (never while
 '           one is linked), I'm not the admin
 '   create  the first admin's name and rank, the folder (Change opens the
-'           folder picker) and their app password twice
+'           folder picker), the site key (a new random one, filled in) and
+'           their app password twice
 '   ask     what to send the admin, with Copy, and Close app
 Private Sub Build_dlgPersonnelSetup()
     Const DLG_W As Long = 7200          ' 480 px
@@ -157,7 +169,7 @@ Private Sub Build_dlgPersonnelSetup()
     pad = Sp(SP_DIALOG): gap = Sp(SP_ROW_GAP)
     x = pad: w = DLG_W - 2 * pad: half = (w - Sp(SP_ITEM_GAP)) \ 2: btnW = px(96)
     NewDialog "Personnel", DLG_W, px(480)
-    Ev F, "OnLoad"
+    Ev F, "OnLoad", "OnKeyDown": F.KeyPreview = True   ' F1 (PersonnelF1)
     y = pad
     Lbl "lblTitle", "Set up the Personnel directory", x, y, w, px(26), 13, True
     y = y + px(26) + gap
@@ -194,6 +206,14 @@ Private Sub Build_dlgPersonnelSetup()
     Lbl("lblFolderHint", "Only Personnel admins should be able to change this folder. Ask IT to restrict it.", _
         x, y, w, px(18), 9, False, CLR_MUTED_FG).Tag = "create"
     y = y + px(18) + gap
+    FieldLabel "lblKey", "Site key", x, y, w, "create"
+    y = y + px(18)
+    Txt("txtKey", "", x, y, w, px(30)).Tag = "create"                   ' btnCreate_Click fills in a new random key
+    y = y + px(30) + px(4)
+    Lbl("lblKeyHint", "Saved as " & PERSONNEL_KEY_FILE & " beside the file for every app. " & _
+        "Keep it unless your site has one.", _
+        x, y, w, px(32), 9, False, CLR_MUTED_FG).Tag = "create"
+    y = y + px(32) + gap
     FieldLabel "lblPwd", "Your app password", x, y, half, "create"
     FieldLabel "lblPwd2", "Type it again", x + half + Sp(SP_ITEM_GAP), y, half, "create"
     y = y + px(18)
@@ -251,7 +271,7 @@ Private Sub Build_dlgSignIn()
     x = pad: w = DLG_W - 2 * pad: btnW = px(96)
     NewDialog "Sign in", DLG_W, px(400)
     F.CloseButton = False                           ' Close app or Sign in ends it
-    Ev F, "OnLoad"
+    Ev F, "OnLoad", "OnKeyDown": F.KeyPreview = True   ' F1 (PersonnelF1)
     y = pad
     Lbl "lblTitle", "Sign in to " & APP_NAME, x, y, w, px(26), 13, True
     y = y + px(26) + gap
@@ -293,7 +313,7 @@ Private Sub Build_dlgPersonnel()
     pad = Sp(SP_DIALOG)
     x = pad: w = DLG_W - 2 * pad: btnW = px(110): listH = px(340)
     NewDialog "Personnel", DLG_W, px(540)
-    Ev F, "OnLoad", "OnOpen"                 ' Form_Open checks admin and themes the form
+    Ev F, "OnLoad", "OnOpen", "OnKeyDown": F.KeyPreview = True   ' Form_Open checks admin and themes the form; F1 (PersonnelF1)
     y = pad
     Lbl "lblTitle", "Personnel", x, y, w - px(260), px(26), 13, True
     y = y + px(26) + Sp(16)
@@ -329,7 +349,7 @@ Private Sub Build_dlgPerson()
     pad = Sp(SP_DIALOG): gap = Sp(SP_ROW_GAP)
     x = pad: w = DLG_W - 2 * pad: half = (w - Sp(16)) \ 2: x2 = x + half + Sp(16): btnW = px(96)
     NewDialog "Person", DLG_W, px(640)
-    Ev F, "OnLoad", "OnOpen"                 ' Form_Open checks admin and themes the form
+    Ev F, "OnLoad", "OnOpen", "OnKeyDown": F.KeyPreview = True   ' Form_Open checks admin and themes the form; F1 (PersonnelF1)
     y = pad
     Lbl "lblTitle", "Add person", x, y, w, px(26), 13, True
     y = y + px(26) + Sp(16)

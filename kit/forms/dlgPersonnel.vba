@@ -37,6 +37,11 @@ Public Property Get HelpTopic() As String
     HelpTopic = "directory"
 End Property
 
+' F1 opens this dialog's help even during startup (PersonnelF1).
+Private Sub Form_KeyDown(KeyCode As Integer, Shift As Integer)
+    PersonnelF1 KeyCode
+End Sub
+
 ' Fill the list with the people matching term, keeping the selected person
 ' when they are still in it.
 Private Sub LoadPeople(ByVal term As String)

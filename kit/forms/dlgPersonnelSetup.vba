@@ -46,6 +46,11 @@ Public Property Get HelpTopic() As String
     HelpTopic = "directory.setup"
 End Property
 
+' F1 opens this dialog's help even during startup (PersonnelF1).
+Private Sub Form_KeyDown(KeyCode As Integer, Shift As Integer)
+    PersonnelF1 KeyCode
+End Sub
+
 ' Show the controls tagged panel (and the untagged title) at their designed
 ' places, hide the rest, and fit the dialog to the panel. Access won't make
 ' the Detail shorter than its lowest control, hidden or not, so hidden
@@ -147,6 +152,7 @@ Private Sub btnCreate_Click()
     On Error GoTo Err_Handler
     ShowPanel "create"
     Me.lblTitle.Caption = "Create the Personnel file"
+    If Len(Nz(Me.txtKey, "")) = 0 Then Me.txtKey = NewPersonnelKey()
     Me.txtFirst.SetFocus
     Exit Sub
 Err_Handler:
@@ -183,25 +189,27 @@ Err_Handler:
     HandleError "dlgPersonnelSetup.btnFolder_Click"
 End Sub
 
-' Create the file, make the current Windows user its first admin with the
-' password typed, and sign them in.
+' Create the file with the site key shown, make the current Windows user its
+' first admin with the password typed, and sign them in.
 Private Sub btnCreateGo_Click()
     On Error GoTo Err_Handler
-    Dim firstName As String, lastName As String, pwd As String, path As String, id As Long, problem As String
+    Dim firstName As String, lastName As String, pwd As String, path As String, id As Long, problem As String, siteKey As String
     Me.btnCreateGo.SetFocus                     ' commits the box being typed in
     firstName = Trim$(Nz(Me.txtFirst, "")): lastName = Trim$(Nz(Me.txtLast, "")): pwd = Nz(Me.txtPwd, "")
     If Len(firstName) = 0 Or Len(lastName) = 0 Then KitMsgBox "Type your first and last name.", vbExclamation: Exit Sub
     If StrComp(pwd, Nz(Me.txtPwd2, ""), vbBinaryCompare) <> 0 Then KitMsgBox "The two passwords don't match.", vbExclamation: Exit Sub
     If Len(pwd) < 8 Then KitMsgBox "Use at least 8 characters for your password.", vbExclamation: Exit Sub
+    siteKey = Trim$(Nz(Me.txtKey, ""))
+    If Len(PersonnelKeyProblem(siteKey)) > 0 Then KitMsgBox PersonnelKeyProblem(siteKey), vbExclamation: Exit Sub
     path = Nz(Me.txtFolder, "")
     If Right$(path, 1) <> "\" Then path = path & "\"
     path = path & PERSONNEL_FILE
-    If FileExists(path) Then
-        KitMsgBox "There is already a Personnel file in that folder. Go Back and choose Find the Personnel file.", vbExclamation
+    If FileExists(path) Or FileExists(PersonnelKeyPath(path)) Then
+        KitMsgBox "There is already a Personnel file or key in that folder. Go Back and choose Find the Personnel file.", vbExclamation
         Exit Sub
     End If
     DoCmd.Hourglass True
-    id = CreatePersonnelFile(path, PersonnelUiAppCode(), firstName, lastName, Trim$(Nz(Me.txtRank, "")))
+    id = CreatePersonnelFile(path, PersonnelUiAppCode(), firstName, lastName, Trim$(Nz(Me.txtRank, "")), siteKey)
     problem = PersonnelSetPassword(id, pwd)
     DoCmd.Hourglass False
     If Len(problem) > 0 Then KitMsgBox problem, vbExclamation

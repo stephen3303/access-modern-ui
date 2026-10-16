@@ -1164,9 +1164,22 @@ Public Function TestKit(ByVal root As String) As String
     peId = CreatePersonnelFile(pePath, "TEST", "Pat", "O'Neil", "LT")
     Check PersonnelPath() = pePath And PersonnelStatus("no_table") = PERSONNEL_READY And PersonnelFileProblem(pePath) = "", "New Personnel file not linked"
     Check InStr(CurrentDb.TableDefs(PERSON_TABLE).Connect, ";PWD=") > 0 And PersonnelFileProblem(be2) <> "", "Personnel file not encrypted, or another file accepted"
+    ' Site key: a new random one, saved beside the file and read from there.
+    Dim peKey As String, peKeyFile As String
+    peKeyFile = root & "\pe\" & PERSONNEL_KEY_FILE
+    peKey = PersonnelKeyFor(pePath)
+    Check FileExists(peKeyFile) And Len(peKey) = PERSONNEL_KEY_MAX And PersonnelKeyProblem(peKey) = "" And _
+        InStr(ReadTextFile(peKeyFile), peKey) = 1 And InStr(CurrentDb.TableDefs(PERSON_TABLE).Connect, "PWD=" & peKey) > 0, "Site key not made, saved or used"
+    Check NewPersonnelKey() <> peKey, "Site keys not random"
+    Name peKeyFile As peKeyFile & ".bak"
+    Check PersonnelFileProblem(pePath) <> "", "Personnel file opened without its key file"
+    Name peKeyFile & ".bak" As peKeyFile
+    Check PersonnelKeyProblem("short1") <> "" And PersonnelKeyProblem("abcdef;123456") <> "" And PersonnelKeyProblem("abc def 123456") <> "" And _
+        PersonnelKeyProblem(String(21, "a")) <> "" And PersonnelKeyProblem("Site-Key.2026!") = "", "Site key rules wrong"
     Check DLookup("display_name", PERSON_TABLE, "person_id=" & peId) = "LT P. O'Neil" And DLookup("is_admin", PERSON_TABLE, "person_id=" & peId), "First admin not added"
     peErr = 0: On Error Resume Next: CreatePersonnelFile root & "\pe2.accdb", "TEST", "A", "B": peErr = Err.Number: On Error GoTo 0
     Check peErr = 5 And Not FileExists(root & "\pe2.accdb"), "Second Personnel file created while one is linked"
+    Check Not FileExists(root & "\" & PERSONNEL_KEY_FILE), "Refused Personnel file left a key file"
     Check PersonnelSignInWindows("TEST", True) And SignedInPersonID() = peId And SignedInIsAdmin(), "Windows sign-in did not find the creator"
     Check DLookup("windows_sid", PERSON_TABLE, "person_id=" & peId) = WinSid(), "SID not saved"
     PersonnelSignOut
@@ -1251,6 +1264,7 @@ Public Function TestKit(ByVal root As String) As String
     DoCmd.OpenForm PERSONNEL_FORM
     Set peFrm = Forms(PERSONNEL_FORM)
     Check peFrm.OnOpen = "[Event Procedure]" And peFrm.lstPeople.Visible, "Personnel page's admin check not wired to Open"
+    Check peFrm.KeyPreview And peFrm.OnKeyDown = "[Event Procedure]", "Personnel page doesn't catch F1 itself"
     Check peFrm.lstPeople.ListCount = DCount("*", PERSON_TABLE) + 1 And Not peFrm.lblNone.Visible, "Personnel page doesn't list everyone"
     DoCmd.Close acForm, PERSONNEL_FORM, acSaveNo
     DoCmd.OpenForm PERSON_FORM, , , , , , "new"
