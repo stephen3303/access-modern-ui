@@ -14,6 +14,9 @@ Option Explicit
 ' code point in hex (E70F is Edit, E74D Delete). "-" is a separator. A caption
 ' starting with "!" is destructive (CLR_DESTRUCTIVE, for Delete); a key
 ' starting with "~" is disabled (CLR_MUTED_FG, can't be picked).
+'
+' The module also has KitPopover, a short explanation shown by a control in
+' the same kind of pop-up (see Popover below).
 
 Public Const MENU_ROWS As Long = 10        ' most items a menu takes, separators included
 Public Const MENU_ROW_H As Long = 32       ' an item's height (px)
@@ -65,6 +68,12 @@ Private m_hot As Long           ' the lit row, -1 for none
 Private m_anchor As RECT        ' the button, screen pixels
 Private m_hAnchor As LongPtr    ' the button's form window (for its monitor)
 Private m_closing As Boolean
+' The popover's (KitPopover).
+Public Const POPOVER_W As Long = 280       ' px
+Private Const POPOVER_LINES As Long = 8
+Public Const POPOVER_LINE_H As Long = 255   ' one line of 9pt text, 17px (twips)
+Private m_popTitle As String
+Private m_popText As String
 
 ' Show a menu of items under button anchor and wait for the user: returns the
 ' picked item's key, or "" when the menu was closed with nothing picked.
@@ -238,12 +247,12 @@ Public Sub MenuKey(frm As Form, KeyCode As Integer)
     KeyCode = 0
 End Sub
 
-' Close the menu (once: dlgMenu's Deactivate also asks, as it closes).
-Public Sub MenuClose(frm As Form)
-    If m_closing Then Exit Sub
+' Close the menu or popover (once: its Deactivate also asks, as it closes).
+Public Function MenuClose(frm As Form)
+    If m_closing Then Exit Function
     m_closing = True
     DoCmd.Close acForm, frm.Name
-End Sub
+End Function
 
 ' dlgMenu's Deactivate: a click outside the menu. Closing during the event is
 ' refused, so the form's timer closes it a moment later.
@@ -376,4 +385,111 @@ Private Sub Place(frm As Form)
     MenuSpot m_anchor.Left, m_anchor.Top, m_anchor.Right, m_anchor.Bottom, rc.Right - rc.Left, rc.Bottom - rc.Top, _
         mi.rcWork.Left, mi.rcWork.Top, mi.rcWork.Right, mi.rcWork.Bottom, gap, x, y
     SetWindowPos frm.hWnd, 0, x, y, 0, 0, SWP_NOSIZE Or SWP_NOZORDER
+End Sub
+
+' ---------------------------------------------------------------------------
+' Popover: a short explanation next to the control it is about (a web
+' popover or rich tooltip), for a "?" or info icon, or a field that needs a
+' sentence of help. KitPopover shows it under the control (or above it,
+' kept on the monitor) and returns at once; it closes when the user clicks
+' anywhere else or presses Esc. dlgPopover (BuildPopoverDialog) is 280px wide
+' with a 10pt bold title and the 9pt text, wrapped, up to 8 lines.
+' ---------------------------------------------------------------------------
+
+
+' Show title (or "" for none) and text in a popover by control anchor.
+' Returns False, logging why, when dlgPopover isn't built.
+Public Function KitPopover(anchor As Control, ByVal title As String, ByVal text As String) As Boolean
+    m_popTitle = title
+    m_popText = text
+    m_closing = False
+    AnchorRect anchor
+    If IsFormOpen("dlgPopover") Then DoCmd.Close acForm, "dlgPopover"
+    On Error GoTo NotBuilt
+    DoCmd.OpenForm "dlgPopover"
+    KitPopover = True
+    Exit Function
+NotBuilt:
+    LogError "modMenu.KitPopover", "dlgPopover could not open: " & Err.Description
+End Function
+
+' dlgPopover's Load: fill it, size it to its text and place it.
+Public Sub PopoverShow(frm As Form)
+    Dim lines As Long, para As Variant, textW As Long, y As Long, h As Long
+    textW = px(POPOVER_W) - 2 * px(14)
+    For Each para In Split(Replace(m_popText, vbCrLf, vbLf), vbLf)
+        If Len(para) = 0 Then
+            lines = lines + 1
+        Else
+            lines = lines - Int(-(MeasureText(CStr(para), 9, 400) * 1.1) / textW)
+        End If
+    Next
+    If lines < 1 Then lines = 1
+    If lines > POPOVER_LINES Then lines = POPOVER_LINES
+    y = px(12)
+    frm.Controls("lblTitle").Visible = (Len(m_popTitle) > 0)
+    frm.Controls("lblTitle").Caption = Replace(m_popTitle, "&", "&&")
+    If Len(m_popTitle) > 0 Then y = y + px(24)
+    h = lines * POPOVER_LINE_H
+    With frm.Controls("lblText")
+        .Caption = Replace(m_popText, "&", "&&")
+        .Top = y
+        .Height = h
+    End With
+    y = y + h + px(12)
+    frm.Controls("ruleBottom").Top = y
+    frm.Controls("ruleLeft").Height = y
+    frm.Controls("ruleRight").Height = y
+    frm.InsideWidth = px(POPOVER_W)
+    frm.InsideHeight = y
+    Place frm
+End Sub
+
+' dlgPopover's KeyDown: Esc, Enter and Tab close it.
+Public Sub PopoverKey(frm As Form, KeyCode As Integer)
+    Select Case KeyCode
+        Case vbKeyEscape, vbKeyReturn, vbKeyTab
+            KeyCode = 0
+            MenuClose frm
+    End Select
+End Sub
+
+' Build dlgPopover, the pop-up KitPopover opens. Call it once with the app's dialogs.
+Public Sub BuildPopoverDialog()
+    Dim c As Control, w As Long, h As Long
+    w = px(POPOVER_W)
+    h = px(12) + px(24) + POPOVER_LINES * POPOVER_LINE_H + px(12)
+    NewForm "", 0, w, h
+    With F
+        .Caption = "Popover"
+        .PopUp = True
+        .Modal = False
+        .BorderStyle = 0
+        .AutoCenter = False
+        .AutoResize = False
+        .ControlBox = False
+        .MinMaxButtons = 0
+        .CloseButton = False
+        .ShortcutMenu = False
+        .ScrollBars = 0
+        .RecordSelectors = False
+        .NavigationButtons = False
+        .Section(acDetail).BackColor = CLR_DIALOG
+        .Section(acDetail).AlternateBackColor = CLR_DIALOG
+        .Section(acDetail).OnClick = "=MenuClose([Form])"
+    End With
+    Ev F, "OnLoad", "OnDeactivate", "OnTimer"
+    Set c = Txt("txtKeys", "", 0, 0, 15, 15)
+    c.BorderStyle = 0: c.BackStyle = 0: c.OnGotFocus = "": c.OnLostFocus = ""
+    Ev c, "OnKeyDown"
+    Set c = Lbl("lblTitle", "", px(14), px(12), w - 2 * px(14), px(20), 10, True, CLR_FG)
+    c.OnClick = "=MenuClose([Form])"
+    Set c = Lbl("lblText", "", px(14), px(36), w - 2 * px(14), POPOVER_LINES * POPOVER_LINE_H, 9, False, CLR_FG)
+    c.TopMargin = 0
+    c.OnClick = "=MenuClose([Form])"
+    Rule "ruleTop", 0, 15, w, 0, CLR_INPUT_BORDER
+    Rule "ruleBottom", 0, h, w, 0, CLR_INPUT_BORDER
+    Rule "ruleLeft", 15, 0, 0, h, CLR_INPUT_BORDER
+    Rule "ruleRight", w, 0, 0, h, CLR_INPUT_BORDER
+    SaveForm "dlgPopover"
 End Sub

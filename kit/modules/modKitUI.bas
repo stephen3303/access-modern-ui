@@ -1202,6 +1202,180 @@ Public Sub AccordionLayout(frm As Object, ByVal prefix As String)
     frame.Height = y - frame.Top
 End Sub
 
+' Show or hide EmptyState nm (every part), with a new title and text when
+' given ("" keeps the built ones).
+Public Sub ShowEmpty(frm As Form, ByVal nm As String, ByVal isShown As Boolean, _
+        Optional ByVal title As String = "", Optional ByVal text As String = "")
+    Dim s As Variant, c As Control
+    If Len(title) > 0 Then frm.Controls(nm & "_t").Caption = Replace(title, "&", "&&")
+    If Len(text) > 0 Then frm.Controls(nm & "_m").Caption = Replace(text, "&", "&&")
+    For Each s In Array("", "_bg", "_ico", "_t", "_m", "_b")
+        Set c = Nothing
+        On Error Resume Next
+        Set c = frm.Controls(nm & s)
+        On Error GoTo 0
+        If Not c Is Nothing Then SetVisible c, isShown
+    Next
+End Sub
+
+' A SearchBox's typing (set by the builder): show the clear mark once there
+' is text, and call the handler with it.
+Public Function SearchChanged(frm As Form, ByVal nm As String)
+    On Error GoTo Fail
+    SearchNotify frm, nm, Nz(frm.Controls(nm).Text, "")
+    Exit Function
+Fail:
+    HandleError "modKitUI.SearchChanged", nm
+End Function
+
+' A SearchBox's clear mark (set by the builder): empty the box, put the focus
+' back in it and call the handler with "".
+Public Function SearchClear(frm As Form, ByVal nm As String)
+    On Error GoTo Fail
+    frm.Controls(nm).Value = Null
+    frm.Controls(nm).SetFocus
+    SearchNotify frm, nm, ""
+    Exit Function
+Fail:
+    HandleError "modKitUI.SearchClear", nm
+End Function
+
+' A SearchBox's focus (set by the builder): the focus ring is on its frame.
+Public Function SearchFocus(frm As Form, ByVal nm As String, ByVal hasFocus As Boolean)
+    On Error GoTo Fail
+    If hasFocus Then FocusRingClear
+    frm.Controls(nm & "_f").BorderColor = Th(IIf(hasFocus, CLR_PRIMARY, CLR_INPUT_BORDER))
+    Exit Function
+Fail:
+    LogError "modKitUI.SearchFocus", nm
+End Function
+
+' A SearchBox's text: what is typed so far while it has the focus, else its value.
+Public Function SearchText(frm As Form, ByVal nm As String) As String
+    Dim c As Control, act As String
+    Set c = frm.Controls(nm)
+    On Error Resume Next
+    act = frm.ActiveControl.Name            ' error 2474 when none has the focus
+    On Error GoTo 0
+    If act = nm Then SearchText = Nz(c.Text, "") Else SearchText = Nz(c.Value, "")
+End Function
+
+' Put text in a SearchBox in code and call its handler, as typing would.
+Public Sub SetSearch(frm As Form, ByVal nm As String, ByVal text As String)
+    frm.Controls(nm).Value = IIf(Len(text) = 0, Null, text)
+    SearchNotify frm, nm, text
+End Sub
+
+Private Sub SearchNotify(frm As Form, ByVal nm As String, ByVal text As String)
+    Dim handler As String
+    SetVisible frm.Controls(nm & "_x"), Len(text) > 0
+    handler = Nz(frm.Controls(nm & "_f").Tag, "")
+    If Len(handler) > 0 Then CallByName frm, handler, VbMethod, text
+End Sub
+
+' A Rating star's click (set by the builder): set the value to star i, or to
+' 0 when it is already i, then call onChange. Not while the value is disabled
+' or locked, or on a read-only form.
+Public Function RatingClick(frm As Form, ByVal nm As String, ByVal i As Long)
+    Dim v As Control, onChange As String
+    On Error GoTo Fail
+    Set v = frm.Controls(nm & "_val")
+    If Not v.Enabled Or v.Locked Then Exit Function
+    If Not frm.AllowEdits Then
+        If Not (frm.NewRecord And frm.AllowAdditions) Then Exit Function
+    End If
+    v.Value = IIf(Nz(v.Value, 0) = i, 0, i)
+    RatingPaint frm, nm
+    onChange = Nz(frm.Controls(nm & "_b1").Tag, "")
+    If Len(onChange) > 0 Then CallByName frm, onChange, VbMethod
+    Exit Function
+Fail:
+    HandleError "modKitUI.RatingClick", nm
+End Function
+
+' Set Rating nm to v (0 to its stars) in code, without calling onChange.
+Public Sub SetRating(frm As Form, ByVal nm As String, ByVal v As Long)
+    If v < 0 Or v > CLng(frm.Controls(nm & "_val").Tag) Then Err.Raise 5, , "Rating " & nm & " has no value " & v
+    frm.Controls(nm & "_val").Value = v
+    RatingPaint frm, nm
+End Sub
+
+' The value of Rating nm (0 when empty).
+Public Function RatingValue(frm As Form, ByVal nm As String) As Long
+    RatingValue = Nz(frm.Controls(nm & "_val").Value, 0)
+End Function
+
+Private Sub RatingPaint(frm As Form, ByVal nm As String)
+    Dim i As Long
+    For i = 1 To CLng(frm.Controls(nm & "_val").Tag)
+        frm.Controls(nm & "_s" & i).Requery
+    Next
+End Sub
+
+' A Slider step's click (set by the builder): move to step i, then call
+' onChange (not when it is already there, while the value is disabled or
+' locked, or on a read-only form).
+Public Function SliderClick(frm As Form, ByVal nm As String, ByVal i As Long)
+    Dim t() As String, v As Control, nv As Double, onChange As String
+    On Error GoTo Fail
+    Set v = frm.Controls(nm & "_val")
+    If Not v.Enabled Or v.Locked Then Exit Function
+    If Not frm.AllowEdits Then
+        If Not (frm.NewRecord And frm.AllowAdditions) Then Exit Function
+    End If
+    t = Split(v.Tag, "|")
+    nv = Val(t(0)) + i * Val(t(2))
+    If Not IsNull(v.Value) Then If Abs(CDbl(v.Value) - nv) < Val(t(2)) / 1000 Then Exit Function
+    SliderSet frm, nm, nv
+    onChange = Nz(frm.Controls(nm & "_b0").Tag, "")
+    If Len(onChange) > 0 Then CallByName frm, onChange, VbMethod
+    Exit Function
+Fail:
+    HandleError "modKitUI.SliderClick", nm
+End Function
+
+' Move Slider nm by delta steps (from the form's KeyDown: -1 for Left, 1 for
+' Right), kept in its range, and call onChange when it moved.
+Public Sub SliderStep(frm As Form, ByVal nm As String, ByVal delta As Long)
+    Dim t() As String, i As Long, n As Long
+    t = Split(frm.Controls(nm & "_val").Tag, "|")
+    n = CLng((Val(t(1)) - Val(t(0))) / Val(t(2)))
+    i = CLng((Nz(frm.Controls(nm & "_val").Value, Val(t(0))) - Val(t(0))) / Val(t(2))) + delta
+    If i < 0 Then i = 0
+    If i > n Then i = n
+    SliderClick frm, nm, i
+End Sub
+
+' Set Slider nm to v in code (rounded to its nearest step, kept in its range),
+' without calling onChange.
+Public Sub SetSlider(frm As Form, ByVal nm As String, ByVal v As Double)
+    Dim t() As String, i As Long, n As Long
+    t = Split(frm.Controls(nm & "_val").Tag, "|")
+    n = CLng((Val(t(1)) - Val(t(0))) / Val(t(2)))
+    i = CLng((v - Val(t(0))) / Val(t(2)))
+    If i < 0 Then i = 0
+    If i > n Then i = n
+    SliderSet frm, nm, Val(t(0)) + i * Val(t(2))
+End Sub
+
+' The value of Slider nm.
+Public Function SliderValue(frm As Form, ByVal nm As String) As Double
+    SliderValue = Nz(frm.Controls(nm & "_val").Value, Val(Split(frm.Controls(nm & "_val").Tag, "|")(0)))
+End Function
+
+Private Sub SliderSet(frm As Form, ByVal nm As String, ByVal v As Double)
+    Dim t() As String, i As Long
+    frm.Controls(nm & "_val").Value = v
+    frm.Controls(nm & "_bg").Requery
+    ' The current step takes the Tab stop, so Tab lands on the knob.
+    t = Split(frm.Controls(nm & "_val").Tag, "|")
+    For i = 0 To CLng((Val(t(1)) - Val(t(0))) / Val(t(2)))
+        frm.Controls(nm & "_b" & i).TabStop = (Abs(Val(t(0)) + i * Val(t(2)) - v) < Val(t(2)) / 1000)
+    Next
+    On Error Resume Next
+    frm.Controls(nm & "_lbl").Requery
+End Sub
+
 ' ---------------------------------------------------------------------------
 ' Messages
 ' ---------------------------------------------------------------------------

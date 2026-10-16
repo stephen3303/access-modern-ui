@@ -28,6 +28,7 @@ Public Function TestKit(ByVal root As String) As String
     SaveForm "subRing"
     BuildToast
     BuildMenuDialog
+    BuildPopoverDialog
     NewForm "test_rows", 0, px(300), px(40)
     Ev F, "BeforeUpdate"
     Txt "txtDesc", "description", 0, 0, px(280), px(30)
@@ -69,6 +70,11 @@ Public Function TestKit(ByVal root As String) As String
     Accordion "acc", px(1100), px(40), px(300), False, "General|Form.subRing|60|open", "Advanced|Form.subRing|60", "Notes||40"
     Accordion "acs", px(1450), px(40), px(300), True, "One||40|open", "Two||40"
     Avatar "avTest", "=""Ada Lovelace""", px(1100), px(500)
+    StatTile "kpi", "Open items", "=12", px(1100), px(560), px(240), , "=-3.5", "vs last week", "E8F4", "#,##0", False
+    EmptyState "emp", px(1100), px(700), px(300), "E721", "No items match", "Try another search.", "Clear search", "", True
+    SearchBox "srch", px(1450), px(560), px(240), "SearchTyped"
+    Rating "rt", "", px(1450), px(610), onChange:="RatingChanged"
+    Slider "sl", "", px(1450), px(660), px(300), 0, 100, 10, "SliderChanged", True
     SecretBox "secret", "", px(400), px(700), px(160), px(30)     ' clear of the ring, required and toggle fields
     SaveForm "frmTest", "testHost"
     DoCmd.OpenForm "frmTest"
@@ -367,6 +373,80 @@ Public Function TestKit(ByVal root As String) As String
     Check host.avTest = "AL" And host.avTest.FormatConditions.Count = 5, "Avatar does not show its initials"
     Check InStr(Nz(host.avTest_bg.Properties("ControlSource").Value, ""), "PillPng(Choose(AvatarTone(") > 0, "Avatar circle is not drawn by tone"
     Check host.avTest_bg.Width = px(32) And host.avTest.Width = px(32) And host.avTest.FontSize = 10, "Avatar is not 32px with 10pt initials"
+    ' Stat tile: change badge text and tone, the built value and badge.
+    Check StatDelta(8) = ChrW(&H25B2) & " 8%" And StatDelta(-3.5) = ChrW(&H25BC) & " 3.5%", "Stat change text differs"
+    Check StatDelta(0) = "0%" And StatDelta(Null) = "" And StatDelta("x") = "", "Flat or empty stat change differs"
+    Check StatTone(5, True) = 0 And StatTone(5, False) = 1 And StatTone(-2, True) = 1 And StatTone(0, True) = 2 And StatTone(Null, True) = 2, "Stat tone differs"
+    ' (Comparing the badge's Value to a ChrW string inside a longer And chain
+    ' crashed VBA 7 on 64-bit Access, so each part is read on its own.)
+    text = Nz(host.kpi_d.Value, "")
+    Check host.kpi.Value = 12, "Stat tile does not show its value"
+    Check text = ChrW(&H25BC) & " 3.5%", "Stat tile does not show its change"
+    Check host.kpi_d.FormatConditions.Count = 2, "Stat tile badge has no tone formats"
+    Check host.kpi_ico.Caption = ChrW(&HE8F4) And host.kpi_cap.Left > host.kpi_dbg.Left + host.kpi_dbg.Width, "Stat tile icon or caption misplaced"
+    ' Empty state: shown as built, hidden and shown again with a new title.
+    Check host.emp_t.Visible And host.emp_b.Visible And host.emp_bg.Visible, "Empty state built shown is hidden"
+    ShowEmpty host, "emp", False
+    Check Not host.emp_t.Visible And Not host.emp_b.Visible And Not host.emp_ico.Visible And Not host.emp.Visible, "ShowEmpty left parts showing"
+    ShowEmpty host, "emp", True, "Nothing here"
+    Check host.emp_t.Visible And host.emp_t.Caption = "Nothing here" And host.emp_m.Caption = "Try another search.", "ShowEmpty did not show the new title"
+    ' Search box: text in code calls the handler and shows the clear mark; the
+    ' mark empties it, focuses it and calls the handler with ""; ring on the frame.
+    Check Not host.srch_x.Visible, "Empty search box shows its clear mark"
+    SetSearch host, "srch", "pump"
+    Check host.lastSearch = "pump" And host.srch_x.Visible And SearchText(host, "srch") = "pump", "SetSearch did not search"
+    SearchClear host, "srch"
+    Check host.lastSearch = "" And Not host.srch_x.Visible And IsNull(host.srch.Value) And host.ActiveControl.Name = "srch", "Clear mark did not empty the search"
+    Check host.srch_f.BorderColor = CLR_PRIMARY, "Focused search box lacks its ring"
+    host.txtFocusSink.SetFocus
+    Check host.srch_f.BorderColor = CLR_INPUT_BORDER, "Search box kept its ring"
+    ' Rating: empty stars, a click fills up to it and calls onChange, a click on
+    ' the value clears it, SetRating is quiet and checks its range.
+    Check RatingValue(host, "rt") = 0 And host.rt_s1 = ChrW(59188), "Rating did not start empty"
+    RatingClick host, "rt", 4
+    text = Nz(host.rt_s4.Value, "")
+    Check RatingValue(host, "rt") = 4 And text = ChrW(59189) And host.ratingChanges = 1, "Star click did not set the rating"
+    text = Nz(host.rt_s5.Value, "")
+    Check text = ChrW(59188), "Star past the rating is filled"
+    RatingClick host, "rt", 4
+    Check RatingValue(host, "rt") = 0 And host.ratingChanges = 2, "Click on the rating did not clear it"
+    SetRating host, "rt", 3
+    Check RatingValue(host, "rt") = 3 And host.ratingChanges = 2, "SetRating was not quiet"
+    On Error Resume Next
+    SetRating host, "rt", 6: badName = Err.Number: Err.Clear
+    On Error GoTo 0
+    Check badName = 5, "SetRating accepted a value past its stars"
+    ' Slider: steps cover the track, a click moves it and calls onChange once,
+    ' SetSlider rounds to a step and stays in range, SliderStep moves by steps.
+    Check SliderValue(host, "sl") = 0 And host.sl_b0.Left = host.sl_bg.Left, "Slider did not start at its minimum"
+    Check host.sl_b10.Left + host.sl_b10.Width = host.sl_bg.Left + host.sl_bg.Width, "Slider steps do not cover the track"
+    SliderClick host, "sl", 7
+    Check SliderValue(host, "sl") = 70 And host.sliderChanges = 1 And host.sl_b7.TabStop And Not host.sl_b0.TabStop, "Slider click did not move it"
+    SliderClick host, "sl", 7
+    Check host.sliderChanges = 1, "Click on the slider's step ran onChange"
+    SetSlider host, "sl", 44
+    Check SliderValue(host, "sl") = 40 And host.sliderChanges = 1, "SetSlider did not round quietly"
+    SetSlider host, "sl", 500
+    Check SliderValue(host, "sl") = 100, "SetSlider left the range"
+    SliderStep host, "sl", -2
+    Check SliderValue(host, "sl") = 80 And host.sliderChanges = 2, "SliderStep did not move two steps"
+    Check host.sl_lbl = 80, "Slider value label differs"
+    Check FileExists(CStr(SliderPng(37, CLR_PRIMARY, CLR_SECONDARY_BG, CLR_SURFACE, 200, 20))), "Slider image missing"
+    Check IsNull(SliderPng(50, CLR_PRIMARY, CLR_SECONDARY_BG, CLR_SURFACE, 20, 20)), "Slider image drawn narrower than its knob"
+    ' Popover: opens with its title and text, sized to the text, Esc closes it.
+    Check KitPopover(host.tglTest, "Due date", "Work is due then."), "Popover did not open"
+    Check IsFormOpen("dlgPopover"), "Popover form is not open"
+    With Forms("dlgPopover")
+        Check .Controls("lblTitle").Caption = "Due date" And .Controls("lblTitle").Visible, "Popover title differs"
+        Check Abs(.InsideHeight - (px(12) + px(24) + POPOVER_LINE_H + px(12))) <= 15, "Popover is not sized to one line (" & .InsideHeight & ")"
+    End With
+    Dim pk As Integer
+    pk = vbKeyEscape: PopoverKey Forms("dlgPopover"), pk
+    Check Not IsFormOpen("dlgPopover"), "Esc did not close the popover"
+    Check KitPopover(host.tglTest, "", "No title"), "Untitled popover did not open"
+    Check Not Forms("dlgPopover").Controls("lblTitle").Visible And Forms("dlgPopover").Controls("lblText").Top = px(12), "Untitled popover kept its title"
+    MenuClose Forms("dlgPopover")
+    DoCmd.SelectObject acForm, "frmTest"
     ' Dropdown menu: placed under its button (right-aligned or above when it would
     ' run off), sized to its items, separators and disabled items skipped by the
     ' keys, a pick returns the key and closes it, Esc returns nothing.
@@ -550,6 +630,22 @@ Public Function TestKit(ByVal root As String) As String
     On Error GoTo 0
     DoCmd.Close acForm, F.Name, acSaveNo
     Check badName = 5 And badScale = 5, "Accordion accepted a bad section"
+    NewForm "", 1, px(300), px(100)
+    Rating "rtRo", "", 0, 0, readOnly:=True
+    On Error Resume Next
+    Rating "rt1", "", 0, px(40): badName = Err.Number: Err.Clear
+    Slider "sl1", "", 0, px(70), px(200): badView = Err.Number: Err.Clear
+    On Error GoTo 0
+    DoCmd.Close acForm, F.Name, acSaveNo
+    Check badName = 5 And badView = 5, "Clickable rating or slider accepted a continuous form"
+    NewForm "", 0, px(300), px(100)
+    On Error Resume Next
+    Rating "rt2", "", 0, 0, 2: badName = Err.Number: Err.Clear
+    Slider "sl2", "", 0, px(40), px(200), 0, 100, 30: badScale = Err.Number: Err.Clear
+    Slider "sl3", "", 0, px(70), px(200), 0, 100, 1: badView = Err.Number: Err.Clear
+    On Error GoTo 0
+    DoCmd.Close acForm, F.Name, acSaveNo
+    Check badName = 5 And badScale = 5 And badView = 5, "Rating or slider accepted a bad count or step"
     ' Splash: CloseSplash and SplashStatus do nothing without one, the footer clears the
     ' subtitle, and the bitmap that hides Access's splash is 58 bytes.
     CloseSplash

@@ -1063,6 +1063,243 @@ Public Function AvatarInitials(ByVal v As Variant) As String
     If UBound(w) > 0 Then AvatarInitials = AvatarInitials & UCase$(Left$(w(UBound(w)), 1))
 End Function
 
+' Stat tile (a dashboard "KPI card"): a rounded card with a muted label, a big
+' value, and below it an optional change badge and caption ("12 open items,
+' up 8% vs last week"). src is the value: a field or an = expression
+' (=DCount("*","item","status='Open'")); fmt formats it ("#,##0", "0.0%",
+' "Currency"). delta is an optional field or expression giving the change in
+' percent: StatDelta shows it as an arrow and the number on a success pill
+' when up, a destructive one when down, a secondary one when flat. upIsGood
+' False swaps the up and down colors (for overdue counts, costs). glyph is an
+' optional MDL2 icon code in hex for the top right. The value and badge are
+' calculated controls: call Recalc on the form when the data behind them
+' changes. Parts: the card box<nm> (Card), <nm>_lbl, <nm> the value, <nm>_dbg
+' and <nm>_d the badge, <nm>_cap and <nm>_ico. 112px tall fits it all.
+Public Sub StatTile(ByVal nm As String, ByVal label As String, ByVal src As String, ByVal x As Long, ByVal y As Long, _
+        ByVal w As Long, Optional ByVal h As Long = 1680, Optional ByVal delta As String = "", _
+        Optional ByVal caption As String = "", Optional ByVal glyph As String = "", Optional ByVal fmt As String = "", _
+        Optional ByVal upIsGood As Boolean = True)
+    Dim c As Control, e As String, tone As String, k As Long, backs As Variant, fores As Variant, list As String
+    Card nm, "", x, y, w, h
+    Lbl nm & "_lbl", label, x + px(16), y + px(14), w - px(56), px(18), 9, False, CLR_MUTED_FG
+    Set c = RO(nm, src, x + px(16), y + px(34), w - px(32), px(38), 22, True)
+    c.TextAlign = 1                        ' numbers would sit right
+    If Len(fmt) > 0 Then c.Format = fmt
+    If Len(glyph) > 0 Then
+        Set c = Lbl(nm & "_ico", ChrW(CLng("&H" & glyph)), x + w - px(40), y + px(12), px(24), px(24), 12, False, CLR_MUTED_FG)
+        c.FontName = "Segoe MDL2 Assets": c.TextAlign = 2
+    End If
+    If Len(delta) > 0 Then
+        If Left$(delta, 1) = "=" Then e = "(" & Mid$(delta, 2) & ")" Else e = "[" & delta & "]"
+        tone = "StatTone(" & e & "," & IIf(upIsGood, "True", "False") & ")"
+        backs = Array(CLR_SUCCESS_BG, CLR_SEVA_BG, CLR_SECONDARY_BG)
+        fores = Array(CLR_SUCCESS_FG, CLR_SEVA_FG, CLR_SECONDARY_FG)
+        For k = 0 To 2
+            list = list & "," & backs(k)
+        Next
+        Set c = Mk(acImage, nm & "_dbg", x + px(16), y + px(80), px(64), px(20), acDetail, "")
+        ImageProps c
+        c.Properties("ControlSource") = "=IIf(IsNull(" & e & "),Null,PillPng(Choose(" & tone & "+1" & list & "),64,20))"
+        Set c = RO(nm & "_d", "=StatDelta(" & e & ")", x + px(16), y + px(80), px(64), px(20), 8, True, fores(2))
+        c.TextAlign = 2
+        VCenter c, px(20), 8, True
+        For k = 0 To 1
+            CF c, tone & "=" & k, -1, fores(k), True
+        Next
+        If Len(caption) > 0 Then Lbl nm & "_cap", caption, x + px(88), y + px(80), w - px(104), px(20), 8, False, CLR_MUTED_FG
+    ElseIf Len(caption) > 0 Then
+        Lbl nm & "_cap", caption, x + px(16), y + px(80), w - px(32), px(20), 8, False, CLR_MUTED_FG
+    End If
+End Sub
+
+' A stat tile's change badge text: an up or down arrow and the percent, one
+' decimal at most (up-arrow 8%, down-arrow 3.5%), "0%" for no change, "" for
+' Null.
+Public Function StatDelta(ByVal v As Variant) As String
+    If IsNull(v) Or IsEmpty(v) Then Exit Function
+    If Not IsNumeric(v) Then Exit Function
+    If CDbl(v) = 0 Then StatDelta = "0%": Exit Function
+    StatDelta = ChrW(IIf(CDbl(v) > 0, &H25B2, &H25BC)) & " " & Format$(Abs(CDbl(v)), "0.#") & "%"
+    If Right$(StatDelta, 2) = ".%" Then StatDelta = Left$(StatDelta, Len(StatDelta) - 2) & "%"
+End Function
+
+' A stat tile's badge tone: 0 good (success), 1 bad (destructive), 2 flat or
+' unknown (secondary). Up is good unless upIsGood is False.
+Public Function StatTone(ByVal v As Variant, ByVal upIsGood As Boolean) As Long
+    StatTone = 2
+    If IsNull(v) Or IsEmpty(v) Then Exit Function
+    If Not IsNumeric(v) Then Exit Function
+    If CDbl(v) = 0 Then Exit Function
+    StatTone = IIf((CDbl(v) > 0) = upIsGood, 0, 1)
+End Function
+
+' Star rating (a web "rating"): n stars (5 by default) for a number field,
+' filled CLR_AMBER_500 up to the value and outlined CLR_INPUT_BORDER after it.
+' A click on star i sets the value to i; a click on the star already the
+' value clears it to 0, as on most review sites. readOnly:=True builds the
+' stars only, for showing a rating on every row of a continuous form. size is
+' a star's box, 24px by default. onChange names a Public Sub in the form's
+' code-behind called after the user changes it. Parts (i from 1): <nm>_val a
+' hidden text box bound to src (Read Me!<nm>_val or RatingValue), <nm>_s<i>
+' the stars (calculated, so they follow the record) and <nm>_b<i> the
+' transparent buttons over them. Raises error 5 for fewer than 3 or more than
+' 10 stars, and for clickable stars on a continuous form.
+Public Function Rating(ByVal nm As String, ByVal src As String, ByVal x As Long, ByVal y As Long, _
+        Optional ByVal stars As Long = 5, Optional ByVal size As Long = 360, Optional ByVal readOnly As Boolean = False, _
+        Optional ByVal onChange As String = "") As Control
+    Dim c As Control, v As Control, i As Long, e As String, fsize As Integer
+    If stars < 3 Or stars > 10 Then Err.Raise 5, , "Rating " & nm & " takes 3 to 10 stars"
+    If Not readOnly And F.DefaultView <> 0 Then Err.Raise 5, , "Rating " & nm & " can only be read-only on a continuous form"
+    Set v = Mk(acTextBox, nm & "_val", x, y, px(13), px(13), acDetail, "")
+    If Len(src) > 0 Then v.ControlSource = src Else v.DefaultValue = "0"
+    v.Visible = False: v.TabStop = False
+    v.Tag = CStr(stars)
+    e = "Nz([" & nm & "_val],0)"
+    fsize = CInt((size \ 15) * 0.55 + 0.5)
+    For i = 1 To stars
+        Set c = RO(nm & "_s" & i, "=IIf(" & e & ">=" & i & ",ChrW(59189),ChrW(59188))", x + (i - 1) * size, y, size, size, _
+            fsize, False, CLR_INPUT_BORDER)
+        c.FontName = "Segoe MDL2 Assets": c.TextAlign = 2
+        VCenter c, size, fsize, True
+        CF c, e & ">=" & i, -1, CLR_AMBER_500
+        If Not readOnly Then
+            Set c = Mk(acCommandButton, nm & "_b" & i, x + (i - 1) * size, y, size, size, acDetail, "")
+            c.Transparent = True
+            c.Tag = onChange
+            c.ControlTipText = i & IIf(i = 1, " star", " stars")
+            c.OnClick = "=RatingClick([Form],""" & nm & """," & i & ")"
+        End If
+    Next
+    Set Rating = v
+End Function
+
+' Stepped slider (a web range input): a 6px track filled CLR_PRIMARY up to
+' the value, with a CLR_SURFACE knob ringed in CLR_PRIMARY on it (SliderPng),
+' for a number field from minV to maxV in steps of stepV (2 to 41 steps). A
+' click anywhere on the track moves the knob to the nearest step. showValue
+' adds the value at the right, 48px wide (fmt formats it, "0%" for a 0-1
+' range). onChange names a Public Sub in the form's code-behind, called after
+' the user changes it. The steps are transparent buttons, so arrow keys need
+' the form's own KeyDown: call SliderStep there. Parts: <nm>_val a hidden text
+' box bound to src (SliderValue), <nm>_bg the track image, <nm>_ring the focus
+' ring, <nm>_b<i> the steps (i from 0) and <nm>_lbl the value. h is the knob's
+' size, 20px by default. Single forms only (error 5 on a continuous form, and
+' for a bad range or step count).
+Public Function Slider(ByVal nm As String, ByVal src As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, _
+        Optional ByVal minV As Double = 0, Optional ByVal maxV As Double = 100, Optional ByVal stepV As Double = 10, _
+        Optional ByVal onChange As String = "", Optional ByVal showValue As Boolean = False, Optional ByVal fmt As String = "", _
+        Optional ByVal h As Long = 300) As Control
+    Dim c As Control, v As Control, n As Long, i As Long, tw As Long, seg As Double, bx As Long, pct As String
+    If F.DefaultView <> 0 Then Err.Raise 5, , "Slider " & nm & " needs a single-record form"
+    If maxV <= minV Or stepV <= 0 Then Err.Raise 5, , "Slider " & nm & " has a bad range or step"
+    n = CLng((maxV - minV) / stepV) + 1
+    If n < 2 Or n > 41 Or Abs(minV + (n - 1) * stepV - maxV) > stepV / 1000 Then _
+        Err.Raise 5, , "Slider " & nm & " needs 2 to 41 steps that end on its maximum"
+    tw = w
+    If showValue Then tw = w - px(56)
+    Set v = Mk(acTextBox, nm & "_val", x, y, px(13), px(13), acDetail, "")
+    If Len(src) > 0 Then v.ControlSource = src Else v.DefaultValue = Str$(minV)
+    v.Visible = False: v.TabStop = False
+    v.Tag = Str$(minV) & "|" & Str$(maxV) & "|" & Str$(stepV)
+    pct = "(Nz([" & nm & "_val]," & Trim$(Str$(minV)) & ")-(" & Trim$(Str$(minV)) & "))*100/(" & Trim$(Str$(maxV - minV)) & ")"
+    Set c = Mk(acImage, nm & "_ring", x - px(4), y - px(4), tw + px(8), h + px(8), acDetail, "")
+    ImageProps c
+    c.Properties("ControlSource") = "=RingPng(" & CLR_PRIMARY & "," & (tw + px(8)) \ 15 & "," & (h + px(8)) \ 15 & ")"
+    c.Visible = False
+    Set c = Mk(acImage, nm & "_bg", x, y, tw, h, acDetail, "")
+    ImageProps c
+    c.Properties("ControlSource") = "=SliderPng(" & pct & "," & CLR_PRIMARY & "," & CLR_SECONDARY_BG & "," & CLR_SURFACE & "," & _
+        tw \ 15 & "," & h \ 15 & ")"
+    ' Step i's button is centered on its knob position and as wide as a step.
+    seg = (tw - h) / (n - 1)
+    For i = 0 To n - 1
+        bx = x + CLng(h / 2 + i * seg - seg / 2)
+        If i = 0 Then bx = x
+        Set c = Mk(acCommandButton, nm & "_b" & i, bx, y, CLng(IIf(i = 0 Or i = n - 1, seg / 2 + h / 2, seg)), h, acDetail, "")
+        c.Transparent = True
+        c.Tag = onChange
+        c.TabStop = (i = 0)
+        c.ControlTipText = Trim$(Format$(minV + i * stepV, IIf(Len(fmt) > 0, fmt, "General Number")))
+        c.OnClick = "=SliderClick([Form],""" & nm & """," & i & ")"
+        c.OnGotFocus = "=ToggleFocus([Form],""" & nm & """,True)"
+        c.OnLostFocus = "=ToggleFocus([Form],""" & nm & """,False)"
+    Next
+    If showValue Then
+        Set c = RO(nm & "_lbl", "=[" & nm & "_val]", x + tw + px(8), y, px(48), h, 9, True)
+        c.TextAlign = 3
+        If Len(fmt) > 0 Then c.Format = fmt
+    End If
+    Set Slider = v
+End Function
+
+' Empty state: what a list or page shows when there is nothing in it, as on
+' the web - a muted icon in a soft circle, a short title, a line or two saying
+' why and what to do, and an optional button to do it ("No items match. Try
+' another search." / Clear filters). Centered in w from y down: a 48px circle,
+' the 11pt title 12px below, the 9pt text (two lines) and the 32px button,
+' about 180px in all. Show it in place of the list with ShowEmpty (a subform
+' always covers a label, so hide the list's subform while it shows). Parts:
+' <nm> an invisible frame, <nm>_bg and <nm>_ico the icon, <nm>_t the title,
+' <nm>_m the text and <nm>_b the button (onClick an = expression or "" for
+' an [Event Procedure] the form handles as <nm>_b_Click). Built hidden unless
+' shown is True.
+Public Sub EmptyState(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal glyph As String, _
+        ByVal title As String, ByVal text As String, Optional ByVal actionCap As String = "", _
+        Optional ByVal onClick As String = "", Optional ByVal shown As Boolean = False)
+    Dim c As Control, cx As Long, bw As Long
+    cx = x + w \ 2
+    Set c = Box(nm, x, y, w, px(180), -1)
+    c.Visible = shown
+    Set c = Mk(acImage, nm & "_bg", cx - px(24), y, px(48), px(48), acDetail, "")
+    ImageProps c
+    c.Properties("ControlSource") = "=PillPng(" & CLR_SECONDARY_BG & ",48,48)"
+    c.Visible = shown
+    Set c = Lbl(nm & "_ico", ChrW(CLng("&H" & glyph)), cx - px(24), y, px(48), px(48), 18, False, CLR_MUTED_FG)
+    c.FontName = "Segoe MDL2 Assets": c.TextAlign = 2: c.Visible = shown
+    VCenter c, px(48), 18, True
+    Set c = Lbl(nm & "_t", title, x, y + px(60), w, px(22), 11, True, CLR_FG)
+    c.TextAlign = 2: c.Visible = shown
+    Set c = Lbl(nm & "_m", text, x + px(16), y + px(84), w - px(32), px(36), 9, False, CLR_MUTED_FG)
+    c.TextAlign = 2: c.Visible = shown: c.TopMargin = 0
+    If Len(actionCap) > 0 Then
+        bw = px(Len(actionCap) * 7 + 40)
+        Set c = Btn(nm & "_b", actionCap, cx - bw \ 2, y + px(128), bw, px(32), "outline")
+        If Len(onClick) > 0 Then c.OnClick = onClick
+        c.Visible = shown
+    End If
+End Sub
+
+' Search box, as on the web: a magnifier inside the left edge, the text, and a
+' clear mark inside the right edge that shows once there is text. handler
+' names a Public Sub or Function on the form taking the text, called as the
+' user types (each keystroke) and with "" when the clear mark empties it;
+' filter the page there. placeholder shows while it is empty. The box takes
+' the focus ring on its frame. Parts: <nm>_f the frame (border and fill),
+' <nm>_ico, <nm> the text box (borderless, between the two marks) and <nm>_x.
+' Read the text with SearchText; set it in code with SetSearch.
+Public Function SearchBox(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal handler As String, _
+        Optional ByVal placeholder As String = "Search...", Optional ByVal h As Long = 480) As Control
+    Dim c As Control, t As Control
+    Set c = Box(nm & "_f", x, y, w, h, CLR_INPUT_BG, CLR_INPUT_BORDER)
+    c.Tag = handler
+    Set c = Lbl(nm & "_ico", ChrW(&HE721), x + px(8), y, px(18), h, 9, False, CLR_MUTED_FG)
+    c.FontName = "Segoe MDL2 Assets": c.TextAlign = 2
+    VCenter c, h, 9, True
+    Set t = Mk(acTextBox, nm, x + px(30), y + px(1), w - px(60), h - px(2), acDetail, "")
+    t.FontName = FONT_UI: t.FontSize = 9: t.ForeColor = CLR_FG
+    t.BorderStyle = 0: t.SpecialEffect = 0: t.BackStyle = 1: t.BackColor = CLR_INPUT_BG
+    t.LeftMargin = 0
+    VCenter t, h - px(2), 9, True
+    t.Format = "@;""" & Replace(placeholder, """", "") & """"
+    t.OnChange = "=SearchChanged([Form],""" & nm & """)"
+    t.OnGotFocus = "=SearchFocus([Form],""" & nm & """,True)"
+    t.OnLostFocus = "=SearchFocus([Form],""" & nm & """,False)"
+    Set c = Link(nm & "_x", ChrW(&HE711), x + w - px(28), y, px(20), h, "=SearchClear([Form],""" & nm & """)", 8, CLR_MUTED_FG)
+    c.FontName = "Segoe MDL2 Assets": c.TextAlign = 2: c.ControlTipText = "Clear": c.Visible = False
+    VCenter c, h, 8, True
+    Set SearchBox = t
+End Function
+
 ' Where an Alert's parts sit, down from its top (twips): an item of height ih
 ' (icon, close mark) is 12px down, or centered in a compact alert (under 48px);
 ' the message is below the title, or level with the icon.
