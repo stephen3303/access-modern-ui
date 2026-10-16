@@ -1276,6 +1276,46 @@ Public Function TestKit(ByVal root As String) As String
     Set peFrm = Forms(PERSON_FORM)
     Check peFrm.txtUser = "alee" And peFrm.txtAccount = "TESTDOM\alee" And peFrm.txtMiddle = "B" And Not peFrm.lblUserHint.Visible, "Change person didn't show the person"
     DoCmd.Close acForm, PERSON_FORM, acSaveNo
+    ' Classification: the selected level limits the permitted markings; the banner shows it.
+    Dim clsFrm As Form, clsKeep As String, clsList As Variant
+    clsKeep = GetSetting(APP_NAME, "Classification", "Level", "")
+    SetAppClassification "UNCLASSIFIED"
+    Check ClassPermits("unclassified") And Not ClassPermits("CUI") And Not ClassPermits("Made Up") And Not ClassPermits(""), "Unclassified app permitted a higher or unknown marking"
+    SetAppClassification "secret"
+    Check AppClassification() = "SECRET" And ClassPermits("SECRET//NOFORN") And ClassPermits("CUI") And Not ClassPermits("TOP SECRET"), "Secret app didn't limit markings to its level"
+    clsList = ClassMarkings()
+    Check clsList(0) = "UNCLASSIFIED" And UBound(clsList) >= 8 And ClassRank(clsList(UBound(clsList))) = 3, "ClassMarkings isn't the permitted list, lowest first"
+    Check UBound(ClassMarkings("TOP SECRET//SCI")) = UBound(clsList) + 5, "ClassMarkings(maxLevel) didn't widen the list"
+    Dim clsE1 As Long, clsE2 As Long, clsE3 As Long
+    On Error Resume Next
+    RequireClass "TOP SECRET": clsE1 = Err.Number
+    Err.Clear: SetAppClassification "Bogus": clsE2 = Err.Number
+    Err.Clear: SetBannerMarking "TOP SECRET": clsE3 = Err.Number
+    On Error GoTo 0
+    Check clsE1 = 5, "RequireClass didn't refuse a marking above the level"
+    Check clsE2 = 5, "SetAppClassification took an unknown level"
+    Check clsE3 = 5, "SetBannerMarking took a marking above the level"
+    SetBannerMarking "SECRET//NOFORN"
+    NewForm "", 0, px(300), px(60)
+    ClassBanner "bnrTop", 0, 0, px(300)
+    ClassBanner "bnrBottom", 0, px(36), px(300), , True
+    SaveForm "frmClassTest"
+    DoCmd.OpenForm "frmClassTest"
+    Set clsFrm = Forms("frmClassTest")
+    ShowClassBanner clsFrm
+    Check clsFrm.bnrTop_text.Caption = "SECRET//NOFORN" And clsFrm.bnrBottom_text.Caption = "SECRET//NOFORN", "Banners don't show the marking"
+    Check clsFrm.bnrTop.BackColor = RGB(200, 16, 46) And clsFrm.bnrTop_text.ForeColor = RGB(255, 255, 255), "Secret banner isn't red with white text"
+    SetAppClassification "CUI"
+    Check BannerMarking() = "CUI" And clsFrm.bnrTop_text.Caption = "CUI" And clsFrm.bnrTop.BackColor = RGB(80, 45, 130), "Lowering the level kept a marking it no longer permits"
+    DoCmd.Close acForm, "frmClassTest", acSaveNo
+    DoCmd.DeleteObject acForm, "frmClassTest"
+    If Len(clsKeep) = 0 Then
+        On Error Resume Next
+        DeleteSetting APP_NAME, "Classification"
+        On Error GoTo 0
+    Else
+        SetAppClassification clsKeep
+    End If
     PersonnelSignOut
     CurrentDb.TableDefs.Delete PERSON_TABLE: CurrentDb.TableDefs.Delete PERSON_APP_TABLE
     g_Silent = False
