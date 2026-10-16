@@ -12,7 +12,7 @@ $utf8 = New-Object Text.UTF8Encoding($false)
 
 . (Join-Path $PSScriptRoot 'AccessReview.ps1')
 
-$ServerVersion = '0.3.0'
+$ServerVersion = '0.4.0'
 
 function Send-Message($obj) {
     [Console]::Out.WriteLine(($obj | ConvertTo-Json -Depth 20 -Compress))
@@ -43,7 +43,7 @@ $Tools = @(
     @{ name = 'review_unlock'; description = 'Release the lock files this owner took.'
        schema = (Schema @{ owner = $str } @('owner'))
        run = { param($a) Exit-ReviewLock -Owner (Arg $a 'owner') } }
-    @{ name = 'open_app'; description = 'Start a separate Access instance and open an existing, already trusted front end (never creates a file). mode offscreen (default) parks every Access window past the desktop edge so it never covers anyone''s work; onscreen is for a dedicated review machine. Startup forms and AutoExec run as usual.'
+    @{ name = 'open_app'; description = 'Start a separate Access instance and open an existing, already trusted front end (never creates a file). mode offscreen (default) parks every Access window past the desktop edge so it never covers anyone''s work; onscreen is for a dedicated review machine. Startup forms and AutoExec run as usual, so it refuses a file downloaded from the internet (Zone.Identifier) and, when ACCESS_REVIEW_ALLOWED_FOLDERS is set, a file outside those folders.'
        schema = (Schema @{ path = @{ type = 'string'; description = 'Full path of the .accdb/.accde.' }; mode = @{ type = 'string'; enum = @('offscreen', 'onscreen') }
                           output_dir = @{ type = 'string'; description = 'Where PNGs go. Default ACCESS_REVIEW_OUTPUT or %LOCALAPPDATA%\AccessReview, in a new <time> folder.' } } @('path'))
        run = { param($a) $p = @{ Path = (Arg $a 'path'); Mode = (Arg $a 'mode' 'offscreen') }; if (Arg $a 'output_dir') { $p.OutputDirectory = $a.output_dir }; Open-ReviewApp @p } }
@@ -66,7 +66,7 @@ $Tools = @(
        schema = (Schema @{ form = $formProp; width_px = $int; height_px = $int; maximized = @{ type = 'boolean' } } @('form'))
        run = { param($a) Set-ReviewFormSize -Name (Arg $a 'form') -WidthPx (Arg $a 'width_px' 0) -HeightPx (Arg $a 'height_px' 0) -Maximize:([bool](Arg $a 'maximized' $false)) } }
     @{ name = 'capture'; description = 'PNG of an open form drawn with PrintWindow (no screen needed, works behind other windows). Optional crop [x, y, width, height] in physical pixels relative to the form window, enlarged by zoom. Returns the image and its saved path.'
-       schema = (Schema @{ form = $formProp; label = @{ type = 'string'; description = 'Added to the file name, e.g. sidebar-collapsed.' }
+       schema = (Schema @{ form = $formProp; label = @{ type = 'string'; pattern = '^[A-Za-z0-9][A-Za-z0-9_.-]*$'; description = 'Added to the file name: letters, digits, ''.'', ''_'' or ''-'', e.g. sidebar-collapsed.' }
                           crop = @{ type = 'array'; items = $int; minItems = 4; maxItems = 4 }; zoom = @{ type = 'integer'; minimum = 1; maximum = 8 } } @('form'))
        run = { param($a) $c = Arg $a 'crop'; Save-ReviewCapture -Name (Arg $a 'form') -Label (Arg $a 'label') -Crop $(if ($c) { [int[]]@($c) } else { $null }) -Zoom (Arg $a 'zoom' 1) }
        image = $true }

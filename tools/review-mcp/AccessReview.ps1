@@ -24,6 +24,7 @@
 # palette on the default (first configured) palette when it closes.
 #
 # Settings come from environment variables, all optional (see README.md):
+#   ACCESS_REVIEW_ALLOWED_FOLDERS    folders open_app may open front ends from, separated by ';'
 #   ACCESS_REVIEW_LOCKS              lock files shared by reviewers, separated by ';'
 #   ACCESS_REVIEW_OUTPUT             folder for captures (default %LOCALAPPDATA%\AccessReview)
 #   ACCESS_REVIEW_PALETTES           name=value pairs for set_palette, separated by ';'
@@ -506,6 +507,44 @@ function Exit-ReviewLock {
     [pscustomobject]@{ Released = $released }
 }
 
+# True when Path is FolderPath itself or inside it. Both are full paths; the comparison
+# ignores case and a trailing separator, and a folder never matches a sibling that
+# merely starts with the same name (C:\Review vs C:\Review2).
+function Test-PathInFolder([string]$Path, [string]$FolderPath) {
+    $f = [IO.Path]::GetFullPath($FolderPath).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+    $Path.StartsWith($f, [StringComparison]::OrdinalIgnoreCase)
+}
+
+# Under automation Access runs a front end's startup code (AutoExec, startup form)
+# without the Enable Content bar, and the run tool calls any public procedure, so
+# open_app refuses a file that came from the internet (its Zone.Identifier stream
+# says zone 3 or 4) and, when ACCESS_REVIEW_ALLOWED_FOLDERS is set, a file outside
+# those folders.
+function Assert-ReviewFileAllowed([string]$Path) {
+    $allowed = @(((Get-ReviewSetting 'ACCESS_REVIEW_ALLOWED_FOLDERS') -split ';') | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    foreach ($a in $allowed) {
+        if (-not [IO.Path]::IsPathRooted($a)) { throw "ACCESS_REVIEW_ALLOWED_FOLDERS: '$a' is not a full path." }
+    }
+    $inside = @($allowed | Where-Object { Test-PathInFolder $Path $_ })
+    if ($allowed.Count -and -not $inside.Count) {
+        throw "'$Path' is not in a folder this tool may open ($($allowed -join '; '), from ACCESS_REVIEW_ALLOWED_FOLDERS)."
+    }
+    # The check above compares names, so a junction or symbolic link inside an allowed
+    # folder could lead outside it. Refuse a path that goes through one below the folder.
+    foreach ($a in $inside) {
+        $root = [IO.Path]::GetFullPath($a).TrimEnd('\', '/')
+        for ($p = $Path; $p -and $p.Length -gt $root.Length; $p = [IO.Path]::GetDirectoryName($p)) {
+            $link = (Get-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue).LinkType
+            if ($link -in 'Junction', 'SymbolicLink') { throw "'$Path' goes through the $link '$p', which may lead outside $a, so it is not opened. Use the file's real location." }
+        }
+    }
+    $zone = $null
+    try { $zone = Get-Content -LiteralPath $Path -Stream Zone.Identifier -ErrorAction Stop } catch {}
+    if ($zone -and (($zone -join "`n") -match '(?m)^ZoneId=([34])\s*$')) {
+        throw "'$Path' was downloaded from the internet (Zone.Identifier ZoneId=$($Matches[1])), so its startup code is not trusted. If you trust it, unblock it first (file Properties, Unblock) and open it again."
+    }
+}
+
 # Starts a separate Access instance and opens an existing front end in it. Off-screen
 # mode parks every Access window past the desktop edge; on-screen mode (for a dedicated
 # review machine) puts the Access window at the top left of the main display.
@@ -515,6 +554,7 @@ function Open-ReviewApp {
     if ($script:Review -and -not $script:Review.Process.HasExited) { throw "Access is already open on $($script:Review.Path). Close it first." }
     $Path = (Resolve-Path -LiteralPath $Path -ErrorAction SilentlyContinue).ProviderPath
     if (-not $Path -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw 'Open only an existing, already trusted front end; this tool never creates one.' }
+    Assert-ReviewFileAllowed $Path
     if (-not $OutputDirectory) {
         $base = Get-ReviewSetting 'ACCESS_REVIEW_OUTPUT'
         if (-not $base) { $base = Join-Path $env:LOCALAPPDATA 'AccessReview' }
@@ -848,6 +888,8 @@ function Save-ReviewCapture {
     Assert-FormOpen $Name
     $hwnd = Get-FormHwnd $Name
     if ($hwnd -eq [IntPtr]::Zero) { throw "Form '$Name' has no window handle." }
+    if ($Label -and $Label -notmatch '^[A-Za-z0-9][A-Za-z0-9_.-]*$') { throw "Capture label '$Label' must be letters, digits, '.', '_' or '-'." }
+    if ($Name -match '[\\/:*?"<>|]') { throw "Form '$Name' has a character that can't be used in a file name." }
     $tag = ($script:Review.Palette -replace ' ', '').ToLower()
     $file = ($Name, $tag, $Label | Where-Object { $_ }) -join '-'
     if ($Crop) { $file += '-crop' }
