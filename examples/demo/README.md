@@ -11,7 +11,7 @@ test changes to it. It has one local table of fictional items and five pages:
 | Dashboard | Four `StatTile`s (open, past due with down as good, complete, average done) with change badges, and the flagged items in a card with an `EmptyState` when none are flagged |
 | List and detail | The list/detail pattern (`SelectFirstRow`, `ShowDetail`, `ClearDetail`), click-to-sort captions, `PrintGrid` and `ExportGrid` in the list's sort; the Due field is a `DateBox` whose date picker marks federal holidays and every item's due date (`MarkDate`); a compact `Toggle` switch (Flagged for review) on the detail panel's Save row; a `SecretBox` (the item's access code); an `Avatar` with the owner's initials beside the Owner field; Save confirms with a toast; a compact warning `Alert` in the header row counts open items past their due date (its close mark hides it); a `Breadcrumb` below the title (All items > status > item) whose crumbs pick the chip; the list's `SearchBox` (magnifier and clear mark, as on Tables) and its `EmptyState` when nothing matches; the detail card's More button (⋯) opens a `KitMenu` dropdown (Mark complete, Flag, Delete) |
 
-Appearance in the sidebar switches palettes. The demo opens on the kit's splash screen
+Help in the sidebar, or F1, opens the kit's help window (`KitHelp`) on the page's topic, with a search box over the topic list; the topics are in `src\help\help.txt`. Appearance in the sidebar switches palettes. The demo opens on the kit's splash screen
 (`BuildSplash`), which opens the main window and closes; `HideAccessSplash` replaces
 Access's own splash with `KitDemo.bmp`.
 Folder trust in the sidebar opens the kit's trust page (`dlgTrust`), which also opens by
@@ -41,6 +41,11 @@ watching for Visual Basic error dialogs as well as the error log:
   right and a status line; it closes once the main window is up. The splash takes the palette
   saved last, so to see it in another palette pick one in Appearance, then close and reopen
   the file.
+- Help: on each page, Help in the sidebar and F1 open the help window on that page's
+  topic (Tables opens Tables; Choosing columns is indented under it). Typing "funnel" in the
+  search box leaves only Tables and marks the word; "zzz" shows "No topics match your
+  search."; Enter opens the first match; Esc closes it. With help open, F1 keeps its topic.
+  Check it in Navy and Midnight: the topic text, its marks and the list stay readable.
 - Cards: corners are round in every palette; hovering the buttons and cards doesn't flicker.
 - Progress: 0 shows only the track, 37 is a third full, 100 is full.
 - Toasts: each click on Outline shows the next variant (success, info, warning,

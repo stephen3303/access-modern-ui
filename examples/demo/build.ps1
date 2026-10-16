@@ -24,6 +24,7 @@ Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force (Join-Path $stage 'forms') | Out-Null
 Copy-Item (Join-Path $repo 'kit\forms\*.vba') (Join-Path $stage 'forms')
 Copy-Item (Join-Path $demo 'src\forms\*.vba') (Join-Path $stage 'forms')
+Copy-Item (Join-Path $demo 'src\help') $stage -Recurse   # the help topics (LoadHelpTopics)
 . (Join-Path $repo 'tools\VbaLineNumbers.ps1')
 if (-not $NoLineNumbers) { Add-VbaLineNumbersToFolder (Join-Path $stage 'forms') }
 

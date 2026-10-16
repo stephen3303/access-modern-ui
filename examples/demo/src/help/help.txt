@@ -1,0 +1,53 @@
+Kit Demo help topics. The build loads this file into the front end (LoadHelpTopics);
+rebuild the front end after editing it. Everything above the first topic is ignored.
+
+Format:
+  === key | Title      starts a topic. A key with a dot (tables.columns) is listed
+                       indented under its parent. Page keys match frmMain's page keys.
+  # Heading            a heading inside the topic
+  - text               a bullet point
+  **text**             bold
+  Other lines are paragraph text; a blank line ends a paragraph.
+
+=== start | Getting Started
+The Kit Demo shows the parts of the access-modern-ui kit working on fictional items. Each page in the sidebar shows a group of them.
+
+# Getting help
+Click **Help** in the sidebar, or press **F1**, to open help for the page you are on. Choose any other topic from the list on the left, or type in the search box to find the topics that mention a word. Press **Enter** in the search box to open the first match.
+
+# Other things in the sidebar
+- **Appearance** opens the list of color palettes. Click one to switch the whole app to it.
+- **Folder trust** explains how to trust this folder, so Access stops asking to enable content.
+
+=== cards | Cards and progress
+This page shows cards, progress bars and the kit's message, toast and input dialogs.
+
+# Try it
+- Click **Primary** to see a message, and **Outline** to see a toast.
+- Click **Ask** to answer a question in the kit's input dialog.
+- Pick **All**, **Open** or **Done** above the table to filter it.
+
+=== tables | Tables
+This page shows two styled tables. Click a column caption to sort by it; click it again to reverse the order.
+
+# Find items
+- Click a **tab** or a **chip** to show only the items in that status. Each shows how many items it holds.
+- Type in the **search box** to match an item or owner. Matches are marked in the table.
+- Click the **funnel** beside a caption to show only some of that column's values.
+
+=== tables.columns | Choosing columns
+Click **Columns** at the top right of the first table to choose which columns it shows and in what order. Your choice is remembered for your Windows account.
+
+=== list | List and detail
+Click an item in the list to open it in the detail panel on the right. Change any field and click **Save**.
+
+# Other actions
+- The **More** button (three dots) on the detail card marks the item complete, flags it or deletes it.
+- **Print** and **Export** at the top of the list print the list or save it as a CSV file, in the order shown.
+
+=== steps | Steps and sections
+This page shows a step indicator and a set of sections that open and close.
+
+# Try it
+- Click **Next** and **Back** to move between the steps. Click a finished step's check mark to go back to it.
+- Click a section's title to open it. Opening one closes the others.

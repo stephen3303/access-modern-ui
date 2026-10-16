@@ -132,7 +132,6 @@ them, and the shell (`frmMain`) last.
 | modGlobals | Constants (`APP_NAME`), session state accessors (TempVars), SQL helpers (`Q`, `SqlVal`, `NzStr`, `NewRow`), `Notify` |
 | modErrors | Error log and handlers (section 5) |
 | modVersion | FE/BE schema version and minimum front-end build checks at sign-in |
-| modHelp | In-app help: loads `help.txt`, picks the topic for the current page, F1 key |
 | modAuth, modCrypto | Sign-in, permissions, salted SHA-256 via Windows CNG |
 | modSchemaDDL | Table specs and back-end creation/upgrade (raise `SCHEMA_VERSION` + migrate) |
 | modBuild | `BuildAll` entry point and startup options |
@@ -143,6 +142,7 @@ them, and the shell (`frmMain`) last.
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
 | modGridCols (kit) | Column chooser: `ChooseGridColumns`, `RestoreGridColumns`, `SetGridColumns`, and `BuildColumnsDialog` for `dlgColumns` |
 | modGridFilter (kit) | Header filters: `GridFilter`, `SetGridFilter`, `SetColumnFilter`, `ClearGridFilters`, `GridFilterWhere`, and `BuildFilterDialog` for `dlgFilter` |
+| modKitHelp (kit) | In-app help: `LoadHelpTopics` (help.txt into `zz_help`), `BuildHelpDialog`, `BuildHelpKey` (F1), `KitHelp` (the topic for what is on screen, search) |
 | modTrust (kit) | `BuildTrustCheck` startup, `TrustNeeded`, `InTrustedLocation`, `ShowTrustHelp` (the `dlgTrust` page on trusting the folder) |
 | modKitUtil (kit) | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `CenterOnApp`, `SetVisible`, `SetEnabled` |
 | modBackdrop (kit) | `DimApp`, `UndimApp`: the dimmed backdrop behind modal dialogs |
@@ -243,8 +243,15 @@ Write documentation in three layers, all in plain, direct prose:
        parent.
      - `# Heading`, `- bullet`, `**bold**`.
      - A blank line ends a paragraph.
-   - Topic keys match page keys, so Help, the F1 key (an `AutoKeys` macro running
-     `=ShowHelp()`) and the sign-in Help link open the topic for whatever is on screen.
+   - The kit's modKitHelp loads it (`LoadHelpTopics`), builds the window
+     (`BuildHelpDialog`) and the F1 key (`BuildHelpKey`, an `AutoKeys` macro running
+     `KitHelp()`).
+   - Topic keys match page keys, so Help (`=KitHelp()`), F1 and the sign-in Help link open
+     the topic for whatever is on screen. A dialog, or a page with tabs, names its own
+     topic with a `Public Property Get HelpTopic() As String` in its code-behind.
+   - The search box over the topic list narrows it to the topics that mention the words
+     and marks them in the topic shown, so users find an answer without knowing where
+     it lives.
    - Name buttons and tabs exactly as they are captioned on screen.
    - The help window is non-modal so it can stay open beside the page. It opens as a
      dialog when another modal form has the focus.
@@ -1106,8 +1113,8 @@ The Appearance dialog grows by itself, because it is built from `PALETTE_COUNT`.
 7. Copy the dialogs: `dlgAppearance`, `BuildMessageDialog` (for `Notify` and `HandleError`),
    `BuildToast` (for `KitToast`),
    `BuildInputDialog` (for `KitInputBox`),
-   `BuildDatePicker` (for date fields), and a non-modal `dlgHelp` with `help.txt` and the F1
-   `AutoKeys` macro. Optionally add the splash screen with `BuildSplash` and
+   `BuildDatePicker` (for date fields), and the help window: `LoadHelpTopics` with
+   `help.txt`, `BuildHelpDialog` and `BuildHelpKey` for F1. Optionally add the splash screen with `BuildSplash` and
    `HideAccessSplash`, and pass `frmSplash` to `BuildTrustCheck` as the startup form.
 8. Write `README.md` and `DEVELOPING.md` using the structure in section 4, linking to the
    kit's README for the builder catalog.

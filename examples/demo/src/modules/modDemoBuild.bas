@@ -5,8 +5,9 @@ Option Explicit
 ' group of kit features: pgCards (Card, Progress), pgTables (BuildGrid
 ' options, GridFit, the column chooser, tabs and chips with counts),
 ' pgList (the list/detail pattern, PrintGrid and ExportGrid, Alert, Breadcrumb)
-' and pgSteps (Stepper, Accordion). frmMain is the
-' shell.
+' and pgSteps (Stepper, Accordion). frmMain is the shell; Help in its
+' sidebar and F1 open the kit's help window on the page's topic
+' (src\help\help.txt).
 
 Public Const PAGE_W As Long = 15840             ' 1056 px
 Public Const PAGE_H As Long = 8400              ' 560 px
@@ -31,6 +32,7 @@ Public Function BuildAll(ByVal srcRoot As String, ByVal outDir As String, ByVal 
         m_step = "seed": SeedItems
     End If
     m_step = "user interface": BuildUserInterface
+    m_step = "help": LoadHelpTopics srcRoot & "\help\help.txt"
     m_step = "startup": SetStartupOptions
     g_Silent = False
     BuildAll = "OK"
@@ -113,6 +115,7 @@ Private Sub BuildUserInterface()
     BuildColumnsDialog             ' the kit's dlgColumns, for ChooseGridColumns
     BuildFilterDialog              ' the kit's dlgFilter, for the header funnels (GridFilter)
     BuildMenuDialog                ' the kit's dlgMenu, for KitMenu (the detail card's More button)
+    BuildHelpDialog                ' the kit's dlgHelp, for KitHelp (Help in the sidebar and F1)
     BuildPopoverDialog             ' the kit's dlgPopover, for KitPopover (the Preferences section's help)
     BuildSplash "frmMain", "access-modern-ui demo"   ' the kit's frmSplash, the startup form
     Build_frmMain
@@ -417,6 +420,10 @@ Private Sub Build_frmMain()
         VCenter c, px(34), 10, True
         y = y + px(38)
     Next
+    Set c = Link("lnkHelp", "Help", px(12), PAGE_H - px(128), px(176), px(34), "=KitHelp()", 10, CLR_NAV_FG)
+    c.LeftMargin = px(12)
+    VCenter c, px(34), 10, True
+    Anchor c, 0, 1
     Set c = Link("lnkTrust", "Folder trust", px(12), PAGE_H - px(90), px(176), px(34), "=ShowTrustHelp()", 10, CLR_NAV_FG)
     c.LeftMargin = px(12)
     VCenter c, px(34), 10, True
@@ -456,6 +463,7 @@ Private Sub SetStartupOptions()
     SetProp "Perform Name AutoCorrect", dbLong, 0
     SetProp "Track Name AutoCorrect Info", dbLong, 0
     SetProp "AppBuild", dbText, Format$(Now(), "yyyy-mm-dd hh:nn")
+    BuildHelpKey                    ' F1 opens the kit's help (the AutoKeys macro)
     HideAccessSplash                ' it writes a file, so a failure leaves the settings above in place
     BuildTrustCheck "frmSplash"     ' after any StartUpForm setting: it removes StartUpForm
 End Sub
