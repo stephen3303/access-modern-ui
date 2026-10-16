@@ -17,7 +17,7 @@ manifest.json         desktop extension manifest (for the .mcpb package)
 - Windows 10 or 11, or Windows Server with a desktop session.
 - Microsoft Access, desktop version. Tested with Access in Microsoft 365; the free Access Runtime is untested.
 - Windows PowerShell 5.1 and .NET Framework 4.x, which come with Windows. Nothing else is installed.
-- A front end you trust, in a trusted location. Under automation Access runs startup code (AutoExec, startup form) without the Enable Content bar.
+- A front end you trust, in a trusted location. Under automation Access runs startup code (AutoExec, startup form) without the Enable Content bar, and `run` can call any public procedure. So `open_app` refuses files downloaded from the internet (Mark of the Web, `Zone.Identifier` zone 3 or 4) and, when **Front-end folder** / `ACCESS_REVIEW_ALLOWED_FOLDERS` is set, any file outside it. The extension requires that setting; set it in a config file too.
 
 ## Install
 
@@ -62,6 +62,7 @@ All optional. In the extension they are fields on its settings page; with a conf
 | Setting | Environment variable | Default | What it does |
 |---|---|---|---|
 | Capture folder | `ACCESS_REVIEW_OUTPUT` | `%LOCALAPPDATA%\AccessReview` | Where PNGs are saved, in a new time-stamped folder per session. `open_app` can also take `output_dir`. |
+| Front-end folder | `ACCESS_REVIEW_ALLOWED_FOLDERS` | none (extension: required) | Folders `open_app` may open files from, including subfolders, separated by `;`. Full paths. When unset, any existing file can be opened. |
 | Shared lock files | `ACCESS_REVIEW_LOCKS` | none | Full paths of lock files, separated by `;`, for a PC several reviewers take turns on. `review_lock` takes all or none; with none configured it does nothing. |
 | Palettes | `ACCESS_REVIEW_PALETTES` | `Navy=1;Midnight=2;Teal Navy=6` | Palettes `set_palette` offers, as `name=number`. The number is passed to the palette procedure. The first one is the default: `close_app` switches back to it. A malformed value is ignored with a warning (in the server log, its instructions and each `set_palette` result) and the defaults are used. |
 | Palette procedure | `ACCESS_REVIEW_PALETTE_PROCEDURE` | `SetPalette` | Public VBA `Sub Name(ByVal i As Long)` in your front end that switches palettes. |
@@ -70,6 +71,7 @@ Example `env` for a config file:
 
 ```json
 "env": {
+  "ACCESS_REVIEW_ALLOWED_FOLDERS": "D:\\Review\\FrontEnds",
   "ACCESS_REVIEW_OUTPUT": "D:\\Reviews",
   "ACCESS_REVIEW_PALETTES": "Light=1;Dark=2",
   "ACCESS_REVIEW_PALETTE_PROCEDURE": "ApplyTheme"
@@ -80,7 +82,7 @@ Example `env` for a config file:
 
 | Tool | What it does |
 |---|---|
-| `open_app` | Opens an existing front end in a new Access instance (never creates a file). `mode`: `offscreen` (default) or `onscreen` for a dedicated review machine. |
+| `open_app` | Opens an existing front end in a new Access instance (never creates a file). Refuses downloaded files and files outside the front-end folder. `mode`: `offscreen` (default) or `onscreen` for a dedicated review machine. |
 | `close_app` | Resets the palette to the default, quits without saving design changes and confirms the process is gone. |
 | `open_form` | Opens a form and sizes it to its design size (form width, visible section heights), or to `width_px` x `height_px` at 96 dpi. Reports whether the Access window clips it. |
 | `resize_form` | Design size, a given size or maximized (Access window at the main display's work area, as a real maximized window gets). A shell form that fills the Access window is sized by resizing the Access window until its inside size matches; `SizeMatches` reports whether it did. |
