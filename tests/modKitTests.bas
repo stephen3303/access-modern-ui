@@ -905,7 +905,7 @@ Public Function TestKit(ByVal root As String) As String
     BuildHelpKey
     Check MacroExists("AutoKeys"), "F1 macro not written"
     ' Locks and write conflicts (modKitLocks).
-    Dim lockTry As Long, cf As Form, saved As Boolean
+    Dim lockTry As Long, conflictFrm As Form, saved As Boolean
     Check IsLockError(3218) And IsLockError(3260) And IsLockError(3188) And Not IsLockError(3022), "Lock errors not told apart"
     lockTry = 0
     Check LockWait(3218, lockTry) And lockTry = 1, "Lock error not retried"
@@ -925,22 +925,22 @@ Public Function TestKit(ByVal root As String) As String
     ' Theirs wins (No): another save lands while the form is changed; the
     ' form's save is refused and it shows the saved record.
     DoCmd.OpenForm "frmConflict"
-    Set cf = Forms("frmConflict")
-    cf.txtName = "mine"
+    Set conflictFrm = Forms("frmConflict")
+    conflictFrm.txtName = "mine"
     CurrentDb.Execute "UPDATE test_conflict SET name = 'theirs' WHERE id = 1", dbFailOnError
     SetConflictAnswer vbNo
-    saved = KitSaveRecord(cf)
-    Check Not saved And Not cf.Dirty And cf.txtName = "theirs", "Write conflict: No did not show the other user's record"
+    saved = KitSaveRecord(conflictFrm)
+    Check Not saved And Not conflictFrm.Dirty And conflictFrm.txtName = "theirs", "Write conflict: No did not show the other user's record"
     Check DLookup("name", "test_conflict", "id=1") = "theirs", "Write conflict: No overwrote the other user's save"
     ' Mine wins (Yes): the change goes back on top of their record and saves.
-    cf.txtName = "mine again"
+    conflictFrm.txtName = "mine again"
     CurrentDb.Execute "UPDATE test_conflict SET qty = 7 WHERE id = 1", dbFailOnError
     SetConflictAnswer vbYes
-    saved = KitSaveRecord(cf)
-    Check Not saved And cf.Dirty And cf.txtName = "mine again" And cf.txtQty = 7, "Write conflict: Yes did not keep the change over the saved record"
-    Check KitSaveRecord(cf), "Record not saved after keeping the change"
+    saved = KitSaveRecord(conflictFrm)
+    Check Not saved And conflictFrm.Dirty And conflictFrm.txtName = "mine again" And conflictFrm.txtQty = 7, "Write conflict: Yes did not keep the change over the saved record"
+    Check KitSaveRecord(conflictFrm), "Record not saved after keeping the change"
     Check DLookup("name", "test_conflict", "id=1") = "mine again" And DLookup("qty", "test_conflict", "id=1") = 7, "Kept change lost the other user's field"
-    Check KitSaveRecord(cf), "Unchanged record not reported saved"
+    Check KitSaveRecord(conflictFrm), "Unchanged record not reported saved"
     SetConflictAnswer 0
     DoCmd.Close acForm, "frmConflict", acSaveNo
     g_Silent = False
