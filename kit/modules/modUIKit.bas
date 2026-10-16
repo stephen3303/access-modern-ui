@@ -990,6 +990,79 @@ Public Sub Accordion(ByVal prefix As String, ByVal x As Long, ByVal y As Long, B
     If F.Section(acDetail).Height < y + allOpen Then F.Section(acDetail).Height = y + allOpen
 End Sub
 
+' Avatar: a person's initials in a circle (a web avatar), for an owner or
+' assignee field, in a detail panel or on every row of a continuous form.
+' src is the field (owner, [owner]) or an expression (=[first] & " " &
+' [last]). Each name keeps one of six soft badge tones (AvatarTone): the
+' badge pairs CLR_INFO_BG/_FG, CLR_SUCCESS_, CLR_WARNING_, CLR_SEVA_, CLR_SEVB_
+' and CLR_SECONDARY_ (an empty name), which keep their contrast in every
+' palette. d is the diameter, 32px by default. Parts: <nm>_bg the circle
+' image and <nm> the initials (AvatarInitials), a read-only text box whose
+' conditional formats color the initials with the tone. Returns the initials.
+Public Function Avatar(ByVal nm As String, ByVal src As String, ByVal x As Long, ByVal y As Long, _
+        Optional ByVal d As Long = 480, Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control
+    Dim c As Control, e As String, k As Long, backs As Variant, fores As Variant, list As String, size As Integer
+    If Left$(src, 1) = "=" Then
+        e = "(" & Mid$(src, 2) & ")"
+    ElseIf Left$(src, 1) = "[" Then
+        e = src
+    Else
+        e = "[" & src & "]"
+    End If
+    backs = AvatarTones(True): fores = AvatarTones(False)
+    For k = 0 To 5
+        list = list & "," & backs(k)
+    Next
+    Set c = Mk(acImage, nm & "_bg", x, y, d, d, sec, parentCtl)
+    ImageProps c
+    c.Properties("ControlSource") = "=PillPng(Choose(AvatarTone(" & e & ")+1" & list & ")," & d \ 15 & "," & d \ 15 & ")"
+    size = CInt((d \ 15) * 0.3 + 0.5)
+    If size < 7 Then size = 7
+    Set c = RO(nm, "=AvatarInitials(" & e & ")", x, y, d, d, size, True, fores(5), sec, parentCtl)
+    c.TextAlign = 2
+    VCenter c, d, size, True
+    For k = 0 To 4
+        CF c, "AvatarTone(" & e & ")=" & k, -1, fores(k), True
+    Next
+    Set Avatar = c
+End Function
+
+' The six avatar tones' circle (back) or initials (fore) colors, in the build
+' palette; tone 5 is the empty name's.
+Public Function AvatarTones(ByVal back As Boolean) As Variant
+    If back Then
+        AvatarTones = Array(CLR_INFO_BG, CLR_SUCCESS_BG, CLR_WARNING_BG, CLR_SEVA_BG, CLR_SEVB_BG, CLR_SECONDARY_BG)
+    Else
+        AvatarTones = Array(CLR_INFO_FG, CLR_SUCCESS_FG, CLR_WARNING_FG, CLR_SEVA_FG, CLR_SEVB_FG, CLR_SECONDARY_FG)
+    End If
+End Function
+
+' An avatar's tone for name v, 0 to 4, the same every time for the same name
+' (ignoring case and spaces at the ends); 5 for an empty one.
+Public Function AvatarTone(ByVal v As Variant) As Long
+    Dim s As String, i As Long, h As Long
+    s = UCase$(Trim$(Nz(v, "")))
+    If Len(s) = 0 Then AvatarTone = 5: Exit Function
+    For i = 1 To Len(s)
+        h = (h * 31 + AscW(Mid$(s, i, 1))) Mod 9973
+    Next
+    AvatarTone = h Mod 5
+End Function
+
+' Initials for name v: the first letters of its first and last words ("ETN1
+' Rivera" is ER), the first letter of a one-word name, "" for an empty one.
+Public Function AvatarInitials(ByVal v As Variant) As String
+    Dim w() As String, s As String
+    s = Trim$(Nz(v, ""))
+    Do While InStr(s, "  ") > 0
+        s = Replace(s, "  ", " ")
+    Loop
+    If Len(s) = 0 Then Exit Function
+    w = Split(s, " ")
+    AvatarInitials = UCase$(Left$(w(0), 1))
+    If UBound(w) > 0 Then AvatarInitials = AvatarInitials & UCase$(Left$(w(UBound(w)), 1))
+End Function
+
 ' Where an Alert's parts sit, down from its top (twips): an item of height ih
 ' (icon, close mark) is 12px down, or centered in a compact alert (under 48px);
 ' the message is below the title, or level with the icon.

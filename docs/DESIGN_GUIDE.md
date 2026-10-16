@@ -784,6 +784,12 @@ Write app-specific helpers next to the builds that use them. Examples:
   sections below, so keep the accordion last in its column. Use `oneOpen` when the sections
   are alternatives; leave it off when the user may compare them. Open the section most
   users need at first.
+- **Avatar**: `Avatar` shows who owns or is assigned a record as their initials in a 32px
+  circle (24px in a dense row), bold at 30% of the diameter in points, beside or instead of
+  the name. The tone comes from the name, so a person keeps one color on every page; tones
+  are the soft badge pairs, so they read in every palette. Initials are the first letters of
+  the first and last words (ETN1 Rivera is ER). It is bound, so it follows the record on a
+  continuous form with no code.
 - **Empty states**: a centered muted 10pt label shown in place of an empty list. Hide the
   list's subform while it shows (`SetVisible`): a subform always covers a label.
 - **Toasts** (`KitToast`, `dlgToast`): a 360px borderless pop-up on `CLR_SURFACE` with

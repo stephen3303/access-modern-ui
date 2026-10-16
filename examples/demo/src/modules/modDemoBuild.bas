@@ -178,7 +178,8 @@ Private Sub Build_subItem()
     FieldLbl "lblName", "ITEM", 0, 0, px(328)
     Txt "txtName", "name", 0, px(18), px(328), px(30)
     FieldLbl "lblOwner", "OWNER", 0, px(56), px(328)
-    Txt "txtOwner", "owner", 0, px(74), px(328), px(30)
+    Txt "txtOwner", "owner", 0, px(74), px(288), px(30)
+    Avatar "avOwner", "owner", px(297), px(73), px(31)   ' the owner's initials, beside the field
     FieldLbl "lblStatus", "STATUS", 0, px(112), hw
     Cbo "cboStatus", "status", "Not started;In progress;Blocked;Complete;Cancelled", 0, px(130), hw, px(30)
     FieldLbl "lblPct", "PERCENT DONE", x2, px(112), hw

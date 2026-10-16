@@ -67,6 +67,7 @@ Public Function TestKit(ByVal root As String) As String
     Stepper "st", px(700), px(840), px(360), 2, "StepPicked", "Details", "Review", "Done"
     Accordion "acc", px(1100), px(40), px(300), False, "General|Form.subRing|60|open", "Advanced|Form.subRing|60", "Notes||40"
     Accordion "acs", px(1450), px(40), px(300), True, "One||40|open", "Two||40"
+    Avatar "avTest", "=""Ada Lovelace""", px(1100), px(500)
     SecretBox "secret", "", px(400), px(700), px(160), px(30)     ' clear of the ring, required and toggle fields
     SaveForm "frmTest", "testHost"
     DoCmd.OpenForm "frmTest"
@@ -355,6 +356,16 @@ Public Function TestKit(ByVal root As String) As String
     OpenSection host, "acc", 4, True: badName = Err.Number: Err.Clear
     On Error GoTo 0
     Check badName = 5, "OpenSection accepted a missing section"
+    ' Avatar: initials from the first and last words, a stable tone per name, the
+    ' empty name's own tone, and the built circle and initials.
+    Check AvatarInitials("ETN1 Rivera") = "ER" And AvatarInitials("  ada   byron  lovelace ") = "AL", "Avatar initials differ"
+    Check AvatarInitials("Plato") = "P" And AvatarInitials(Null) = "" And AvatarInitials("   ") = "", "One-word or empty avatar initials differ"
+    Check AvatarTone("Ada Lovelace") = AvatarTone(" ada lovelace ") And AvatarTone("Ada Lovelace") <= 4, "Avatar tone is not stable"
+    Check AvatarTone(Null) = 5 And AvatarTone("") = 5, "Empty name has no tone of its own"
+    host.Recalc
+    Check host.avTest = "AL" And host.avTest.FormatConditions.Count = 5, "Avatar does not show its initials"
+    Check InStr(Nz(host.avTest_bg.Properties("ControlSource").Value, ""), "PillPng(Choose(AvatarTone(") > 0, "Avatar circle is not drawn by tone"
+    Check host.avTest_bg.Width = px(32) And host.avTest.Width = px(32) And host.avTest.FontSize = 10, "Avatar is not 32px with 10pt initials"
     host.ringA.SetFocus
     Check host.ringA.BorderColor = CLR_PRIMARY, "Focused input lacks its focus ring"
     host.ringB.SetFocus
