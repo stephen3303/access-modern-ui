@@ -140,7 +140,7 @@ Public Sub BuildHelpDialog()
     Set c = Txt("txtSearch", "", pad, rowY, px(240), px(28), 9)
     c.Format = "@;""Search help..."""
     Ev c, "OnChange", "OnKeyDown"
-    Set c = Lst("lstTopics", "", pad, listY, px(240), paneBottom - listY, 2, "0;3.5in")
+    Set c = Lst("lstTopics", "", pad, listY, px(240), paneBottom - listY, 2, "0;" & px(220))
     c.ColumnHeads = False: c.FontSize = 10
     Ev c, "AfterUpdate"
     Set c = Lbl("lblNoMatch", "No topics match your search.", pad + px(10), listY + px(10), px(220), px(36), 9, False, CLR_MUTED_FG)
@@ -286,6 +286,7 @@ Public Sub HelpOpen(frm As Form, ByVal topic As String)
     m_term = ""
     frm.Caption = APP_NAME & " Help"
     frm.lstTopics.RowSource = HelpTopicsSql()
+    SetVisible frm.lstTopics, True
     SetVisible frm.lblNoMatch, False
     HelpShow frm, topic
     CenterOnApp frm
@@ -302,13 +303,22 @@ Public Sub HelpShow(frm As Form, ByVal topic As String)
 End Sub
 
 ' dlgHelp's search box changed: narrow the list to the topics that contain
-' term, say so when none do, and mark term in the topic shown.
+' term and mark term in the topic shown. When the shown topic isn't among
+' them, the first one that is is shown instead. When none are, the empty
+' list is hidden (it would paint over the note) and the note says so.
 Public Sub HelpSearch(frm As Form, ByVal term As String)
+    Dim n As Long
     m_term = Trim$(term)
     frm.lstTopics.RowSource = HelpTopicsSql(m_term)
-    frm.lstTopics = m_topic
-    SetVisible frm.lblNoMatch, frm.lstTopics.ListCount = 0
-    frm.txtBody = HelpBodyHtml(m_topic, m_term)
+    n = frm.lstTopics.ListCount
+    SetVisible frm.lstTopics, n > 0
+    SetVisible frm.lblNoMatch, n = 0
+    If n > 0 And Not Listed(frm.lstTopics, m_topic) Then
+        HelpShow frm, frm.lstTopics.ItemData(0)
+    Else
+        frm.lstTopics = m_topic
+        frm.txtBody = HelpBodyHtml(m_topic, m_term)
+    End If
 End Sub
 
 ' Enter in dlgHelp's search box: show the first topic the search found.
@@ -324,6 +334,14 @@ End Function
 ' ---------------------------------------------------------------------------
 ' Helpers
 ' ---------------------------------------------------------------------------
+
+' True when list box lst has a row with key.
+Private Function Listed(lst As Control, ByVal key As String) As Boolean
+    Dim i As Long
+    For i = 0 To lst.ListCount - 1
+        If lst.ItemData(i) = key Then Listed = True: Exit Function
+    Next
+End Function
 
 Private Function HelpLoaded() As Boolean
     On Error Resume Next

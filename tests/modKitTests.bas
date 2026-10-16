@@ -762,7 +762,8 @@ Public Function TestKit(ByVal root As String) As String
     Check InStr(helpHtml, "<ul><li>one</li><li>two</li></ul>") > 0 And Right$(helpHtml, 5) = "</ul>", "Help bullets not listed, or trailing spacer kept"
     Check InStr(HelpBodyHtml("start", "BOLD"), "BACKGROUND-COLOR:") > 0, "Search term not marked in the topic"
     Check HelpRows("") = 3 And HelpRows("sign") = 1 And HelpRows("Sign ") = 1, "Help search does not match text ignoring case"
-    Check HelpRows("*") = 1 And HelpRows("[x") = 1 And HelpRows("0%") = 1 And HelpRows("#") = 0, "Help search treats wildcards as wildcards"
+    ' Literal matches: "*" in **bold** (start) and 5*2 (detail), "#" only in start's "# Steps".
+    Check HelpRows("*") = 2 And HelpRows("5*2") = 1 And HelpRows("[x") = 1 And HelpRows("0%") = 1 And HelpRows("#") = 1, "Help search treats wildcards as wildcards"
     Check HelpRows("o'b") = 0 And HelpRows("zzz") = 0, "Help search matched missing text"
     Set rows = CurrentDb.OpenRecordset(HelpTopicsSql())
     rows.MoveLast
@@ -794,12 +795,13 @@ Public Function TestKit(ByVal root As String) As String
     Check helpFrm.lstTopics.ListCount = 1 And Not helpFrm.lblNoMatch.Visible, "Help search did not narrow the list"
     Check InStr(helpFrm.txtBody, "BACKGROUND-COLOR:") > 0, "Help search not marked in the topic shown"
     HelpSearch helpFrm, "zzz"
-    Check helpFrm.lstTopics.ListCount = 0 And helpFrm.lblNoMatch.Visible, "No-match note not shown"
+    Check helpFrm.lstTopics.ListCount = 0 And helpFrm.lblNoMatch.Visible And Not helpFrm.lstTopics.Visible, "No-match note not shown, or the empty list covers it"
     HelpSearch helpFrm, "intro"
+    Check HelpCurrentTopic() = "start" And helpFrm.lstTopics.Visible, "Search did not show the first match when the shown topic dropped out"
     HelpShowFirstMatch helpFrm
     Check HelpCurrentTopic() = "start", "Enter did not show the first match"
     HelpSearch helpFrm, ""
-    Check helpFrm.lstTopics.ListCount = 3 And Not helpFrm.lblNoMatch.Visible, "Clearing the search did not list every topic"
+    Check helpFrm.lstTopics.ListCount = 3 And Not helpFrm.lblNoMatch.Visible And HelpCurrentTopic() = "start", "Clearing the search did not list every topic"
     DoCmd.Close acForm, "dlgHelp", acSaveNo
     DoCmd.OpenForm "frmTestFilter"
     Check HelpTopicOf(Forms("frmTestFilter")) = "", "Form without HelpTopic named a topic"
