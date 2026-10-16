@@ -272,9 +272,12 @@ End Function
 ' True when username belongs to an active person who has no app password
 ' yet (the login screen then asks them to set one).
 Public Function PersonnelNeedsPassword(ByVal username As String) As Boolean
-    Dim h As Variant
-    h = DLookup("Nz(password_hash,'')", PERSON_TABLE, "is_active AND username=" & SqlText(Trim$(username)))
-    If Not IsNull(h) Then PersonnelNeedsPassword = (Len(h) = 0)
+    Dim crit As String
+    ' Not Nz in the DLookup expression: over a linked table it returns Null
+    ' for a missing hash, the same as for no such person.
+    crit = "is_active AND username=" & SqlText(Trim$(username))
+    If DCount("*", PERSON_TABLE, crit) = 0 Then Exit Function
+    PersonnelNeedsPassword = (Len(Nz(DLookup("password_hash", PERSON_TABLE, crit), "")) = 0)
 End Function
 
 ' Set a person's app password (salted hash). Returns "" or why the password

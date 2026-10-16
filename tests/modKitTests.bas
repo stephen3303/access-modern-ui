@@ -1131,6 +1131,7 @@ Public Function TestKit(ByVal root As String) As String
     peErr = 0: On Error Resume Next: AddPerson "Ann", "Lee", "", "", "alee": peErr = Err.Number: On Error GoTo 0
     Check peErr = 5, "Duplicate sign-in name accepted"
     Check PersonnelNeedsPassword("alee") And PersonnelSignIn("alee", "anything1", "TEST") <> "", "Sign-in without a password set"
+    Check Not PersonnelNeedsPassword("nobody"), "Unknown username asked for a first password"
     Check PersonnelSetPassword(pe2, "short") <> "" And PersonnelSetPassword(pe2, "long enough 1") = "", "Password length not checked"
     Check PersonnelSignIn("alee", "wrong pass", "TEST") <> "" And SignedInPersonID() = 0, "Wrong password accepted"
     Check PersonnelSignIn("alee", "long enough 1", "TEST") = "" And SignedInPersonID() = pe2 And Not SignedInIsAdmin() And KitUser() = "alee", "Password sign-in failed"
