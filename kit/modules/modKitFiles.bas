@@ -56,6 +56,7 @@ End Type
 
 Private Declare PtrSafe Function GetSaveFileNameW Lib "comdlg32" (ofn As OPENFILENAME) As Long
 Private Declare PtrSafe Function GetOpenFileNameW Lib "comdlg32" (ofn As OPENFILENAME) As Long
+Private Declare PtrSafe Function CommDlgExtendedError Lib "comdlg32" () As Long
 
 ' Windows' Save As window: returns the chosen path, or "" on Cancel. It asks
 ' before replacing an existing file, and adds the chosen type's extension
@@ -186,7 +187,7 @@ End Function
 ' Save As (saving True) or Open, owned by the Access window.
 Private Function FileWindow(ByVal saving As Boolean, ByVal title As String, ByVal defaultName As String, _
         ByVal filters As String, ByVal purpose As String) As String
-    Dim ofn As OPENFILENAME, buf As String, filt As String, startDir As String, defExt As String, ok As Long
+    Dim ofn As OPENFILENAME, buf As String, filt As String, startDir As String, defExt As String, ok As Long, errCode As Long
     On Error GoTo Fail
     filt = FileFilterText(filters)
     startDir = LastFolder(purpose)
@@ -195,8 +196,9 @@ Private Function FileWindow(ByVal saving As Boolean, ByVal title As String, ByVa
     ' window (Windows adds it), so switching to Excel saves a .xlsx.
     If saving Then defaultName = WithoutFilterExtension(defaultName, filters)
     ' The folder in the name too: Windows can prefer the folder it used last
-    ' over lpstrInitialDir, but never over a path in lpstrFile.
-    If Len(startDir) > 0 Then defaultName = WithSlash(startDir) & defaultName
+    ' over lpstrInitialDir, but never over a path in lpstrFile. Only with a
+    ' name: a bare "folder\" makes the Open window fail (FNERR_INVALIDFILENAME).
+    If Len(startDir) > 0 And Len(defaultName) > 0 Then defaultName = WithSlash(startDir) & defaultName
     buf = Left$(defaultName, MAX_PATH_W - 1) & String$(MAX_PATH_W - Len(Left$(defaultName, MAX_PATH_W - 1)), vbNullChar)
     CloseSplash                                 ' never open behind the splash screen
     With ofn
@@ -213,7 +215,11 @@ Private Function FileWindow(ByVal saving As Boolean, ByVal title As String, ByVa
         If saving Then .flags = .flags Or OFN_OVERWRITEPROMPT Else .flags = .flags Or OFN_FILEMUSTEXIST
     End With
     If saving Then ok = GetSaveFileNameW(ofn) Else ok = GetOpenFileNameW(ofn)
-    If ok = 0 Then Exit Function                ' Cancel (or the window failed)
+    If ok = 0 Then                              ' Cancel, unless Windows reports why the window failed
+        errCode = CommDlgExtendedError()
+        If errCode <> 0 Then Err.Raise vbObjectError + 513, "modKitFiles", "The file window could not open (code &H" & Hex$(errCode) & ")."
+        Exit Function
+    End If
     FileWindow = Left$(buf, InStr(buf, vbNullChar) - 1)
     RememberFolder purpose, FileWindow
     Exit Function

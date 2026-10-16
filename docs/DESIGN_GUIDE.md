@@ -29,7 +29,8 @@ app that shows every builder working.
   numeric color appears in VBA. Palettes are generated from one Python file.
 - **Split front end and back end.** Each user runs their own front-end copy (forms, code,
   per-user scratch tables) linked to one shared back-end data file. Version checks keep the
-  two in step.
+  two in step (`KitVersionProblem`), and `KitEnsureBackend` at startup reconnects a copy whose
+  data file has moved, with one Open window instead of a broken app.
 - **Keep the kit separate from the app.** Reusable modules go in `kit/`. App modules go in
   `src/` and provide a few named hooks the kit calls.
 

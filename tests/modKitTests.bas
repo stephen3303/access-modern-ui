@@ -1054,6 +1054,53 @@ Public Function TestKit(ByVal root As String) As String
     SaveSetting APP_NAME, "Files", "Folder_test", root & "\gone"
     Check LastFolder("test") = "", "Missing remembered folder offered"
     DeleteSetting APP_NAME, "Files"
+    ' Back-end links and version checks (modKitBackend).
+    Dim be1 As String, be2 As String, beDb As DAO.Database, beErr As Long
+    be1 = root & "\be_one.accdb": be2 = root & "\be_two.accdb"
+    Set beDb = DBEngine.CreateDatabase(be1, dbLangGeneral)
+    beDb.Execute "CREATE TABLE be_items (id LONG PRIMARY KEY, name TEXT(60))", dbFailOnError
+    beDb.Execute "INSERT INTO be_items VALUES (1, 'one')", dbFailOnError
+    beDb.Execute "CREATE TABLE be_notes (id LONG PRIMARY KEY)", dbFailOnError
+    beDb.Close
+    FileCopy be1, be2
+    Set beDb = DBEngine.OpenDatabase(be2)
+    beDb.Execute "UPDATE be_items SET name = 'two'", dbFailOnError
+    beDb.Close
+    Check KitLinkTables(be1, Array("be_items", "be_notes")) = 2, "Tables not linked"
+    Check KitBackendPath("be_items") = be1 And KitBackendPath("test_rows") = "" And KitBackendPath("no_table") = "", "Linked data file not read"
+    Check KitLinkedTables().Count = 2 And KitBackendReachable("be_items"), "Linked tables not listed or not reachable"
+    Check KitRelinkAll(be2) = 2 And KitBackendPath("be_notes") = be2 And DLookup("name", "be_items", "id=1") = "two", "Relink did not move every table"
+    Check KitEnsureBackend("be_items", "be_two.accdb"), "Reachable data file not accepted"
+    Check KitEnsureBackend("test_rows", "be_two.accdb"), "Local table taken for a lost data file"
+    ' A second, encrypted data file keeps its own links and password when the first moves.
+    Dim be3 As String
+    be3 = root & "\be_pw.accdb"
+    Set beDb = DBEngine.CreateDatabase(be3, dbLangGeneral & ";pwd=kit test")
+    beDb.Execute "CREATE TABLE be_people (id LONG PRIMARY KEY)", dbFailOnError
+    beDb.Close
+    Check KitLinkTables(be3, Array("be_people"), "kit test") = 1 And KitBackendPath("be_people") = be3, "Encrypted data file not linked"
+    Check KitLinkedTables(be2).Count = 2 And KitLinkedTables().Count = 3, "Linked tables not listed per file"
+    Check KitRelinkAll(be1, be2) = 2 And KitBackendPath("be_people") = be3 And DCount("*", "be_people") = 0, "Relink moved another file's tables"
+    Check KitRelinkAll(be2, be1) = 2 And KitRelinkAll(be3, be3) = 1 And DCount("*", "be_people") = 0, "Relink lost the link's password"
+    CurrentDb.TableDefs.Delete "be_people"
+    beErr = 0: On Error Resume Next: KitCheckBackendPath "be_one.accdb": beErr = Err.Number: On Error GoTo 0
+    Check beErr = 5, "Relative data file path accepted"
+    beErr = 0: On Error Resume Next: KitCheckBackendPath CurrentDb.Name: beErr = Err.Number: On Error GoTo 0
+    Check beErr = 5, "Front end accepted as its own data file"
+    beErr = 0: On Error Resume Next: KitCheckBackendPath root & "\missing.accdb": beErr = Err.Number: On Error GoTo 0
+    Check beErr = 5, "Missing data file accepted"
+    Set beDb = DBEngine.OpenDatabase(be1)
+    beDb.Execute "DROP TABLE be_notes", dbFailOnError
+    beDb.Close
+    beErr = 0: On Error Resume Next: KitRelinkAll be1: beErr = Err.Number: On Error GoTo 0
+    Check beErr = 5 And KitBackendPath("be_items") = be2, "Relink to a file missing a table changed the links"
+    CurrentDb.TableDefs.Delete "be_items": CurrentDb.TableDefs.Delete "be_notes"
+    Check KitVersionProblem(3, 3, "", "2026-10-16 10:00") = "", "Matching versions reported a problem"
+    Check InStr(KitVersionProblem(4, 3, "", "x", "Copy it from S:\App."), "newer version") > 0 And _
+        InStr(KitVersionProblem(4, 3, "", "x", "Copy it from S:\App."), "S:\App.") > 0, "Newer data file not reported with the advice"
+    Check InStr(KitVersionProblem(2, 3, "", "x"), "older version") > 0, "Older data file not reported"
+    Check InStr(KitVersionProblem(3, 3, "2026-10-16 12:00", "2026-10-16 10:00"), "built on or after") > 0 And _
+        KitVersionProblem(3, 3, "2026-10-16 12:00", "2026-10-17 09:00") = "", "Minimum build not compared"
     g_Silent = False
     TestKit = checks & " kit checks passed"
 End Function
