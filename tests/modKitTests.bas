@@ -1101,6 +1101,42 @@ Public Function TestKit(ByVal root As String) As String
     Check InStr(KitVersionProblem(2, 3, "", "x"), "older version") > 0, "Older data file not reported"
     Check InStr(KitVersionProblem(3, 3, "2026-10-16 12:00", "2026-10-16 10:00"), "built on or after") > 0 And _
         KitVersionProblem(3, 3, "2026-10-16 12:00", "2026-10-17 09:00") = "", "Minimum build not compared"
+    ' Personnel directory (modPersonnel): create, link, sign-in.
+    Dim pePath As String, peId As Long, pe2 As Long, peErr As Long
+    On Error Resume Next                        ' links left by an earlier run
+    CurrentDb.TableDefs.Delete PERSON_TABLE: CurrentDb.TableDefs.Delete PERSON_APP_TABLE
+    On Error GoTo 0
+    PersonnelSignOut
+    KitLinkTables be2, Array("be_items")
+    Check PersonnelDefaultPath("be_items") = Left$(root, InStrRev(root, "\") - 1) & "\Personnel\" & PERSONNEL_FILE, "Default Personnel place not beside the data folder"
+    CurrentDb.TableDefs.Delete "be_items"
+    Check PersonnelPath() = "" And PersonnelStatus("no_table") = PERSONNEL_NOT_SET_UP, "Personnel reported set up before it was"
+    pePath = root & "\pe\" & PERSONNEL_FILE
+    peId = CreatePersonnelFile(pePath, "TEST", "Pat", "O'Neil", "LT")
+    Check PersonnelPath() = pePath And PersonnelStatus("no_table") = PERSONNEL_READY And PersonnelFileProblem(pePath) = "", "New Personnel file not linked"
+    Check InStr(CurrentDb.TableDefs(PERSON_TABLE).Connect, ";PWD=") > 0 And PersonnelFileProblem(be2) <> "", "Personnel file not encrypted, or another file accepted"
+    Check DLookup("display_name", PERSON_TABLE, "person_id=" & peId) = "LT P. O'Neil" And DLookup("is_admin", PERSON_TABLE, "person_id=" & peId), "First admin not added"
+    peErr = 0: On Error Resume Next: CreatePersonnelFile root & "\pe2.accdb", "TEST", "A", "B": peErr = Err.Number: On Error GoTo 0
+    Check peErr = 5 And Not FileExists(root & "\pe2.accdb"), "Second Personnel file created while one is linked"
+    Check PersonnelSignInWindows("TEST", True) And SignedInPersonID() = peId And SignedInIsAdmin(), "Windows sign-in did not find the creator"
+    Check DLookup("windows_sid", PERSON_TABLE, "person_id=" & peId) = WinSid(), "SID not saved"
+    PersonnelSignOut
+    Check SignedInPersonID() = 0 And Not PersonnelSignInWindows("OTHER", True), "Sign-in let a person into an app they lack"
+    pe2 = AddPerson("Ann", "Lee", "YN2", "", "alee")
+    SetPersonApp pe2, "TEST", True
+    peErr = 0: On Error Resume Next: AddPerson "Ann", "Lee", "", "", "alee": peErr = Err.Number: On Error GoTo 0
+    Check peErr = 5, "Duplicate sign-in name accepted"
+    Check PersonnelNeedsPassword("alee") And PersonnelSignIn("alee", "anything1", "TEST") <> "", "Sign-in without a password set"
+    Check PersonnelSetPassword(pe2, "short") <> "" And PersonnelSetPassword(pe2, "long enough 1") = "", "Password length not checked"
+    Check PersonnelSignIn("alee", "wrong pass", "TEST") <> "" And SignedInPersonID() = 0, "Wrong password accepted"
+    Check PersonnelSignIn("alee", "long enough 1", "TEST") = "" And SignedInPersonID() = pe2 And Not SignedInIsAdmin() And KitUser() = "alee", "Password sign-in failed"
+    PersonnelSignOut
+    SetPersonApp pe2, "TEST", False
+    Check InStr(PersonnelSignIn("alee", "long enough 1", "TEST"), "access") > 0, "Sign-in ignored the app access"
+    peErr = 0: On Error Resume Next: PersonnelSaveWindowsAccount: peErr = Err.Number: On Error GoTo 0
+    Check peErr = 5, "Windows account saved with nobody signed in"
+    PersonnelSignOut
+    CurrentDb.TableDefs.Delete PERSON_TABLE: CurrentDb.TableDefs.Delete PERSON_APP_TABLE
     g_Silent = False
     TestKit = checks & " kit checks passed"
 End Function
