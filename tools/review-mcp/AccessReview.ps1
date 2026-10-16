@@ -507,6 +507,16 @@ function Exit-ReviewLock {
     [pscustomobject]@{ Released = $released }
 }
 
+# Folder for captures and snapshots: ACCESS_REVIEW_OUTPUT, or %LOCALAPPDATA%\AccessReview.
+# A relative setting would resolve against whichever folder the server or Access happens
+# to be in, so it is refused.
+function Get-ReviewOutputBase {
+    $base = Get-ReviewSetting 'ACCESS_REVIEW_OUTPUT'
+    if (-not $base) { return (Join-Path $env:LOCALAPPDATA 'AccessReview') }
+    if (-not [IO.Path]::IsPathRooted($base)) { throw "ACCESS_REVIEW_OUTPUT: '$base' is not a full path." }
+    [IO.Path]::GetFullPath($base)
+}
+
 # True when Path is FolderPath itself or inside it. Both are full paths; the comparison
 # ignores case and a trailing separator, and a folder never matches a sibling that
 # merely starts with the same name (C:\Review vs C:\Review2).
@@ -531,6 +541,9 @@ function Assert-ReviewFileAllowed([string]$Path) {
     }
     # The check above compares names, so a junction or symbolic link inside an allowed
     # folder could lead outside it. Refuse a path that goes through one below the folder.
+    # A hard link to a file elsewhere is not detected (Windows can't tell it from the
+    # original); making one needs write access to the allowed folder, which already lets
+    # someone put any front end there.
     foreach ($a in $inside) {
         $root = [IO.Path]::GetFullPath($a).TrimEnd('\', '/')
         for ($p = $Path; $p -and $p.Length -gt $root.Length; $p = [IO.Path]::GetDirectoryName($p)) {
@@ -556,9 +569,7 @@ function Open-ReviewApp {
     if (-not $Path -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw 'Open only an existing, already trusted front end; this tool never creates one.' }
     Assert-ReviewFileAllowed $Path
     if (-not $OutputDirectory) {
-        $base = Get-ReviewSetting 'ACCESS_REVIEW_OUTPUT'
-        if (-not $base) { $base = Join-Path $env:LOCALAPPDATA 'AccessReview' }
-        $OutputDirectory = Join-Path $base (Get-Date -Format 'yyyyMMdd-HHmmss')
+        $OutputDirectory = Join-Path (Get-ReviewOutputBase) (Get-Date -Format 'yyyyMMdd-HHmmss')
     }
     New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 
@@ -755,7 +766,12 @@ function Set-ReviewPalette {
     $acc = $script:Review.Acc
     $open = @(foreach ($f in @(Get-ReviewOpenForms)) { [pscustomobject]@{ Name = $f; OpenArgs = [string](Find-FormValue $f '.OpenArgs') } })
     try { $r = Invoke-ReviewGuarded { $acc.Run($proc, [ref]$i) } }
-    catch { throw "Could not run the palette procedure '$proc' (ACCESS_REVIEW_PALETTE_PROCEDURE); the front end needs a public Sub $proc(ByVal i As Long). $($_.Exception.Message)" }
+    catch {
+        # Access error 2517: Run can't find the procedure. Anything else is a real failure
+        # inside it (or a timeout) and is reported as it is.
+        if ($_.Exception.Message -match '2517|can.t find the procedure') { throw "Could not run the palette procedure '$proc' (ACCESS_REVIEW_PALETTE_PROCEDURE); the front end needs a public Sub $proc(ByVal i As Long). $($_.Exception.Message)" }
+        throw "The palette procedure '$proc' failed: $($_.Exception.Message)"
+    }
     $script:Review.Palette = $Name
     $dialogs = @($r.Dialogs); $reopened = @()
     if (-not $NoReopen) {
@@ -953,11 +969,7 @@ function Get-ReviewControls {
 # Snapshots live outside the per-session capture folders, because the two sides of a
 # comparison come from two sessions: the base build and the PR build, usually the same
 # front-end file rebuilt in between.
-function Get-ReviewSnapshotRoot {
-    $base = Get-ReviewSetting 'ACCESS_REVIEW_OUTPUT'
-    if (-not $base) { $base = Join-Path $env:LOCALAPPDATA 'AccessReview' }
-    Join-Path $base 'snapshots'
-}
+function Get-ReviewSnapshotRoot { Join-Path (Get-ReviewOutputBase) 'snapshots' }
 
 function Get-ReviewSnapshotDir([string]$Label) {
     if ($Label -notmatch '^[A-Za-z0-9][A-Za-z0-9_.-]*$') { throw "Snapshot label '$Label' must be letters, digits, '.', '_' or '-'." }
@@ -988,34 +1000,45 @@ function Save-ReviewSnapshot {
     Assert-ReviewOpen
     $dir = Get-ReviewSnapshotDir $Label
     $names = if ($Forms) { $Forms } else { Get-ReviewFormNames }
-    foreach ($n in $names) { if ($n -match '[\\/:*?"<>|]') { throw "Unsupported form name '$n'." } }
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
-    if (-not $Forms) { Get-ChildItem -LiteralPath $dir -Filter *.txt | Remove-Item }
+    if (-not $Forms) { Get-ChildItem -LiteralPath $dir -File | Where-Object { $_.Extension -in '.txt', '.failed' } | Remove-Item }
     $dialogs = @(); $saved = @(); $failed = @()
     foreach ($n in $names) {
-        $path = Join-Path $dir "$n.txt"
+        if ($n -match '[\\/:*?"<>|]') { $failed += [pscustomobject]@{ Form = $n; Error = "The name has a character that can't be used in a file name." }; continue }
+        $path = Join-Path $dir "$n.txt"; $mark = Join-Path $dir "$n.failed"
+        # Clear this form's earlier result first, so a failed save never leaves an old
+        # definition behind to be compared as if it were this build's.
+        foreach ($f in $path, $mark) { if (Test-Path -LiteralPath $f) { Remove-Item -LiteralPath $f } }
         try {
             $r = Invoke-ReviewGuarded { $script:Review.Acc.SaveAsText(2, $n, $path) }   # 2 = acForm
             $dialogs += $r.Dialogs
             $saved += [pscustomobject]@{ Form = $n; Objects = (Read-FormSnapshot $path).Count }
-        } catch { $failed += [pscustomobject]@{ Form = $n; Error = $_.Exception.Message } }
+        } catch {
+            $msg = $_.Exception.Message
+            if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path }
+            # compare_snapshots reads this marker and reports the form as not compared
+            # rather than removed.
+            [IO.File]::WriteAllText($mark, $msg, (New-Object Text.UTF8Encoding($false)))
+            $failed += [pscustomobject]@{ Form = $n; Error = $msg }
+        }
     }
     [pscustomobject]@{ Label = $Label; Folder = $dir; Saved = $saved; Failed = $failed; Dialogs = $dialogs }
 }
 
 # Compares two snapshots by label (Access need not be open). Saves the full report as
-# snapshots\compare-<before>-<after>.txt and returns it, with the differences per form.
+# "snapshots\compare <before> to <after>.txt" (labels have no spaces, so the name is
+# unambiguous) and returns it, with the differences per form.
 function Compare-ReviewSnapshot {
     param([Parameter(Mandatory)][string]$Before, [Parameter(Mandatory)][string]$After, [string[]]$Forms, [int]$MaxLines = 400)
     $cmp = Compare-FormSnapshotFolder -BeforeDir (Get-ReviewSnapshotDir $Before) -AfterDir (Get-ReviewSnapshotDir $After) -Forms $Forms
     $text = Format-FormSnapshotReport $cmp "Form snapshots: $Before -> $After"
-    $path = Join-Path (Get-ReviewSnapshotRoot) "compare-$Before-$After.txt"
+    $path = Join-Path (Get-ReviewSnapshotRoot) "compare $Before to $After.txt"
     [IO.File]::WriteAllText($path, $text, (New-Object Text.UTF8Encoding($false)))
     $lines = $text -split "`r?`n"
     $shown = if ($lines.Count -gt $MaxLines) { (($lines[0..($MaxLines - 1)]) -join "`n") + "`n... $($lines.Count - $MaxLines) more lines in $path" } else { $text }
     [pscustomobject]@{
         Report = $path
-        FormsAdded = $cmp.FormsAdded; FormsRemoved = $cmp.FormsRemoved
+        FormsAdded = $cmp.FormsAdded; FormsRemoved = $cmp.FormsRemoved; NotCompared = $cmp.NotCompared
         FormsChanged = @($cmp.Forms | Where-Object { $_.Differences -gt 0 } | ForEach-Object { "$($_.Form) ($($_.Differences))" })
         FormsUnchanged = @($cmp.Forms | Where-Object { $_.Differences -eq 0 }).Count
         Text = $shown

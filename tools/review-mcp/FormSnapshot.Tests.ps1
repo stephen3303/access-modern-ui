@@ -142,6 +142,14 @@ try {
     Check 'UTF-16 files compared' ($cmp.Forms.Count -eq 1 -and $cmp.Forms[0].Differences -eq 6)
     $report = Format-FormSnapshotReport $cmp 'base -> pr'
     Check 'report lists each difference' ($report -match '\+ btnSave \(CommandButton\)' -and $report -match '~ lblTitle\.Left: 16 px -> 20 px' -and $report -match '\+ form frmNew')
+
+    # A form whose snapshot failed on one side (a <form>.failed marker, no .txt) is
+    # reported as not compared, not as removed.
+    [IO.File]::WriteAllLines((Join-Path $b 'frmBroken.txt'), [string[]]$base, [Text.Encoding]::Unicode)
+    [IO.File]::WriteAllText((Join-Path $a 'frmBroken.failed'), 'SaveAsText failed')
+    $cmp = Compare-FormSnapshotFolder -BeforeDir $b -AfterDir $a
+    Check 'failed snapshot not compared' (($cmp.FormsRemoved -join ',') -eq 'frmOld' -and ($cmp.NotCompared -join ',') -eq 'frmBroken (snapshot failed in after)')
+    Check 'report lists not compared' ((Format-FormSnapshotReport $cmp 'x') -match '\? form frmBroken \(snapshot failed in after\), not compared')
 } finally { Remove-Item -Recurse -Force $root }
 
 if ($failures) { Write-Host "$failures check(s) failed"; exit 1 }

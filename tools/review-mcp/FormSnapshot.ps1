@@ -174,8 +174,18 @@ function Compare-FormSnapshotFolder {
     param([Parameter(Mandatory)][string]$BeforeDir, [Parameter(Mandatory)][string]$AfterDir, [string[]]$Forms)
     foreach ($d in $BeforeDir, $AfterDir) { if (-not (Test-Path -LiteralPath $d -PathType Container)) { throw "No snapshot at $d." } }
     $list = { param($dir) @(Get-ChildItem -LiteralPath $dir -Filter *.txt | ForEach-Object { $_.BaseName } | Sort-Object) }
+    $failedIn = { param($dir) @(Get-ChildItem -LiteralPath $dir -Filter *.failed | ForEach-Object { $_.BaseName }) }
     $bn = & $list $BeforeDir; $an = & $list $AfterDir
-    if ($Forms) { $bn = @($bn | Where-Object { $Forms -contains $_ }); $an = @($an | Where-Object { $Forms -contains $_ }) }
+    # A form whose snapshot failed on either side can't be compared; it is listed as such
+    # instead of looking added or removed.
+    $bf = & $failedIn $BeforeDir; $af = & $failedIn $AfterDir
+    $notCompared = @(@($bf | ForEach-Object { "$_ (snapshot failed in before)" }) + @($af | ForEach-Object { "$_ (snapshot failed in after)" }))
+    $skip = @($bf) + @($af)
+    if ($Forms) {
+        $bn = @($bn | Where-Object { $Forms -contains $_ }); $an = @($an | Where-Object { $Forms -contains $_ })
+        $notCompared = @($notCompared | Where-Object { $Forms -contains ($_ -replace ' \(snapshot failed.*$', '') })
+    }
+    $bn = @($bn | Where-Object { $skip -notcontains $_ }); $an = @($an | Where-Object { $skip -notcontains $_ })
     $results = foreach ($f in $an) {
         if ($bn -notcontains $f) { continue }
         $r = Compare-FormText -Before (Read-FormSnapshot (Join-Path $BeforeDir "$f.txt")) -After (Read-FormSnapshot (Join-Path $AfterDir "$f.txt"))
@@ -185,6 +195,7 @@ function Compare-FormSnapshotFolder {
     [pscustomobject]@{
         FormsAdded = @($an | Where-Object { $bn -notcontains $_ })
         FormsRemoved = @($bn | Where-Object { $an -notcontains $_ })
+        NotCompared = $notCompared
         Forms = @($results)
     }
 }
@@ -195,6 +206,7 @@ function Format-FormSnapshotReport($Comparison, [string]$Title) {
     if ($Title) { [void]$sb.AppendLine($Title) }
     foreach ($f in $Comparison.FormsAdded) { [void]$sb.AppendLine("+ form $f") }
     foreach ($f in $Comparison.FormsRemoved) { [void]$sb.AppendLine("- form $f") }
+    foreach ($f in @($Comparison.NotCompared)) { [void]$sb.AppendLine("? form $f, not compared") }
     $same = @($Comparison.Forms | Where-Object { $_.Differences -eq 0 } | ForEach-Object { $_.Form })
     foreach ($f in @($Comparison.Forms | Where-Object { $_.Differences -gt 0 })) {
         [void]$sb.AppendLine()
