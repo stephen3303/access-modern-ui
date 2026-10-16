@@ -1279,6 +1279,68 @@ Public Function TestKit(ByVal root As String) As String
     PersonnelSignOut
     CurrentDb.TableDefs.Delete PERSON_TABLE: CurrentDb.TableDefs.Delete PERSON_APP_TABLE
     g_Silent = False
+    ' AI service (modKitAI): request and answer formats, JSON, the key rules and the
+    ' dialogs. Nothing here contacts a service or saves a setting.
+    Dim aiRoot As Variant, aiProblem As String, aiHdr As Variant, aiBody As String, aiFrm As Form
+    Check JsonString("a""b\c" & vbLf & vbTab & Chr$(1) & ChrW(233)) = """a\""b\\c\n\t\u0001" & ChrW(233) & """", "JsonString escaped wrongly"
+    JsonParse "{""a"":[1,{""b"":""x\ny\u00e9""},true,null],""c"":{""d"":-2.5e1}}", aiRoot
+    Check JsonText(aiRoot, "a/1/b") = "x" & vbLf & "y" & ChrW(233), "JsonText missed a string with escapes"
+    Check JsonText(aiRoot, "c/d") = "-25" And JsonText(aiRoot, "a/0") = "1" And JsonText(aiRoot, "a/2") = "True", "JsonText misread numbers or booleans"
+    Check JsonText(aiRoot, "a/3") = "" And JsonText(aiRoot, "a/9") = "" And JsonText(aiRoot, "zz/y") = "" And JsonText(aiRoot, "a") = "", "JsonText returned something for null, a missing path or an array"
+    peErr = 0: On Error Resume Next: JsonParse "{""a"":", aiRoot: peErr = Err.Number: On Error GoTo 0
+    Check peErr = 5, "JsonParse accepted broken JSON"
+    AIReset
+    AIAddMessage "user", "Hi ""there"""
+    AIAddMessage "assistant", "Hello"
+    AIAddMessage "user", "Again"
+    aiBody = AIRequestBody(AI_OPENAI, "m1", "Be brief", 100)
+    Check aiBody = "{""model"":""m1"",""messages"":[{""role"":""system"",""content"":""Be brief""},{""role"":""user"",""content"":""Hi \""there\""""},{""role"":""assistant"",""content"":""Hello""},{""role"":""user"",""content"":""Again""}]}", "OpenAI request wrong: " & aiBody
+    aiBody = AIRequestBody(AI_ANTHROPIC, "m2", "Be brief", 100)
+    Check Left$(aiBody, 62) = "{""model"":""m2"",""max_tokens"":100,""system"":""Be brief"",""messages"":", "Anthropic request wrong: " & aiBody
+    Check InStr(aiBody, """role"":""system""") = 0, "Anthropic request put system text in the messages"
+    aiBody = AIRequestBody(AI_OLLAMA, "m3", "", 100)
+    Check Right$(aiBody, 17) = "],""stream"":false}" And InStr(aiBody, "system") = 0, "Ollama request wrong: " & aiBody
+    Check AIMessageCount() = 3, "Conversation lost messages"
+    AIReset
+    Check AIMessageCount() = 0, "AIReset kept messages"
+    aiHdr = AIHeaders(AI_OPENAI, "k-1")
+    Check aiHdr(UBound(aiHdr)) = "Authorization: Bearer k-1", "OpenAI key header wrong"
+    aiHdr = AIHeaders(AI_ANTHROPIC, "k-2")
+    Check aiHdr(UBound(aiHdr)) = "x-api-key: k-2" And aiHdr(UBound(aiHdr) - 1) = "anthropic-version: 2023-06-01", "Anthropic headers wrong"
+    aiHdr = AIHeaders(AI_OLLAMA, "")
+    Check UBound(aiHdr) = 0, "A header with no key was added"
+    Check InStr(AIRequestBody(AI_OPENAI, "m", "", 1), "k-1") = 0, "The key reached a request body"
+    Check AIParseResponse(AI_OPENAI, "{""choices"":[{""message"":{""role"":""assistant"",""content"":""Four""}}]}", aiProblem) = "Four" And aiProblem = "", "OpenAI answer misread"
+    Check AIParseResponse(AI_ANTHROPIC, "{""content"":[{""type"":""text"",""text"":""Fo""},{""type"":""text"",""text"":""ur""}]}", aiProblem) = "Four", "Anthropic text blocks not joined"
+    Check AIParseResponse(AI_OLLAMA, "{""message"":{""content"":""Four""},""done"":true}", aiProblem) = "Four", "Ollama answer misread"
+    Check AIParseResponse(AI_OPENAI, "{""error"":{""message"":""Bad key""}}", aiProblem) = "" And InStr(aiProblem, "Bad key") > 0, "A service error was read as an answer"
+    Check AIParseResponse(AI_OPENAI, "<html>", aiProblem) = "" And InStr(aiProblem, "could not be read") > 0, "HTML was read as an answer"
+    Check AIParseResponse(AI_OPENAI, "{""choices"":[]}", aiProblem) = "" And InStr(aiProblem, "empty") > 0, "No choices not reported"
+    Check InStr(AIFailureText(AI_OPENAI, "{""error"":{""message"":""Nope""}}", 401), "HTTP 401: Nope") > 0 And InStr(AIFailureText(AI_OPENAI, "", 429), "wait") > 0, "HTTP failure text wrong"
+    Check AIEndpointProblem("") = "" And AIEndpointProblem("https://example.com/v1") = "" And AIEndpointProblem("http://localhost:11434/api") = "", "A good AI address was refused"
+    Check Len(AIEndpointProblem("http://example.com/v1")) > 0 And Len(AIEndpointProblem("http://localhost.evil.com/")) > 0 And Len(AIEndpointProblem("ftp://x")) > 0, "A clear-text AI address was allowed"
+    peErr = 0: On Error Resume Next: AIConfigure AI_OPENAI, , , "sk-abc123": peErr = Err.Number: On Error GoTo 0
+    Check peErr = AI_ERR_NUMBER, "AIConfigure accepted a key as the variable name"
+    peErr = 0: On Error Resume Next: AIConfigure "bogus": peErr = Err.Number: On Error GoTo 0
+    Check peErr = AI_ERR_NUMBER, "AIConfigure accepted an unknown provider"
+    Check AIProviderValid("Anthropic") And Not AIProviderValid("gemini"), "Provider names misjudged"
+    AISetKey " typed-key ": Check AIKey() = "typed-key", "Session key not kept"
+    AIClearKey: Check AIKey() <> "typed-key", "Session key not cleared"
+    AIRegisterPart "Notes", "Summarize notes": AIRegisterPart "notes", "Summarize a note": AIRegisterPart "mail", "Draft mail"
+    Check AIPartCount() = 2 And AIPartKey(1) = "notes" And AIPartCaption(1) = "Summarize a note", "AI parts not registered or renamed"
+    peErr = 0: On Error Resume Next: AIRegisterPart "two words", "x": peErr = Err.Number: On Error GoTo 0
+    Check peErr = AI_ERR_NUMBER, "AI part key with a space accepted"
+    BuildAIDialogs
+    DoCmd.OpenForm "dlgAI", acDesign
+    Set aiFrm = Forms("dlgAI")
+    Check HasControl(aiFrm, "txtMessage") And HasControl(aiFrm, "btnSend") And HasControl(aiFrm, "txtAnswer"), "AI chat dialog lacks its controls"
+    Check aiFrm.txtAnswer.Locked And aiFrm.btnClose.Cancel, "AI chat answer not read-only or Close not Cancel"
+    DoCmd.Close acForm, "dlgAI", acSaveNo
+    DoCmd.OpenForm "dlgAISettings", acDesign
+    Set aiFrm = Forms("dlgAISettings")
+    Check HasControl(aiFrm, "cboProvider") And HasControl(aiFrm, "txtKey") And HasControl(aiFrm, "chkPart" & AIUiPartRows()), "AI settings dialog lacks its controls"
+    Check aiFrm.txtKey.InputMask = SECRET_MASK, "AI session key not masked"
+    DoCmd.Close acForm, "dlgAISettings", acSaveNo
     TestKit = checks & " kit checks passed"
 End Function
 

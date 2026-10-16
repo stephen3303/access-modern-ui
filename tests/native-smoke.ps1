@@ -45,6 +45,8 @@ try {
  Copy-Item (Join-Path $repo 'kit/forms/dlgSignIn.vba') $formDir
  Copy-Item (Join-Path $repo 'kit/forms/dlgPersonnel.vba') $formDir
  Copy-Item (Join-Path $repo 'kit/forms/dlgPerson.vba') $formDir
+ Copy-Item (Join-Path $repo 'kit/forms/dlgAI.vba') $formDir
+ Copy-Item (Join-Path $repo 'kit/forms/dlgAISettings.vba') $formDir
  Copy-Item (Join-Path $PSScriptRoot 'testHost.vba') $formDir
  Copy-Item (Join-Path $PSScriptRoot 'testRefuse.vba') $formDir
  Copy-Item (Join-Path $PSScriptRoot 'testConflict.vba') $formDir

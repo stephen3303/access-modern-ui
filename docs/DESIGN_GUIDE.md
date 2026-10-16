@@ -156,6 +156,7 @@ them, and the shell (`frmMain`) last.
 | modKitHelp (kit) | In-app help: `LoadHelpTopics` (help.txt into `zz_help`), `BuildHelpDialog`, `BuildHelpKey` (F1), `KitHelp` (the topic for what is on screen, search) |
 | modTrust (kit) | `BuildTrustCheck` startup, `TrustNeeded`, `InTrustedLocation`, `ShowTrustHelp` (the `dlgTrust` page on trusting the folder) |
 | modKitUtil (kit) | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `CenterOnApp`, `SetVisible`, `SetEnabled` |
+| modKitAI, modKitAIUI (kit) | AI service client (`AIAsk`, `AIAskInto`, `AIConfigure`; keys come from an environment variable or the session, never saved) and its chat and settings dialogs (`KitAIChat`, `KitAISettings`, `BuildAIDialogs`); users choose which registered parts use AI |
 | modBackdrop (kit) | `DimApp`, `UndimApp`: the dimmed backdrop behind modal dialogs |
 | modDarkMode (kit), modPalette (gen), modTheme (gen) | Palette engine (section 7) |
 | modPng (kit) | Draws anti-aliased PNGs for rounded pills, card corners, progress capsules and toggle switches |
