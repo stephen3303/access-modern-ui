@@ -1055,6 +1055,52 @@ Public Function TestKit(ByVal root As String) As String
     Check LastFolder("test") = "", "Missing remembered folder offered"
     DeleteSetting APP_NAME, "Files"
     g_Silent = False
+    ' AI service module: JSON, one request and reply per service, parts, endpoint rules (no network).
+    Dim aiMsgs As Collection, aiRoot As Variant, aiParts As Variant
+    Set aiMsgs = New Collection
+    aiMsgs.Add Array("user", "Hi ""you""" & vbLf & ChrW(233))
+    Check JsonStr("a""b\c" & vbTab & ChrW(233)) = """a\""b\\c\t\u00E9""", "JsonStr did not escape the text"
+    Set aiRoot = JsonParse("{""a"":[1,2.5,true,null,""x\u00e9\n""],""b"":{""c"":""d""}}")
+    Check aiRoot("a").Count = 5 And aiRoot("a")(2) = 2.5 And aiRoot("a")(3) = True And IsNull(aiRoot("a")(4)) And aiRoot("a")(5) = "x" & ChrW(233) & vbLf And aiRoot("b")("c") = "d", "JsonParse read the wrong values"
+    badName = 0
+    On Error Resume Next
+    Set aiRoot = JsonParse("{""a"":")
+    If Err.Number = 5 Then badName = 1
+    Err.Clear
+    On Error GoTo 0
+    Check badName = 1, "JsonParse accepted broken JSON"
+    Check InStr(AiRequest("openai", "m1", "be brief", aiMsgs, 0), """role"":""system""") > 0 And InStr(AiRequest("openai", "m1", "", aiMsgs, 0), "system") = 0, "the OpenAI request's system message is wrong"
+    Check InStr(AiRequest("anthropic", "m1", "be brief", aiMsgs, 0), """max_tokens"":1024") > 0 And InStr(AiRequest("anthropic", "m1", "be brief", aiMsgs, 0), """system"":""be brief""") > 0, "the Anthropic request is wrong"
+    Check InStr(AiRequest("gemini", "m1", "x", aiMsgs, 50), """maxOutputTokens"":50") > 0 And InStr(AiRequest("gemini", "m1", "x", aiMsgs, 0), """systemInstruction""") > 0, "the Gemini request is wrong"
+    Check AiReply("openai", "{""choices"":[{""message"":{""content"":""Hello""}}]}") = "Hello", "the OpenAI reply is wrong"
+    Check AiReply("anthropic", "{""content"":[{""type"":""text"",""text"":""He""},{""type"":""text"",""text"":""llo""}]}") = "Hello", "the Anthropic reply is wrong"
+    Check AiReply("gemini", "{""candidates"":[{""content"":{""parts"":[{""text"":""Hello""}]}}]}") = "Hello", "the Gemini reply is wrong"
+    badName = 0
+    On Error Resume Next
+    aiRoot = AiReply("openai", "{""error"":{""message"":""bad key""}}")
+    If InStr(Err.Description, "bad key") > 0 Then badName = 1
+    Err.Clear
+    On Error GoTo 0
+    Check badName = 1, "a service error message was lost"
+    AiBind "tstA", "Part A", "frmX", "txtIn", "txtOut", "Q: {input}", "btnAi"
+    AiBind "tstB", "Part B", defaultOn:=True
+    Check AiPartList()(0) = "tstA|Part A" And Not AiPartEnabled("tstA") And AiPartEnabled("tstB"), "AI parts did not start as declared (off unless defaultOn)"
+    AiSetPartEnabled "tstA", True
+    Check AiPartEnabled("tstA"), "AiSetPartEnabled did not turn a part on"
+    AiSetPartEnabled "tstA", False: AiUnbind "tstA": AiUnbind "tstB"
+    DeleteSetting APP_NAME, "AI", "Part_tstA"
+    badName = 0
+    On Error Resume Next
+    AiConfigure endpoint:="http://example.com/v1"
+    If Err.Number = 5 Then badName = 1
+    Err.Clear
+    On Error GoTo 0
+    Check badName = 1, "a plain http endpoint to another computer was accepted"
+    Check AiKey() = Trim$(Environ$(AiKeyVar())), "AiKey is not the environment variable's value"
+    AiSetKey "test-key"
+    Check AiKey() = "test-key", "AiSetKey did not keep the key"
+    AiSetKey ""
+    Check AiKey() = Trim$(Environ$(AiKeyVar())), "AiSetKey empty did not forget the key"
     ' Classification: the ceiling limits the permitted labels; the banner takes its color.
     Check KitClassification() = "UNCLASSIFIED", "the default classification is not UNCLASSIFIED"
     Check ClassificationPermits("UNCLASSIFIED") And Not ClassificationPermits("CUI") And Not ClassificationPermits(""), "UNCLASSIFIED permits more than UNCLASSIFIED labels"
