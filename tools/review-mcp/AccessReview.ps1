@@ -525,8 +525,18 @@ function Assert-ReviewFileAllowed([string]$Path) {
     foreach ($a in $allowed) {
         if (-not [IO.Path]::IsPathRooted($a)) { throw "ACCESS_REVIEW_ALLOWED_FOLDERS: '$a' is not a full path." }
     }
-    if ($allowed.Count -and -not @($allowed | Where-Object { Test-PathInFolder $Path $_ }).Count) {
+    $inside = @($allowed | Where-Object { Test-PathInFolder $Path $_ })
+    if ($allowed.Count -and -not $inside.Count) {
         throw "'$Path' is not in a folder this tool may open ($($allowed -join '; '), from ACCESS_REVIEW_ALLOWED_FOLDERS)."
+    }
+    # The check above compares names, so a junction or symbolic link inside an allowed
+    # folder could lead outside it. Refuse a path that goes through one below the folder.
+    foreach ($a in $inside) {
+        $root = [IO.Path]::GetFullPath($a).TrimEnd('\', '/')
+        for ($p = $Path; $p -and $p.Length -gt $root.Length; $p = [IO.Path]::GetDirectoryName($p)) {
+            $link = (Get-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue).LinkType
+            if ($link -in 'Junction', 'SymbolicLink') { throw "'$Path' goes through the $link '$p', which may lead outside $a, so it is not opened. Use the file's real location." }
+        }
     }
     $zone = $null
     try { $zone = Get-Content -LiteralPath $Path -Stream Zone.Identifier -ErrorAction Stop } catch {}
