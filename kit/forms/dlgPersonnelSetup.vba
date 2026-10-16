@@ -72,13 +72,13 @@ Private Sub ShowPanel(ByVal panel As String)
     Me.Repaint                                  ' no trace of the last panel's text
 End Sub
 
-' Make lblWhy as tall as its text (two lines usually, four with a long path)
-' and move the choices under it to match. Measured like dlgMessage: 10pt
-' lines, with 10% spare for word breaks.
+' Make lblWhy as tall as its text (two lines usually, four or more with a
+' long path) and move the choices under it to match. The lines are counted
+' by wrapping the words as the label does, since a long path can't break at
+' a space and leaves the line before it short.
 Private Sub FitWhy()
     Dim lines As Long, dy As Long, k As Variant
-    lines = -Int(-(MeasureText(Me.lblWhy.Caption, 10, 400) * 1.1) / Me.lblWhy.Width)
-    If lines < 1 Then lines = 1
+    lines = WrapLines(Me.lblWhy.Caption, Me.lblWhy.Width - 60)    ' less the label's inner margins
     dy = lines * CLng(10 * 20 * 1.36) + 30 - Me.lblWhy.Height
     If dy = 0 Then Exit Sub
     m_fullHeight = m_fullHeight + IIf(dy > 0, dy, 0)
@@ -88,6 +88,29 @@ Private Sub FitWhy()
         If Me.Controls(k).Tag = "choice" And m_tops(k) > m_tops("lblWhy") Then m_tops(k) = m_tops(k) + dy
     Next
 End Sub
+
+' Lines text takes at 10pt in a label avail twips wide, wrapping word by
+' word. A word wider than the line (a long path) breaks across lines.
+Private Function WrapLines(ByVal text As String, ByVal avail As Long) As Long
+    Dim para As Variant, wd As Variant, n As Long, used As Long, ww As Long, gap As Long
+    gap = MeasureText("a b", 10, 400) - MeasureText("ab", 10, 400)
+    For Each para In Split(Replace(text, vbCrLf, vbLf), vbLf)
+        n = n + 1: used = 0
+        For Each wd In Split(CStr(para), " ")
+            If Len(wd) > 0 Then
+                ww = MeasureText(CStr(wd), 10, 400)
+                If used > 0 And used + gap + ww > avail Then n = n + 1: used = 0
+                If used > 0 Then used = used + gap
+                used = used + ww
+                Do While used > avail
+                    n = n + 1: used = used - avail
+                Loop
+            End If
+        Next
+    Next
+    If n < 1 Then n = 1
+    WrapLines = n
+End Function
 
 ' Height to the lowest visible control of panel, plus the dialog padding.
 Private Sub FitToPanel(ByVal panel As String)
