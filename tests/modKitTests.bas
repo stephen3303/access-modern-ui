@@ -307,6 +307,16 @@ Public Function TestKit(ByVal root As String) As String
     ShowAlert host, "alTest", "x", "loud": badName = Err.Number: Err.Clear
     On Error GoTo 0
     Check badName = 5, "ShowAlert accepted an unknown variant"
+    ' Keyboard reach: the close mark has a KeyButton named for screen readers that
+    ' marks the mark while focused and hides with the alert.
+    Check host.alTest_xk.Visible And host.alTest_xk.TabStop And host.alTest_xk.Caption = "Dismiss", "Alert close mark has no keyboard button"
+    host.alTest_xk.SetFocus
+    Check host.alTest_x.ForeColor = CLR_PRIMARY, "Focused close mark is not marked"
+    host.txtFocusSink.SetFocus
+    Check host.alTest_x.ForeColor = CLR_MUTED_FG, "Close mark kept its focus mark"
+    HideAlert host, "alTest"
+    Check Not host.alTest_xk.Visible, "Hidden alert left its keyboard button"
+    ShowAlert host, "alTest", "Back.", "info"
     ' Breadcrumb: built path in order, the last crumb current and not a link, a
     ' path wider than the trail folds its middle into an ellipsis, too many fail.
     Check host.bc0.Visible And host.bc2.Visible And Not host.bc3.Visible And Not host.bc_s3.Visible, "Breadcrumb shows the wrong crumbs"
@@ -328,6 +338,15 @@ Public Function TestKit(ByVal root As String) As String
     SetBreadcrumb host, "bc", "1|1", "2|2", "3|3", "4|4", "5|5", "6|6": badName = Err.Number: Err.Clear
     On Error GoTo 0
     Check badName = 5, "Breadcrumb took more items than slots"
+    ' Keyboard reach: every crumb but the current page has a KeyButton over it,
+    ' named with its caption; focus underlines the crumb.
+    SetBreadcrumb host, "bc", "home|Home", "items|Items", "i42|Pump overhaul"
+    Check host.bc0_k.Visible And host.bc1_k.Visible And Not host.bc2_k.Visible And Not host.bc3_k.Visible, "Breadcrumb keyboard buttons differ"
+    Check host.bc1_k.Left = host.bc1.Left And host.bc1_k.Width = host.bc1.Width And host.bc1_k.Caption = "Items", "Crumb keyboard button is not over its crumb"
+    host.bc0_k.SetFocus
+    Check host.bc0.ForeColor = CLR_PRIMARY And host.bc0.FontUnderline, "Focused crumb is not marked"
+    host.txtFocusSink.SetFocus
+    Check host.bc0.ForeColor = CLR_MUTED_FG And Not host.bc0.FontUnderline, "Crumb kept its focus mark"
     ' Stepper: done, current and later steps drawn apart; a done step's click goes
     ' back to it, later ones do nothing; SetStep moves it and rejects bad steps.
     Check host.st_f1.Visible And Not host.st_r1.Visible And host.st_n1.Caption = ChrW(&HE73E), "Done step is not checked"
@@ -347,6 +366,12 @@ Public Function TestKit(ByVal root As String) As String
     SetStep host, "st", 5: badName = Err.Number: Err.Clear
     On Error GoTo 0
     Check badName = 5 And CurrentStep(host, "st") = 1, "SetStep accepted a step out of range"
+    ' Keyboard reach: only done steps take a Tab stop; names say the state.
+    SetStep host, "st", 3
+    Check host.st_k1.TabStop And host.st_k2.TabStop And Not host.st_k3.TabStop, "Step tab stops are not the done steps"
+    Check host.st_k3.Caption = "Step 3 of 3, Done, current" And host.st_k1.Caption = "Step 1 of 3, Details, done", "Step button names differ"
+    Check host.st_r3.Visible = False And host.st_f3.Visible, "Current step is not filled"
+    SetStep host, "st", 1
     ' Accordion: open and closed sections stacked, a header click opens or closes
     ' and moves the sections below, a one-open accordion closes the others.
     Check SectionOpen(host, "acc", 1) And Not SectionOpen(host, "acc", 2), "Accordion did not start with its open section"
@@ -363,6 +388,12 @@ Public Function TestKit(ByVal root As String) As String
     OpenSection host, "acc", 4, True: badName = Err.Number: Err.Clear
     On Error GoTo 0
     Check badName = 5, "OpenSection accepted a missing section"
+    ' Accordion headers: names carry the state; focus underlines the title.
+    Check host.acc_h2.Caption = "Advanced, expanded" And host.acc_h1.Caption = "General, collapsed", "Accordion header names differ"
+    host.acc_h1.SetFocus
+    Check host.acc_t1.ForeColor = CLR_PRIMARY And host.acc_t1.FontUnderline, "Focused accordion header is not marked"
+    host.txtFocusSink.SetFocus
+    Check host.acc_t1.ForeColor = CLR_FG And Not host.acc_t1.FontUnderline, "Accordion header kept its focus mark"
     ' Avatar: initials from the first and last words, a stable tone per name, the
     ' empty name's own tone, and the built circle and initials.
     Check AvatarInitials("ETN1 Rivera") = "ER" And AvatarInitials("  ada   byron  lovelace ") = "AL", "Avatar initials differ"
@@ -400,6 +431,10 @@ Public Function TestKit(ByVal root As String) As String
     Check host.srch_f.BorderColor = CLR_PRIMARY, "Focused search box lacks its ring"
     host.txtFocusSink.SetFocus
     Check host.srch_f.BorderColor = CLR_INPUT_BORDER, "Search box kept its ring"
+    SetSearch host, "srch", "x"
+    Check host.srch_xk.Visible And host.srch_xk.Caption = "Clear search", "Search clear mark has no keyboard button"
+    SetSearch host, "srch", ""
+    Check Not host.srch_xk.Visible, "Empty search kept its clear button"
     ' Rating: empty stars, a click fills up to it and calls onChange, a click on
     ' the value clears it, SetRating is quiet and checks its range.
     Check RatingValue(host, "rt") = 0 And host.rt_s1 = ChrW(59188), "Rating did not start empty"
@@ -416,6 +451,12 @@ Public Function TestKit(ByVal root As String) As String
     SetRating host, "rt", 6: badName = Err.Number: Err.Clear
     On Error GoTo 0
     Check badName = 5, "SetRating accepted a value past its stars"
+    Check host.rt_s5.ForeColor = CLR_MUTED_FG And host.rt_b3.Caption = "3 stars", "Rating empty star color or names differ"
+    host.rt_b2.SetFocus
+    Check host.rt_ring.Visible, "Focused rating shows no ring"
+    host.txtFocusSink.SetFocus
+    Check Not host.rt_ring.Visible, "Rating kept its ring"
+    Check host.segTest_b1.Caption = "Week" And host.sl_b3.Caption = "30", "Segmented or slider buttons are unnamed"
     ' Slider: steps cover the track, a click moves it and calls onChange once,
     ' SetSlider rounds to a step and stays in range, SliderStep moves by steps.
     Check SliderValue(host, "sl") = 0 And host.sl_b0.Left = host.sl_bg.Left, "Slider did not start at its minimum"

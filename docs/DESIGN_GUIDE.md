@@ -865,6 +865,15 @@ Write app-specific helpers next to the builds that use them. Examples:
   it, from a muted MDL2 help mark (E9CE) beside the caption. 280px wide, a 10pt bold title,
   9pt text, up to 8 lines. It closes on a click anywhere or Esc. Keep page-level help in the
   page title's "?" (`TitleTip`).
+- **Keyboard and screen readers**: everything a mouse can click, a keyboard can reach.
+  Access labels can't take the focus, so every clickable label (a link, a close mark, a
+  crumb, a help mark) gets a `KeyButton` over it, and every transparent button (switches,
+  segments, stars, slider steps, accordion headers) gets a `Caption`: it isn't drawn, but
+  it is the name a screen reader reads. A focused control always shows it: a focus ring
+  (inputs, `Toggle`, `Segmented`, `Rating`, `Slider`) or `FocusMark` (labels and accordion
+  titles turn `CLR_PRIMARY` and, for text, underlined). Outlines that carry meaning (an
+  empty star, a step not reached) use `CLR_MUTED_FG`, which keeps 3:1 against the surface;
+  `CLR_INPUT_BORDER` is for decoration only.
 - **Empty states**: a centered muted 10pt label shown in place of an empty list. Hide the
   list's subform while it shows (`SetVisible`): a subform always covers a label.
 - **Toasts** (`KitToast`, `dlgToast`): a 360px borderless pop-up on `CLR_SURFACE` with
