@@ -3,8 +3,9 @@ Option Explicit
 
 ' Kit Demo - BuildAll and the Build_<form> procedures. Each page shows a
 ' group of kit features: pgCards (Card, Progress), pgTables (BuildGrid
-' options, GridFit, the column chooser, tabs and chips with counts) and
-' pgList (the list/detail pattern, PrintGrid and ExportGrid). frmMain is the
+' options, GridFit, the column chooser, tabs and chips with counts),
+' pgList (the list/detail pattern, PrintGrid and ExportGrid, Alert, Breadcrumb)
+' and pgSteps (Stepper, Accordion). frmMain is the
 ' shell.
 
 Public Const PAGE_W As Long = 15840             ' 1056 px
@@ -100,6 +101,8 @@ Private Sub BuildUserInterface()
     Build_pgCards
     Build_pgTables
     Build_pgList
+    Build_subAbout
+    Build_pgSteps
     Build_dlgAppearance
     BuildMessageDialog             ' the kit's dlgMessage, for KitMsgBox
     BuildInputDialog               ' the kit's dlgInput, for KitInputBox
@@ -306,6 +309,36 @@ Private Sub Build_pgList()
     SaveForm "pgList"
 End Sub
 
+' A short text body for the accordion's closed-by-default sections.
+Private Sub Build_subAbout()
+    NewForm "", 0, CW() - px(32), px(56)
+    F.Section(acDetail).BackColor = CLR_BG
+    F.Section(acDetail).AlternateBackColor = CLR_BG
+    Lbl "lblAbout", "A section body is a subform, so it can hold anything a form can. Opening a section pushes the " & _
+        "ones below it down; closing it lets them back up.", px(4), 0, CW() - px(40), px(48), 9, False, CLR_MUTED_FG
+    SaveForm "subAbout"
+End Sub
+
+' Steps and sections: a step indicator (Stepper) in a card with Back and
+' Next, and an accordion of three sections below it, the first holding the
+' items table.
+Private Sub Build_pgSteps()
+    Dim c As Control, y As Long
+    NewForm "", 0, PAGE_W, PAGE_H
+    Ev F, "OnLoad"
+    PageHeader "Steps and sections", "A step indicator (Stepper) and an accordion (Accordion). " & _
+        "Back and Next move the steps; click a check mark to go back. Click a section's header to open or close it.", CX
+    y = px(84)
+    Card "Wizard", "New item", CX, y, CW(), px(160), , 2, 0
+    Stepper "steps", CX + px(16), y + px(44), CW() - px(32), 1, "StepBack", "Details", "Owner", "Review", "Submit"
+    Lbl "lblStepBody", "", CX + px(16), y + px(112), CW() - px(260), px(36), 9, False, CLR_MUTED_FG
+    Set c = Btn("btnBack", "Back", CX + CW() - px(224), y + px(116), px(96), px(28), "outline")
+    Set c = Btn("btnNext", "Next", CX + CW() - px(112), y + px(116), px(96), px(28))
+    Accordion "acc", CX, y + px(176), CW(), True, "Items|subGridCards|150|open", "About sections|subAbout|56", _
+        "One open at a time|subAbout|56"
+    SaveForm "pgSteps"
+End Sub
+
 ' Shell: sidebar with the pages, Folder trust (the kit's trust page) and
 ' Appearance, and the page host sfPage.
 Private Sub Build_frmMain()
@@ -317,7 +350,7 @@ Private Sub Build_frmMain()
     Lbl "lblBrand", APP_NAME, px(20), px(20), px(160), px(26), 13, True, CLR_WHITE
     Lbl "lblBrandSub", "access-modern-ui", px(20), px(46), px(160), px(18), 8, False, CLR_NAV_MUTED
     Box "boxSideLine", px(16), px(76), px(168), px(1), CLR_SIDEBAR_LINE
-    pages = Array("cards|Cards and progress", "tables|Tables", "list|List and detail")
+    pages = Array("cards|Cards and progress", "tables|Tables", "list|List and detail", "steps|Steps and sections")
     y = px(90)
     For i = 0 To UBound(pages)
         Set c = Link("nt_" & Split(pages(i), "|")(0), Split(pages(i), "|")(1), px(12), y, px(176), px(34), _

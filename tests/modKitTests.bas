@@ -64,6 +64,9 @@ Public Function TestKit(ByVal root As String) As String
     Segmented "segTest", "", px(700), px(660), px(240), "day|Day;week|Week;month|Month", onChange:="SegmentChanged"
     Alert "alTest", px(700), px(720), px(320), px(64), "warning", "Heads up", "Check the due date.", True
     Breadcrumb "bc", px(700), px(800), px(320), 5, "CrumbPicked", "home|Home", "items|Items", "i42|Pump overhaul"
+    Stepper "st", px(700), px(840), px(360), 2, "StepPicked", "Details", "Review", "Done"
+    Accordion "acc", px(1100), px(40), px(300), False, "General|Form.subRing|60|open", "Advanced|Form.subRing|60", "Notes||40"
+    Accordion "acs", px(1450), px(40), px(300), True, "One||40|open", "Two||40"
     SecretBox "secret", "", px(400), px(700), px(160), px(30)     ' clear of the ring, required and toggle fields
     SaveForm "frmTest", "testHost"
     DoCmd.OpenForm "frmTest"
@@ -317,6 +320,41 @@ Public Function TestKit(ByVal root As String) As String
     SetBreadcrumb host, "bc", "1|1", "2|2", "3|3", "4|4", "5|5", "6|6": badName = Err.Number: Err.Clear
     On Error GoTo 0
     Check badName = 5, "Breadcrumb took more items than slots"
+    ' Stepper: done, current and later steps drawn apart; a done step's click goes
+    ' back to it, later ones do nothing; SetStep moves it and rejects bad steps.
+    Check host.st_f1.Visible And Not host.st_r1.Visible And host.st_n1.Caption = ChrW(&HE73E), "Done step is not checked"
+    Check host.st_f2.Visible And host.st_n2.Caption = "2" And host.st_l2.FontWeight = 600 And host.st_l2.ForeColor = CLR_FG, "Current step is not set apart"
+    Check host.st_r3.Visible And Not host.st_f3.Visible And host.st_l3.ForeColor = CLR_MUTED_FG, "Later step is not a ring"
+    Check host.st_c1.BackColor = CLR_PRIMARY And host.st_c2.BackColor = CLR_INPUT_BORDER, "Step connectors are not colored by progress"
+    Check host.st_c1.Left > host.st_f1.Left + host.st_f1.Width And host.st_c1.Left + host.st_c1.Width < host.st_f2.Left, "Step connector touches its circles"
+    StepClick host, "st", 1
+    Check host.lastStep = 1, "Done step click did not call the handler"
+    StepClick host, "st", 3
+    Check host.lastStep = 1, "Later step click called the handler"
+    SetStep host, "st", 4
+    Check CurrentStep(host, "st") = 4 And host.st_f3.Visible And host.st_n3.Caption = ChrW(&HE73E) And host.st_c2.BackColor = CLR_PRIMARY, "Stepper did not show every step done"
+    SetStep host, "st", 1
+    Check host.st_n1.Caption = "1" And host.st_r2.Visible And host.st_c1.BackColor = CLR_INPUT_BORDER, "Stepper did not go back to the first step"
+    On Error Resume Next
+    SetStep host, "st", 5: badName = Err.Number: Err.Clear
+    On Error GoTo 0
+    Check badName = 5 And CurrentStep(host, "st") = 1, "SetStep accepted a step out of range"
+    ' Accordion: open and closed sections stacked, a header click opens or closes
+    ' and moves the sections below, a one-open accordion closes the others.
+    Check SectionOpen(host, "acc", 1) And Not SectionOpen(host, "acc", 2), "Accordion did not start with its open section"
+    Check host.acc_v1.Caption = ChrW(&HE70D) And host.acc_v2.Caption = ChrW(&HE76C), "Accordion chevrons do not show open and closed"
+    Check host.acc_b1.Top = host.acc.Top + px(48) And host.acc_h2.Top = host.acc_b1.Top + px(68), "Accordion sections are not stacked"
+    AccordionClick host, "acc", 2
+    Check SectionOpen(host, "acc", 2) And host.acc_h3.Top = host.acc_b2.Top + px(68) And host.acc_v2.Caption = ChrW(&HE70D), "Opened section did not push the next one down"
+    AccordionClick host, "acc", 1
+    Check Not SectionOpen(host, "acc", 1) And host.acc_h2.Top = host.acc.Top + px(41) And host.acc_u1.Top = host.acc.Top + px(40), "Closed section did not let the next one up"
+    Check host.acc.Height = host.acc_b2.Top + px(68) + px(41) - host.acc.Top, "Accordion frame is not its sections' height"
+    OpenSection host, "acs", 2, True
+    Check SectionOpen(host, "acs", 2) And Not SectionOpen(host, "acs", 1), "One-open accordion left another section open"
+    On Error Resume Next
+    OpenSection host, "acc", 4, True: badName = Err.Number: Err.Clear
+    On Error GoTo 0
+    Check badName = 5, "OpenSection accepted a missing section"
     host.ringA.SetFocus
     Check host.ringA.BorderColor = CLR_PRIMARY, "Focused input lacks its focus ring"
     host.ringB.SetFocus
@@ -449,6 +487,21 @@ Public Function TestKit(ByVal root As String) As String
     On Error GoTo 0
     DoCmd.Close acForm, F.Name, acSaveNo
     Check badName = 5, "Breadcrumb accepted one slot"
+    NewForm "", 0, px(300), px(100)
+    On Error Resume Next
+    Stepper "st1", 0, 0, px(300), 1, "", "Only": badName = Err.Number: Err.Clear
+    Stepper "st2", 0, 0, px(150), 1, "", "A", "B", "C": badScale = Err.Number: Err.Clear
+    On Error GoTo 0
+    DoCmd.Close acForm, F.Name, acSaveNo
+    Check badName = 5, "Stepper accepted one step"
+    Check badScale = 5, "Stepper accepted steps under 64px"
+    NewForm "", 0, px(300), px(100)
+    On Error Resume Next
+    Accordion "ac1", 0, 0, px(300), False, "Title only": badName = Err.Number: Err.Clear
+    Accordion "ac2", 0, 0, px(300), False, "Title||tall": badScale = Err.Number: Err.Clear
+    On Error GoTo 0
+    DoCmd.Close acForm, F.Name, acSaveNo
+    Check badName = 5 And badScale = 5, "Accordion accepted a bad section"
     ' Splash: CloseSplash and SplashStatus do nothing without one, the footer clears the
     ' subtitle, and the bitmap that hides Access's splash is 58 bytes.
     CloseSplash

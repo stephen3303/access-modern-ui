@@ -897,6 +897,99 @@ Public Sub Breadcrumb(ByVal prefix As String, ByVal x As Long, ByVal y As Long, 
     LayoutCrumbs F, prefix, path
 End Sub
 
+' Step indicator for a task done in steps (a wizard, an approval route): a
+' numbered circle per step with its caption below, joined by connectors.
+' Steps before the current one are done: a CLR_PRIMARY circle with a check
+' mark and a CLR_PRIMARY connector after it. The current step is a CLR_PRIMARY
+' circle with its number and a bold CLR_FG caption; later steps are a
+' CLR_INPUT_BORDER ring with a CLR_MUTED_FG number and caption. current is
+' 1-based; steps + 1 shows every step done. handler names a Public Sub or
+' Function on the form taking the step number, called when the user clicks a
+' done step (to go back to it); "" makes no step clickable. Change the step
+' with SetStep. The steps share w equally (at least 64px each) and take 56px
+' down. Parts: <prefix> an invisible frame (its Tag keeps the state),
+' <prefix>_f<i> and _r<i> the filled and ringed circles, _n<i> the number,
+' _l<i> the caption and _c<i> the connector after step i (i from 1).
+' Raises error 5 for fewer than 2 or more than 8 steps or too little width.
+Public Sub Stepper(ByVal prefix As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal current As Long, _
+        ByVal handler As String, ParamArray captions() As Variant)
+    Const D As Long = 28                 ' circle diameter (px)
+    Dim n As Long, i As Long, slot As Long, cx As Long, c As Control, click As String
+    n = UBound(captions) + 1
+    If n < 2 Or n > 8 Then Err.Raise 5, , "Stepper " & prefix & " takes 2 to 8 steps"
+    slot = w \ n
+    If slot < px(64) Then Err.Raise 5, , "Stepper " & prefix & " is too narrow: each step needs 64px"
+    Set c = Box(prefix, x, y, w, px(56), -1)
+    c.Tag = handler & "|" & current & "|" & n
+    For i = 1 To n
+        cx = x + (i - 1) * slot + slot \ 2
+        If i < n Then
+            Box prefix & "_c" & i, cx + px(D \ 2 + 8), y + px(D \ 2 - 1), slot - px(D + 16), px(2), CLR_INPUT_BORDER
+        End If
+        Set c = Mk(acImage, prefix & "_f" & i, cx - px(D \ 2), y, px(D), px(D), acDetail, "")
+        ImageProps c
+        c.Properties("ControlSource") = "=PillPng(" & CLR_PRIMARY & "," & D & "," & D & ")"
+        Set c = Mk(acImage, prefix & "_r" & i, cx - px(D \ 2), y, px(D), px(D), acDetail, "")
+        ImageProps c
+        c.Properties("ControlSource") = "=RingPng(" & CLR_INPUT_BORDER & "," & D & "," & D & ")"
+        click = "=StepClick([Form],""" & prefix & """," & i & ")"
+        Set c = Lbl(prefix & "_n" & i, CStr(i), cx - px(D \ 2), y, px(D), px(D), 9, True, CLR_MUTED_FG)
+        c.TextAlign = 2
+        c.OnClick = click
+        Set c = Lbl(prefix & "_l" & i, CStr(captions(i - 1)), x + (i - 1) * slot + px(4), y + px(D + 8), slot - px(8), px(18), 9, False, CLR_MUTED_FG)
+        c.TextAlign = 2
+        c.OnClick = click
+    Next
+    StepPaint F, prefix
+End Sub
+
+' Accordion: sections stacked down the page, each a 40px header (a 10pt
+' semibold title and a chevron, with a hairline below) over a body subform
+' that the header shows and hides; the sections below move up or down to
+' close the gap, like a web accordion. Use it for a long form or settings page
+' split into parts the user opens one or a few at a time. sections are
+' "Title|sourceObject|body height px|open" ("open" shows the body at first;
+' sourceObject may be "" for one set at run time). oneOpen:=True keeps one
+' section open at a time. Put the accordion last in its column: only its own
+' parts move. The form's section is made tall enough for every body open at
+' once (the tallest, with oneOpen), since Access raises error 2100 for a control moved past its bottom. Parts (i from 1): <prefix> an invisible frame (its Tag keeps
+' single and the body heights), <prefix>_h<i> a transparent header button
+' (click, Tab stop and Space), _t<i> the title, _v<i> the chevron, _u<i> the
+' rule and _b<i> the body subform. Raises error 5 for no section or a bad one.
+Public Sub Accordion(ByVal prefix As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal oneOpen As Boolean, _
+        ParamArray sections() As Variant)
+    Dim n As Long, i As Long, p() As String, hs As String, c As Control, yy As Long, allOpen As Long, tallest As Long
+    n = UBound(sections) + 1
+    If n < 1 Then Err.Raise 5, , "Accordion " & prefix & " has no sections"
+    Set c = Box(prefix, x, y, w, px(40) * n, -1)
+    yy = y
+    For i = 1 To n
+        p = Split(CStr(sections(i - 1)), "|")
+        If UBound(p) < 2 Then Err.Raise 5, , "Accordion " & prefix & " section is not Title|sourceObject|height: " & sections(i - 1)
+        If Not IsNumeric(p(2)) Then Err.Raise 5, , "Accordion " & prefix & " section height is not a number: " & sections(i - 1)
+        hs = hs & IIf(i > 1, ",", "") & px(CLng(p(2)))
+        allOpen = allOpen + px(41) + px(15) + px(CLng(p(2)))
+        If px(CLng(p(2))) > tallest Then tallest = px(CLng(p(2)))
+        Set c = Lbl(prefix & "_t" & i, p(0), x + px(4), yy, w - px(36), px(40), 10, True)
+        VCenter c, px(40), 10, True
+        Set c = Lbl(prefix & "_v" & i, ChrW(&HE76C), x + w - px(28), yy, px(24), px(40), 9, False, CLR_MUTED_FG)
+        c.FontName = "Segoe MDL2 Assets"
+        c.TextAlign = 2
+        VCenter c, px(40), 9, True
+        Rule prefix & "_u" & i, x, yy + px(40), w, 0, CLR_BORDER
+        Set c = SubF(prefix & "_b" & i, p(1), x, yy + px(48), w, px(CLng(p(2))))
+        c.Visible = (UBound(p) >= 3 And LCase$(Trim$(p(UBound(p)))) = "open")
+        Set c = Mk(acCommandButton, prefix & "_h" & i, x, yy, w, px(40), acDetail, "")
+        c.Transparent = True
+        c.OnClick = "=AccordionClick([Form],""" & prefix & """," & i & ")"
+        yy = yy + px(41)
+    Next
+    F.Controls(prefix).Tag = IIf(oneOpen, "single", "") & "|" & hs
+    AccordionLayout F, prefix
+    If oneOpen Then allOpen = n * px(41) + px(15) + tallest
+    If F.Section(acDetail).Height < y + allOpen Then F.Section(acDetail).Height = y + allOpen
+End Sub
+
 ' Where an Alert's parts sit, down from its top (twips): an item of height ih
 ' (icon, close mark) is 12px down, or centered in a compact alert (under 48px);
 ' the message is below the title, or level with the icon.

@@ -4,6 +4,7 @@ Public callbackGrid As String
 Public toggleChanges As Long
 Public segmentChanges As Long
 Public lastCrumb As String
+Public lastStep As Long
 ' A Toggle's onChange (modKitTests).
 Public Sub ToggleChanged()
     toggleChanges = toggleChanges + 1
@@ -15,6 +16,10 @@ End Sub
 ' A Breadcrumb's handler (modKitTests).
 Public Sub CrumbPicked(ByVal key As String)
     lastCrumb = key
+End Sub
+' A Stepper's handler (modKitTests).
+Public Sub StepPicked(ByVal i As Long)
+    lastStep = i
 End Sub
 Public Sub GridClick(ByVal grid As String, ByVal dbl As Boolean)
     callbackGrid = grid

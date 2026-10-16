@@ -139,7 +139,7 @@ them, and the shell (`frmMain`) last.
 | modBuildUI, modBuildPages, modBuildPages2 | `Build_<form>` procedures, one per form, grouped by area |
 | modUI | Run-time UI helpers: `NavTo`, badges/pills painting, `ShowTip`, the app's hooks (`BadgeColors`, `StatusVariant`) |
 | modUIKit (kit) | Build-time control builders (section 6) |
-| modKitUI (kit) | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSwitch`, `ToggleFocus`, `SegmentClick`, `SetSegment`, `SegmentValue`, `ShowAlert`, `HideAlert`, `SetBreadcrumb`, `CrumbClick`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `KitToast`, `KitInputBox`, `CheckRequired`, `SetCount`, `StyleChip` |
+| modKitUI (kit) | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSwitch`, `ToggleFocus`, `SegmentClick`, `SetSegment`, `SegmentValue`, `ShowAlert`, `HideAlert`, `SetBreadcrumb`, `CrumbClick`, `SetStep`, `CurrentStep`, `OpenSection`, `SectionOpen`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `KitToast`, `KitInputBox`, `CheckRequired`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
 | modGridCols (kit) | Column chooser: `ChooseGridColumns`, `RestoreGridColumns`, `SetGridColumns`, and `BuildColumnsDialog` for `dlgColumns` |
 | modGridFilter (kit) | Header filters: `GridFilter`, `SetGridFilter`, `SetColumnFilter`, `ClearGridFilters`, `GridFilterWhere`, and `BuildFilterDialog` for `dlgFilter` |
@@ -769,6 +769,21 @@ Write app-specific helpers next to the builds that use them. Examples:
   the path with `SetBreadcrumb` whenever the page's place changes. A path wider than the
   trail keeps its first and last crumbs and folds the middle into an ellipsis, as web
   breadcrumbs do.
+- **Step indicator**: `Stepper` shows progress through a task done in steps (a new-record
+  wizard, an approval route) above the step's own content, usually in a card with Back and
+  Next at the bottom right. 28px circles centered in equal slots, 9pt captions 8px below,
+  2px connectors 8px clear of the circles. Done steps are filled `CLR_PRIMARY` with a check
+  mark (MDL2 E73E) and fill the connector after them; the current step is filled with its
+  number and a bold `CLR_FG` caption; later steps are a 2px `CLR_INPUT_BORDER` ring with a
+  `CLR_MUTED_FG` number. A click on a done step goes back to it (the `handler`); later steps
+  can't be skipped to. Keep captions to one or two words.
+- **Accordion**: `Accordion` splits a long page into sections the user opens as needed:
+  40px headers with a 10pt semibold title and a chevron at the right (right when closed,
+  down when open), a `CLR_BORDER` hairline under each, and the open section's body (a
+  subform) 7px below its header and 8px above the next. Opening or closing moves the
+  sections below, so keep the accordion last in its column. Use `oneOpen` when the sections
+  are alternatives; leave it off when the user may compare them. Open the section most
+  users need at first.
 - **Empty states**: a centered muted 10pt label shown in place of an empty list. Hide the
   list's subform while it shows (`SetVisible`): a subform always covers a label.
 - **Toasts** (`KitToast`, `dlgToast`): a 360px borderless pop-up on `CLR_SURFACE` with

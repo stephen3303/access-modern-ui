@@ -1094,6 +1094,114 @@ Private Function CrumbWidth(ByVal s As String) As Long
     CrumbWidth = MeasureText(s, 9, 400) + px(6)
 End Function
 
+' Make step current (1-based; steps + 1 shows every step done) on Stepper
+' prefix. Raises error 5 for a step out of range.
+Public Sub SetStep(frm As Form, ByVal prefix As String, ByVal current As Long)
+    Dim t() As String
+    t = Split(frm.Controls(prefix).Tag, "|")
+    If current < 1 Or current > CLng(t(2)) + 1 Then Err.Raise 5, , "Stepper " & prefix & " has no step " & current
+    frm.Controls(prefix).Tag = t(0) & "|" & current & "|" & t(2)
+    StepPaint frm, prefix
+End Sub
+
+' The current step of Stepper prefix.
+Public Function CurrentStep(frm As Form, ByVal prefix As String) As Long
+    CurrentStep = CLng(Split(frm.Controls(prefix).Tag, "|")(1))
+End Function
+
+' A step's click (set by the builder): call the handler with a done step's
+' number. The current step and later ones do nothing.
+Public Function StepClick(frm As Form, ByVal prefix As String, ByVal i As Long)
+    Dim t() As String
+    On Error GoTo Fail
+    t = Split(frm.Controls(prefix).Tag, "|")
+    If Len(t(0)) = 0 Or i >= CLng(t(1)) Then Exit Function
+    CallByName frm, t(0), VbMethod, i
+    Exit Function
+Fail:
+    HandleError "modKitUI.StepClick", prefix & i
+End Function
+
+' Paint a Stepper's steps for its current step, in a form open in design view
+' (the builder) or form view (SetStep).
+Public Sub StepPaint(frm As Object, ByVal prefix As String)
+    Dim t() As String, n As Long, cur As Long, i As Long, done As Boolean, numLbl As Control, capLbl As Control
+    t = Split(frm.Controls(prefix).Tag, "|")
+    cur = CLng(t(1)): n = CLng(t(2))
+    For i = 1 To n
+        done = (i < cur)
+        Set numLbl = frm.Controls(prefix & "_n" & i)
+        Set capLbl = frm.Controls(prefix & "_l" & i)
+        frm.Controls(prefix & "_f" & i).Visible = (i <= cur)
+        frm.Controls(prefix & "_r" & i).Visible = (i > cur)
+        If done Then
+            numLbl.FontName = "Segoe MDL2 Assets": numLbl.Caption = ChrW(&HE73E)
+        Else
+            numLbl.FontName = FONT_UI: numLbl.Caption = CStr(i)
+        End If
+        numLbl.ForeColor = Th(IIf(i <= cur, CLR_BTN_FG, CLR_MUTED_FG))
+        capLbl.ForeColor = Th(IIf(i = cur, CLR_FG, CLR_MUTED_FG))
+        capLbl.FontWeight = IIf(i = cur, 600, 400)
+        If i < n Then frm.Controls(prefix & "_c" & i).BackColor = Th(IIf(done, CLR_PRIMARY, CLR_INPUT_BORDER))
+    Next
+End Sub
+
+' An Accordion header's click (set by the builder): open the section if
+' closed, close it if open (in a single accordion, opening one closes the
+' others).
+Public Function AccordionClick(frm As Form, ByVal prefix As String, ByVal i As Long)
+    On Error GoTo Fail
+    OpenSection frm, prefix, i, Not SectionOpen(frm, prefix, i)
+    Exit Function
+Fail:
+    HandleError "modKitUI.AccordionClick", prefix & i
+End Function
+
+' Open or close section i of Accordion prefix and move the sections below.
+Public Sub OpenSection(frm As Form, ByVal prefix As String, ByVal i As Long, ByVal isOpen As Boolean)
+    Dim t() As String, j As Long, n As Long
+    t = Split(frm.Controls(prefix).Tag, "|")
+    n = UBound(Split(t(1), ",")) + 1
+    If i < 1 Or i > n Then Err.Raise 5, , "Accordion " & prefix & " has no section " & i
+    If isOpen And t(0) = "single" Then
+        For j = 1 To n
+            If j <> i Then SetVisible frm.Controls(prefix & "_b" & j), False
+        Next
+    End If
+    ' A body that has the focus can't be hidden: SetVisible moves it first.
+    SetVisible frm.Controls(prefix & "_b" & i), isOpen
+    AccordionLayout frm, prefix
+End Sub
+
+' True while section i of Accordion prefix is open.
+Public Function SectionOpen(frm As Form, ByVal prefix As String, ByVal i As Long) As Boolean
+    SectionOpen = frm.Controls(prefix & "_b" & i).Visible
+End Function
+
+' Stack an Accordion's sections from its top: each header, then its body when
+' open, with 8px below it; the chevron points down on an open section. Works
+' in design view (the builder) and form view (OpenSection).
+Public Sub AccordionLayout(frm As Object, ByVal prefix As String)
+    Dim frame As Control, hs() As String, i As Long, y As Long, b As Control
+    Set frame = frm.Controls(prefix)
+    hs = Split(Split(frame.Tag, "|")(1), ",")
+    y = frame.Top
+    For i = 1 To UBound(hs) + 1
+        Set b = frm.Controls(prefix & "_b" & i)
+        frm.Controls(prefix & "_h" & i).Top = y
+        frm.Controls(prefix & "_t" & i).Top = y
+        frm.Controls(prefix & "_v" & i).Top = y
+        frm.Controls(prefix & "_v" & i).Caption = ChrW(IIf(b.Visible, &HE70D, &HE76C))
+        frm.Controls(prefix & "_u" & i).Top = y + px(40)
+        y = y + px(41)
+        If b.Visible Then
+            b.Top = y + px(7)
+            y = y + px(7) + CLng(hs(i - 1)) + px(8)
+        End If
+    Next
+    frame.Height = y - frame.Top
+End Sub
+
 ' ---------------------------------------------------------------------------
 ' Messages
 ' ---------------------------------------------------------------------------
