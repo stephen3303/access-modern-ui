@@ -31,6 +31,9 @@ Option Explicit
 '   Private Sub Form_Current()
 '       KitNoteRecord Me
 '   End Sub
+'   Private Sub Form_AfterUpdate()
+'       KitNoteRecord Me               ' the saved record is the new "as loaded"
+'   End Sub
 '   Private Sub Form_BeforeUpdate(Cancel As Integer)
 '       KitNoteEdits Me                ' (with any checks of your own)
 '   End Sub
@@ -61,12 +64,12 @@ Private m_inSave As Boolean     ' KitSaveRecord is running (its retries wait wit
 Private m_saving As Boolean     ' KitSaveRecord is saving: KitFormError leaves locks and conflicts to it
 Private m_formLock As Long      ' the lock error KitFormError passed on to KitSaveRecord
 Private m_conflictForm As String ' the form whose save hit a write conflict, for SaveTry to resolve
-' The record as loaded, noted by KitNoteRecord (Form_Current): by the time
-' of BeforeUpdate or Form_Error, OldValue already holds the other user's
-' saved values, so it can't tell the user's edits from theirs.
-Private m_recForm As String
-Private m_recBm As Variant      ' that record's bookmark
-Private m_recVals As Collection ' bound control values, keyed by control name
+' The record as loaded, noted by KitNoteRecord (Form_Current and
+' Form_AfterUpdate): by the time of BeforeUpdate or Form_Error, OldValue
+' already holds the other user's saved values, so it can't tell the user's
+' edits from theirs. One note per open form, keyed by form name; each is
+' Array(bookmark, values keyed by control name).
+Private m_recs As Collection
 ' The user's edits, noted by KitNoteEdits before each save.
 Private m_editForm As String
 Private m_names As Collection   ' changed controls
@@ -164,19 +167,26 @@ End Sub
 ' A bound form's Current (see the top of the module): note the record's
 ' bound values as loaded, for KitNoteEdits to compare against.
 Public Sub KitNoteRecord(frm As Form)
-    Dim c As Control
-    m_recForm = ""
-    Set m_recVals = New Collection
-    If frm.NewRecord Then Exit Sub      ' nothing loaded: every value is the user's
+    Dim c As Control, vals As Collection, bm As Variant
     On Error GoTo Fail
-    m_recBm = frm.Bookmark
+    If m_recs Is Nothing Then Set m_recs = New Collection
+    ForgetRecord frm.Name
+    If frm.NewRecord Then Exit Sub      ' nothing loaded: every value is the user's
+    bm = frm.Bookmark
+    Set vals = New Collection
     For Each c In frm.Controls
-        If IsBoundEditor(c) Then m_recVals.Add c.Value, c.Name
+        If IsBoundEditor(c) Then vals.Add c.Value, c.Name
     Next
-    m_recForm = frm.Name
+    m_recs.Add Array(bm, vals), frm.Name
     Exit Sub
 Fail:
-    m_recForm = ""                      ' no bookmark: a conflict keeps Access's window
+    ForgetRecord frm.Name               ' no bookmark: a conflict keeps Access's window
+End Sub
+
+' Drop the note for form nm, if there is one.
+Private Sub ForgetRecord(ByVal nm As String)
+    On Error Resume Next                ' no note for nm
+    m_recs.Remove nm
 End Sub
 
 ' A bound form's BeforeUpdate (see the top of the module): note which
@@ -184,7 +194,7 @@ End Sub
 ' noted it) and their values, so a write conflict can name them and, on
 ' Yes, put back only those.
 Public Sub KitNoteEdits(frm As Form)
-    Dim c As Control, src As String, loaded As Boolean, was As Variant
+    Dim c As Control, src As String, loaded As Boolean, was As Variant, note As Variant, loadedVals As Collection
     Set m_names = New Collection
     Set m_fields = New Collection
     Set m_vals = New Collection
@@ -192,10 +202,11 @@ Public Sub KitNoteEdits(frm As Form)
     loaded = SameRecord(frm)
     If Not loaded And Not frm.NewRecord Then Exit Sub   ' no Form_Current note: a conflict keeps Access's window
     m_editForm = frm.Name
+    If loaded Then note = m_recs(frm.Name): Set loadedVals = note(1)
     For Each c In frm.Controls
         If IsBoundEditor(c) Then
             src = c.ControlSource
-            If loaded Then was = m_recVals(c.Name) Else was = Null     ' a new record: all the user's
+            If loaded Then was = loadedVals(c.Name) Else was = Null     ' a new record: all the user's
             If Not SameValue(c.Value, was) Then
                 m_names.Add c.Name
                 m_fields.Add FieldCaption(c, src)
@@ -207,11 +218,12 @@ End Sub
 
 ' True when KitNoteRecord noted frm's current record.
 Private Function SameRecord(frm As Form) As Boolean
-    Dim bm As Variant
-    If m_recForm <> frm.Name Or frm.NewRecord Then Exit Function
-    On Error GoTo Fail
+    Dim bm As Variant, note As Variant
+    If m_recs Is Nothing Or frm.NewRecord Then Exit Function
+    On Error GoTo Fail                  ' no note for frm
+    note = m_recs(frm.Name)
     bm = frm.Bookmark
-    SameRecord = (StrComp(bm, m_recBm, vbBinaryCompare) = 0)
+    SameRecord = (StrComp(bm, note(0), vbBinaryCompare) = 0)
     Exit Function
 Fail:
 End Function
@@ -249,6 +261,7 @@ TryAgain:
     m_saving = False
     If Len(m_conflictForm) > 0 Then GoTo Conflict   ' Access gave up the save without an error
     SaveTry = Not frm.Dirty
+    If SaveTry Then KitNoteRecord frm   ' the saved record is the new "as loaded" (AfterUpdate may not be wired)
     Exit Function
 Conflict:
     ResolveConflict frm                 ' after the failed save, never inside it

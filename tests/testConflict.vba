@@ -5,6 +5,10 @@ Private Sub Form_Current()
     KitNoteRecord Me
 End Sub
 
+Private Sub Form_AfterUpdate()
+    KitNoteRecord Me
+End Sub
+
 Private Sub Form_BeforeUpdate(Cancel As Integer)
     KitNoteEdits Me
 End Sub

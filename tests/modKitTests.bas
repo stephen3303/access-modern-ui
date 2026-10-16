@@ -918,7 +918,7 @@ Public Function TestKit(ByVal root As String) As String
     lockTry = 0: On Error Resume Next: KitExecute "UPDATE no_such_table SET x = 1": lockTry = Err.Number: On Error GoTo 0
     Check lockTry <> 0, "KitExecute hid a failing query"
     NewForm "test_conflict", 0, px(300), px(80)
-    Ev F, "OnCurrent", "BeforeUpdate", "OnError"
+    Ev F, "OnCurrent", "BeforeUpdate", "AfterUpdate", "OnError"
     Txt "txtName", "name", 0, 0, px(200), px(30)
     Txt "txtQty", "qty", 0, px(40), px(80), px(30)
     SaveForm "frmConflict", "testConflict"
@@ -941,6 +941,16 @@ Public Function TestKit(ByVal root As String) As String
     Check KitSaveRecord(conflictFrm), "Record not saved after keeping the change"
     Check DLookup("name", "test_conflict", "id=1") = "mine again" And DLookup("qty", "test_conflict", "id=1") = 7, "Kept change lost the other user's field"
     Check KitSaveRecord(conflictFrm), "Unchanged record not reported saved"
+    ' After a save of their own, the user's next edit is compared with what
+    ' they saved: the other user's later qty survives Yes.
+    conflictFrm.txtQty = 5
+    Check KitSaveRecord(conflictFrm), "Own change not saved"
+    conflictFrm.txtName = "third"
+    CurrentDb.Execute "UPDATE test_conflict SET qty = 9 WHERE id = 1", dbFailOnError
+    SetConflictAnswer vbYes
+    saved = KitSaveRecord(conflictFrm)
+    Check Not saved And conflictFrm.txtQty = 9 And KitSaveRecord(conflictFrm), "Write conflict: Yes after an own save put a stale field back"
+    Check DLookup("name", "test_conflict", "id=1") = "third" And DLookup("qty", "test_conflict", "id=1") = 9, "Write conflict after an own save lost a field"
     SetConflictAnswer 0
     DoCmd.Close acForm, "frmConflict", acSaveNo
     g_Silent = False
