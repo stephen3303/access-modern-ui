@@ -342,8 +342,8 @@ errors a single-user app never sees, and every app handles them the same way:
   queries through `KitExecute`, save bound forms with `KitSaveRecord`, and wrap your own
   DAO edits in a `LockWait` retry (the pattern is at the top of modKitLocks).
 - **Write conflicts** (7787, 7878): someone saved the record after this user started
-  editing it. Every bound form that edits shared data calls `KitNoteEdits Me` in its
-  `BeforeUpdate`, has a `Form_Error` that calls `KitFormError Me, DataErr, Response`, and
+  editing it. Every bound form that edits shared data calls `KitNoteRecord Me` in its
+  `Current` and `KitNoteEdits Me` in its `BeforeUpdate`, has a `Form_Error` that calls `KitFormError Me, DataErr, Response`, and
   saves with `KitSaveRecord`. On a conflict the user gets a `KitMsgBox` naming the fields
   they changed: Yes puts those back over the other user's record (they save again), No
   shows the other user's version. Saves Access starts itself (moving off the record,

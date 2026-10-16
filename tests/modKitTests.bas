@@ -918,7 +918,7 @@ Public Function TestKit(ByVal root As String) As String
     lockTry = 0: On Error Resume Next: KitExecute "UPDATE no_such_table SET x = 1": lockTry = Err.Number: On Error GoTo 0
     Check lockTry <> 0, "KitExecute hid a failing query"
     NewForm "test_conflict", 0, px(300), px(80)
-    Ev F, "BeforeUpdate", "OnError"
+    Ev F, "OnCurrent", "BeforeUpdate", "OnError"
     Txt "txtName", "name", 0, 0, px(200), px(30)
     Txt "txtQty", "qty", 0, px(40), px(80), px(30)
     SaveForm "frmConflict", "testConflict"

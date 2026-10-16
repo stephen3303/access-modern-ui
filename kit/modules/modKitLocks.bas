@@ -28,6 +28,9 @@ Option Explicit
 '       HandleError "pgItems.CloseItem"
 '
 ' For bound forms, add these to the form's code-behind:
+'   Private Sub Form_Current()
+'       KitNoteRecord Me
+'   End Sub
 '   Private Sub Form_BeforeUpdate(Cancel As Integer)
 '       KitNoteEdits Me                ' (with any checks of your own)
 '   End Sub
@@ -58,8 +61,13 @@ Private m_inSave As Boolean     ' KitSaveRecord is running (its retries wait wit
 Private m_saving As Boolean     ' KitSaveRecord is saving: KitFormError leaves locks and conflicts to it
 Private m_formLock As Long      ' the lock error KitFormError passed on to KitSaveRecord
 Private m_conflictForm As String ' the form whose save hit a write conflict, for SaveTry to resolve
-' The user's edits, noted by KitNoteEdits before each save (inside
-' Form_Error, OldValue already holds the other user's saved values).
+' The record as loaded, noted by KitNoteRecord (Form_Current): by the time
+' of BeforeUpdate or Form_Error, OldValue already holds the other user's
+' saved values, so it can't tell the user's edits from theirs.
+Private m_recForm As String
+Private m_recBm As Variant      ' that record's bookmark
+Private m_recVals As Collection ' bound control values, keyed by control name
+' The user's edits, noted by KitNoteEdits before each save.
 Private m_editForm As String
 Private m_names As Collection   ' changed controls
 Private m_fields As Collection  ' what the user calls them, for the message
@@ -153,29 +161,70 @@ Fail:
     LogError "modKitLocks.KitFormError", frm.Name & " error " & DataErr
 End Sub
 
+' A bound form's Current (see the top of the module): note the record's
+' bound values as loaded, for KitNoteEdits to compare against.
+Public Sub KitNoteRecord(frm As Form)
+    Dim c As Control
+    m_recForm = ""
+    Set m_recVals = New Collection
+    If frm.NewRecord Then Exit Sub      ' nothing loaded: every value is the user's
+    On Error GoTo Fail
+    m_recBm = frm.Bookmark
+    For Each c In frm.Controls
+        If IsBoundEditor(c) Then m_recVals.Add c.Value, c.Name
+    Next
+    m_recForm = frm.Name
+    Exit Sub
+Fail:
+    m_recForm = ""                      ' no bookmark: a conflict keeps Access's window
+End Sub
+
 ' A bound form's BeforeUpdate (see the top of the module): note which
-' bound controls the user changed and their values, so a write conflict can
-' name them and, on Yes, put back only those.
+' bound controls the user changed (against the record as KitNoteRecord
+' noted it) and their values, so a write conflict can name them and, on
+' Yes, put back only those.
 Public Sub KitNoteEdits(frm As Form)
-    Dim c As Control, src As String
+    Dim c As Control, src As String, loaded As Boolean, was As Variant
     Set m_names = New Collection
     Set m_fields = New Collection
     Set m_vals = New Collection
+    m_editForm = ""
+    loaded = SameRecord(frm)
+    If Not loaded And Not frm.NewRecord Then Exit Sub   ' no Form_Current note: a conflict keeps Access's window
     m_editForm = frm.Name
     For Each c In frm.Controls
-        Select Case c.ControlType
-            Case acTextBox, acComboBox, acCheckBox, acToggleButton, acListBox, acOptionGroup
-                src = c.ControlSource
-                If Len(src) > 0 And Left$(src, 1) <> "=" Then
-                    If Not SameValue(c.Value, c.OldValue) Then
-                        m_names.Add c.Name
-                        m_fields.Add FieldCaption(c, src)
-                        m_vals.Add c.Value
-                    End If
-                End If
-        End Select
+        If IsBoundEditor(c) Then
+            src = c.ControlSource
+            If loaded Then was = m_recVals(c.Name) Else was = Null     ' a new record: all the user's
+            If Not SameValue(c.Value, was) Then
+                m_names.Add c.Name
+                m_fields.Add FieldCaption(c, src)
+                m_vals.Add c.Value
+            End If
+        End If
     Next
 End Sub
+
+' True when KitNoteRecord noted frm's current record.
+Private Function SameRecord(frm As Form) As Boolean
+    Dim bm As Variant
+    If m_recForm <> frm.Name Or frm.NewRecord Then Exit Function
+    On Error GoTo Fail
+    bm = frm.Bookmark
+    SameRecord = (StrComp(bm, m_recBm, vbBinaryCompare) = 0)
+    Exit Function
+Fail:
+End Function
+
+' True for a control the user edits that is bound to a field.
+Private Function IsBoundEditor(c As Control) As Boolean
+    Dim src As String
+    Select Case c.ControlType
+        Case acTextBox, acComboBox, acCheckBox, acToggleButton, acListBox, acOptionGroup
+            src = c.ControlSource
+            IsBoundEditor = Len(src) > 0 And Left$(src, 1) <> "="
+    End Select
+End Function
 
 ' Tests only: answer the next conflicts with vbYes or vbNo instead of
 ' asking (0 asks again).
