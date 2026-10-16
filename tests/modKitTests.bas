@@ -957,6 +957,8 @@ Public Function TestKit(ByVal root As String) As String
     Dim sf2 As Form, added As Long
     Check Len(WinUser()) > 0 And StrComp(WinUser(), Environ$("USERNAME"), vbTextCompare) = 0, "WinUser is not the Windows account"
     Check Len(WinComputer()) > 0 And StrComp(WinComputer(), Environ$("COMPUTERNAME"), vbTextCompare) = 0, "WinComputer is not this computer"
+    Check StrComp(WinAccount(), Environ$("USERDOMAIN") & "\" & Environ$("USERNAME"), vbTextCompare) = 0, "WinAccount is not DOMAIN\user"
+    Check WinSid() Like "S-1-5-*-*" And WinSid() = WinSid(), "WinSid is not this account's SID"
     TempVars("Username") = Null
     Check KitUser() = WinUser(), "KitUser without a sign-in is not the Windows account"
     TempVars("Username") = "O'Neil"

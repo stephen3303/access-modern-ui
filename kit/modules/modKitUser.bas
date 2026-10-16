@@ -29,9 +29,24 @@ Public Const STAMP_USER_LEN As Long = 150      ' the by columns' width, as error
 
 Private Declare PtrSafe Function GetUserNameW Lib "advapi32" (ByVal lpBuffer As LongPtr, nSize As Long) As Long
 Private Declare PtrSafe Function GetComputerNameW Lib "kernel32" (ByVal lpBuffer As LongPtr, nSize As Long) As Long
+Private Declare PtrSafe Function GetUserNameExW Lib "secur32" (ByVal NameFormat As Long, ByVal lpNameBuffer As LongPtr, nSize As Long) As Long
+Private Declare PtrSafe Function GetCurrentProcess Lib "kernel32" () As LongPtr
+Private Declare PtrSafe Function OpenProcessToken Lib "advapi32" (ByVal ProcessHandle As LongPtr, ByVal DesiredAccess As Long, TokenHandle As LongPtr) As Long
+Private Declare PtrSafe Function GetTokenInformation Lib "advapi32" (ByVal TokenHandle As LongPtr, ByVal TokenInformationClass As Long, TokenInformation As Any, ByVal TokenInformationLength As Long, ReturnLength As Long) As Long
+Private Declare PtrSafe Function ConvertSidToStringSidW Lib "advapi32" (ByVal Sid As LongPtr, StringSid As LongPtr) As Long
+Private Declare PtrSafe Function CloseHandle Lib "kernel32" (ByVal hObject As LongPtr) As Long
+Private Declare PtrSafe Function LocalFree Lib "kernel32" (ByVal hMem As LongPtr) As LongPtr
+Private Declare PtrSafe Function lstrlenW Lib "kernel32" (ByVal lpString As LongPtr) As Long
+Private Declare PtrSafe Sub CopyMemory Lib "kernel32" Alias "RtlMoveMemory" (Destination As Any, Source As Any, ByVal Length As LongPtr)
+
+Private Const NAME_SAM_COMPATIBLE As Long = 2   ' EXTENDED_NAME_FORMAT: DOMAIN\user
+Private Const TOKEN_QUERY As Long = 8
+Private Const TOKEN_USER_CLASS As Long = 1      ' TOKEN_INFORMATION_CLASS.TokenUser
 
 Private m_winUser As String
 Private m_computer As String
+Private m_account As String
+Private m_sid As String
 
 ' The Windows account running Access ("jsmith"), read once from Windows; the
 ' USERNAME environment variable only if Windows doesn't answer.
@@ -57,6 +72,47 @@ Public Function WinComputer() As String
         If Len(m_computer) = 0 Then m_computer = Environ$("COMPUTERNAME")
     End If
     WinComputer = m_computer
+End Function
+
+'' The full Windows account, DOMAIN\user ("NAVY\jsmith", or "PC-042\jsmith"
+' off a domain), read once from Windows (GetUserNameExW); the USERDOMAIN and
+' USERNAME variables only if Windows doesn't answer. Use this, not
+' WinUser(), to match a person record: two domains can both have a jsmith.
+Public Function WinAccount() As String
+    Dim buf As String, n As Long
+    If Len(m_account) = 0 Then
+        n = 512
+        buf = String$(n, vbNullChar)
+        If GetUserNameExW(NAME_SAM_COMPATIBLE, StrPtr(buf), n) <> 0 Then m_account = Left$(buf, n)
+        If Len(m_account) = 0 Then m_account = Environ$("USERDOMAIN") & "\" & WinUser()
+    End If
+    WinAccount = m_account
+End Function
+
+' The Windows account's security ID ("S-1-5-21-...-1104"), from Access's own
+' process token, read once. It stays the same when the account is renamed,
+' so it is the surest way to know a person again. "" if Windows doesn't
+' answer; there is no environment fallback, since a SID that can be typed
+' in can't be trusted.
+Public Function WinSid() As String
+    Dim hTok As LongPtr, need As Long, buf() As Byte, pSid As LongPtr, pStr As LongPtr, n As Long
+    If Len(m_sid) > 0 Then WinSid = m_sid: Exit Function
+    If OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, hTok) = 0 Then Exit Function
+    GetTokenInformation hTok, TOKEN_USER_CLASS, ByVal 0&, 0, need     ' asks the size; fails by design
+    If need > 0 Then
+        ReDim buf(0 To need - 1)
+        If GetTokenInformation(hTok, TOKEN_USER_CLASS, buf(0), need, need) <> 0 Then
+            CopyMemory pSid, buf(0), LenB(pSid)                     ' TOKEN_USER starts with the SID pointer
+            If ConvertSidToStringSidW(pSid, pStr) <> 0 Then
+                n = lstrlenW(pStr)
+                m_sid = String$(n, vbNullChar)
+                CopyMemory ByVal StrPtr(m_sid), ByVal pStr, n * 2
+                LocalFree pStr
+            End If
+        End If
+    End If
+    CloseHandle hTok
+    WinSid = m_sid
 End Function
 
 ' The name to record as the person doing something: the app's signed-in

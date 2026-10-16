@@ -355,6 +355,8 @@ anyone can change it before Access starts. Every table several users edit has
 `created_by`, `created_at`, `updated_by` and `updated_at` (`AddStampFields`), filled by
 `StampRecord Me` in the bound form's `BeforeUpdate` and by `StampSql()` or
 `StampColumns()`/`StampValues()` in SQL writes.
+To recognise a person (sign-in, a person record), match `WinAccount()` (DOMAIN\user)
+or `WinSid()`, never the bare `WinUser()`: two domains can both have a jsmith.
 
 ---
 
