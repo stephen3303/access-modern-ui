@@ -724,6 +724,102 @@ Public Function Toggle(ByVal nm As String, ByVal src As String, ByVal x As Long,
     Set Toggle = c
 End Function
 
+' Segmented control: two to six options side by side on a rounded track, one
+' of them picked, like a web "toggle group" or iOS segmented control (Week |
+' Month | Year, List | Board). The picked option sits on a raised CLR_SURFACE
+' thumb in CLR_FG bold; the others are CLR_MUTED_FG on the CLR_SECONDARY_BG
+' track. Use it for a short, fixed choice that changes what the page shows;
+' a long or data-driven list is a combo box.
+' items are "key|Caption" pairs separated by ";", "week|Week;month|Month".
+' Keys are text without quotes, "|" or ";". src is the field it shows and
+' changes (text or number: a number field takes the key as its value), or ""
+' for an unbound control that starts on the first item. w x h is the track,
+' 32px tall by default; the options share its width equally.
+' Access has no such control, so it is built from plain ones (i from 0):
+'   <nm>_val   a hidden text box bound to src: the value (SegmentValue, or
+'              read Me!<nm>_val); its Tag lists the keys
+'   <nm>_ring  a CLR_PRIMARY focus ring 2px outside the track, shown while an
+'              option has the focus
+'   <nm>_bg    the track image
+'   <nm>_th<i> option i's thumb image, drawn only while i is picked: its
+'              expression reads <nm>_val, so moving to another record moves
+'              the thumb with no code
+'   <nm>_t<i>  option i's caption, bold CLR_FG by a conditional format while
+'              i is picked
+'   <nm>_b<i>  a transparent button over option i that takes its clicks, a
+'              Tab stop and Space (SegmentClick in modKitUI)
+' onChange names a Public Sub in the form's code-behind, called with no
+' arguments after the user picks another option (not on a click on the picked
+' one, and not for SetSegment). Single forms only, like Toggle: raises error 5
+' on a continuous form, for fewer than 2 or more than 6 items, a bad or repeated
+' key, or options narrower than 40px. Returns the value box <nm>_val.
+Public Function Segmented(ByVal nm As String, ByVal src As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, _
+        ByVal items As String, Optional ByVal h As Long = 480, Optional ByVal onChange As String = "", _
+        Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control
+    Const PAD As Long = 3                ' px between the track's edge and a thumb
+    Dim parts() As String, p() As String, keys() As String, caps() As String
+    Dim n As Long, i As Long, j As Long, segPx As Long, hPx As Long, trackPx As Long, thPx As Long
+    Dim c As Control, v As Control, sx As Long, cond As String
+    If F.DefaultView <> 0 Then Err.Raise 5, , "Segmented " & nm & " needs a single-record form: one thumb would show on every row"
+    parts = Split(items, ";")
+    n = UBound(parts) + 1
+    If n < 2 Or n > 6 Then Err.Raise 5, , "Segmented " & nm & " takes 2 to 6 items: " & items
+    ReDim keys(n - 1): ReDim caps(n - 1)
+    For i = 0 To n - 1
+        p = Split(parts(i), "|")
+        If UBound(p) <> 1 Then Err.Raise 5, , "Segmented " & nm & " item is not key|Caption: " & parts(i)
+        keys(i) = Trim$(p(0)): caps(i) = p(1)
+        If Len(keys(i)) = 0 Or InStr(keys(i), """") > 0 Then Err.Raise 5, , "Segmented " & nm & " has a bad key: " & parts(i)
+        For j = 0 To i - 1
+            If keys(j) = keys(i) Then Err.Raise 5, , "Segmented " & nm & " repeats the key " & keys(i)
+        Next
+    Next
+    hPx = h \ 15
+    segPx = (w \ 15 - 2 * PAD) \ n
+    If segPx < 40 Then Err.Raise 5, , "Segmented " & nm & " is too narrow: each option needs 40px"
+    trackPx = 2 * PAD + n * segPx
+    thPx = hPx - 2 * PAD
+    Set v = Mk(acTextBox, nm & "_val", x, y, px(13), px(13), sec, parentCtl)
+    If Len(src) > 0 Then v.ControlSource = src Else v.DefaultValue = """" & keys(0) & """"
+    v.Visible = False
+    v.TabStop = False
+    v.Tag = Join(keys, ";")
+    ' Created back to front: ring, track, thumbs, captions, then the buttons.
+    Set c = Mk(acImage, nm & "_ring", x - px(4), y - px(4), px(trackPx + 8), px(hPx + 8), sec, parentCtl)
+    ImageProps c
+    c.Properties("ControlSource") = "=RingPng(" & CLR_PRIMARY & "," & trackPx + 8 & "," & hPx + 8 & ")"
+    c.Visible = False
+    Set c = Mk(acImage, nm & "_bg", x, y, px(trackPx), px(hPx), sec, parentCtl)
+    ImageProps c
+    c.Properties("ControlSource") = "=PillPng(" & CLR_SECONDARY_BG & "," & trackPx & "," & hPx & ")"
+    For i = 0 To n - 1
+        sx = x + px(PAD + i * segPx)
+        cond = "Nz([" & nm & "_val],"""") & """"=""" & keys(i) & """"
+        Set c = Mk(acImage, nm & "_th" & i, sx, y + px(PAD), px(segPx), px(thPx), sec, parentCtl)
+        ImageProps c
+        c.Properties("ControlSource") = "=IIf(" & cond & ",PillPng(" & CLR_SURFACE & "," & segPx & "," & thPx & "),Null)"
+    Next
+    For i = 0 To n - 1
+        sx = x + px(PAD + i * segPx)
+        Set c = RO(nm & "_t" & i, "=""" & Replace(caps(i), """", """""") & """", sx, y + px(PAD), px(segPx), px(thPx), 9, False, CLR_MUTED_FG, sec, parentCtl)
+        c.TextAlign = 2
+        CF c, cond, -1, CLR_FG, True
+    Next
+    For i = 0 To n - 1
+        sx = x + px(PAD + i * segPx)
+        Set c = Mk(acCommandButton, nm & "_b" & i, sx, y, px(segPx), h, sec, parentCtl)
+        c.Transparent = True
+        c.Tag = onChange
+        c.ControlTipText = caps(i)
+        ' A command button raises Click for both halves of a double click, so
+        ' OnDblClick stays empty (a second click on the picked option is ignored).
+        c.OnClick = "=SegmentClick([Form],""" & nm & """,""" & keys(i) & """)"
+        c.OnGotFocus = "=ToggleFocus([Form],""" & nm & """,True)"
+        c.OnLostFocus = "=ToggleFocus([Form],""" & nm & """,False)"
+    Next
+    Set Segmented = v
+End Function
+
 ' kind: primary | outline | ghost | destructive | nav
 Public Function Btn(ByVal nm As String, ByVal cap As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
         Optional ByVal kind As String = "primary", Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control

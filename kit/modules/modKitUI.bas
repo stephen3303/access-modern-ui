@@ -5,7 +5,8 @@ Option Explicit
 ' scale their columns (GridFit), list/detail pages (SelectFirstRow,
 ' ShowDetail, ClearDetail), search matches marked in tables (GridHighlight),
 ' tabs and filter chips with counts (SetCount, StyleChip), focus rings on
-' inputs (FocusRing), toggle switches (ToggleSwitch, ToggleFocus), the splash
+' inputs (FocusRing), toggle switches (ToggleSwitch, ToggleFocus), segmented
+' controls (SegmentClick, SetSegment, SegmentValue), the splash
 ' screen's status line (SplashStatus) and messages and questions in the kit's
 ' look (KitMsgBox, KitInputBox, and KitToast for ones that fade on their own).
 ' Colors set here go through Th() so they follow the palette.
@@ -894,6 +895,57 @@ Public Function ToggleFocus(frm As Form, ByVal nm As String, ByVal hasFocus As B
 Fail:
     LogError "modKitUI.ToggleFocus", nm
 End Function
+
+' A Segmented option's click (set by the builder): pick option key, move the
+' thumb and bold its caption, then call the control's onChange. Does nothing
+' when key is already picked, while the value is disabled or locked, or on a
+' read-only form.
+Public Function SegmentClick(frm As Form, ByVal nm As String, ByVal key As String)
+    Dim v As Control, onChange As String
+    On Error GoTo Fail
+    Set v = frm.Controls(nm & "_val")
+    If Not v.Enabled Or v.Locked Then Exit Function
+    ' Nested, so an unbound settings form never reads NewRecord.
+    If Not frm.AllowEdits Then
+        If Not (frm.NewRecord And frm.AllowAdditions) Then Exit Function
+    End If
+    If Nz(v.Value, "") & "" = key Then Exit Function
+    v.Value = key
+    SegmentPaint frm, nm
+    onChange = Nz(frm.Controls(nm & "_b0").Tag, "")
+    If Len(onChange) > 0 Then CallByName frm, onChange, VbMethod
+    Exit Function
+Fail:
+    HandleError "modKitUI.SegmentClick", nm
+End Function
+
+' Pick option key of Segmented control nm in code, without calling its
+' onChange (as a value set in code fires no AfterUpdate). Raises error 5 for a
+' key the control doesn't have. A bound control follows its field on its own:
+' call this only to change the value.
+Public Sub SetSegment(frm As Form, ByVal nm As String, ByVal key As String)
+    Dim v As Control
+    Set v = frm.Controls(nm & "_val")
+    If InStr(";" & v.Tag & ";", ";" & key & ";") = 0 Then Err.Raise 5, , "Segmented " & nm & " has no option " & key
+    v.Value = key
+    SegmentPaint frm, nm
+End Sub
+
+' The picked key of Segmented control nm, as text ("" when none is).
+Public Function SegmentValue(frm As Form, ByVal nm As String) As String
+    SegmentValue = Nz(frm.Controls(nm & "_val").Value, "") & ""
+End Function
+
+' Redraw a Segmented control after its value changed in code: an unbound
+' image and a calculated caption only recalculate when asked.
+Private Sub SegmentPaint(frm As Form, ByVal nm As String)
+    Dim i As Long, n As Long
+    n = UBound(Split(frm.Controls(nm & "_val").Tag, ";")) + 1
+    For i = 0 To n - 1
+        frm.Controls(nm & "_th" & i).Requery
+        frm.Controls(nm & "_t" & i).Requery
+    Next
+End Sub
 
 ' ---------------------------------------------------------------------------
 ' Messages

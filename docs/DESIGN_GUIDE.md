@@ -139,7 +139,7 @@ them, and the shell (`frmMain`) last.
 | modBuildUI, modBuildPages, modBuildPages2 | `Build_<form>` procedures, one per form, grouped by area |
 | modUI | Run-time UI helpers: `NavTo`, badges/pills painting, `ShowTip`, the app's hooks (`BadgeColors`, `StatusVariant`) |
 | modUIKit (kit) | Build-time control builders (section 6) |
-| modKitUI (kit) | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSwitch`, `ToggleFocus`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `KitToast`, `KitInputBox`, `CheckRequired`, `SetCount`, `StyleChip` |
+| modKitUI (kit) | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSwitch`, `ToggleFocus`, `SegmentClick`, `SetSegment`, `SegmentValue`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `KitToast`, `KitInputBox`, `CheckRequired`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
 | modGridCols (kit) | Column chooser: `ChooseGridColumns`, `RestoreGridColumns`, `SetGridColumns`, and `BuildColumnsDialog` for `dlgColumns` |
 | modGridFilter (kit) | Header filters: `GridFilter`, `SetGridFilter`, `SetColumnFilter`, `ClearGridFilters`, `GridFilterWhere`, and `BuildFilterDialog` for `dlgFilter` |
@@ -406,6 +406,9 @@ End Sub
   - `Toggle nm, src, x, y, [w], [h], [onChange]`: an on/off switch for a yes/no field
     (section 6.6). Use it for settings and flags that take effect at once; keep `Chk`
     for a choice saved with the rest of a form.
+  - `Segmented nm, src, x, y, w, items, [h], [onChange]`: a segmented control for one of
+    2 to 6 short options that changes what the page shows (section 6.6). Use a combo box
+    for a longer or data-driven list.
   - `Btn ... kind`: `primary`, `outline`, `ghost`, `destructive` or `nav`, each with
     themed hover and pressed colors and `Shape = 1` for rounded corners.
   - `Link`: clickable label.
@@ -736,6 +739,18 @@ Write app-specific helpers next to the builds that use them. Examples:
   Hide it with `SetVisible` on `<nm>`, and the track goes too; `SetEnabled` on `<nm>`
   stops clicks and the Tab stop but doesn't dim the track. Use it on single forms only:
   in a continuous form the ring shows on every row.
+- **Segmented control**: `Segmented` lays 2 to 6 options side by side on a capsule track
+  in `CLR_SECONDARY_BG`, 32px tall by default (28px beside a card title), sharing its width
+  equally; give each option at least 40px, and its caption room at 9pt. The picked option sits on a
+  `CLR_SURFACE` capsule thumb inset 3px, its caption bold `CLR_FG`; the others are
+  `CLR_MUTED_FG`, like a web toggle group. It is a hidden text box `<nm>_val` holding the picked key
+  (bound to a text or number field, or unbound and starting on the first item), the track
+  image, one thumb image per option whose expression shows it only while that option is picked,
+  so a bound control follows the record with no code, the captions with a conditional
+  format, and a transparent button per option (`SegmentClick`) that takes clicks, a Tab stop
+  and Space. The focus ring is the `Toggle`'s, around the whole track, so leave 4px clear.
+  Act on a change in `onChange`; read the value with `SegmentValue` and set it with
+  `SetSegment`, which calls no `onChange`. Single forms only.
 - **Empty states**: a centered muted 10pt label shown in place of an empty list. Hide the
   list's subform while it shows (`SetVisible`): a subform always covers a label.
 - **Toasts** (`KitToast`, `dlgToast`): a 360px borderless pop-up on `CLR_SURFACE` with

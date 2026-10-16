@@ -12,6 +12,22 @@ Err_Handler:
     HandleError "pgCards.Form_Load"
 End Sub
 
+' The segmented control's onChange: All, Open (not yet complete or cancelled)
+' or Done.
+Public Sub ShowChanged()
+    On Error GoTo Err_Handler
+    With Me.sfItems.Form
+        Select Case SegmentValue(Me, "segShow")
+            Case "open": .Filter = "status Not In ('Complete','Cancelled')": .FilterOn = True
+            Case "done": .Filter = "status In ('Complete','Cancelled')": .FilterOn = True
+            Case Else: .Filter = "": .FilterOn = False
+        End Select
+    End With
+    Exit Sub
+Err_Handler:
+    HandleError "pgCards.ShowChanged"
+End Sub
+
 ' Row click in the table (subGrid): nothing to open on this page.
 Public Sub GridClick(ByVal grid As String, ByVal dbl As Boolean)
 End Sub

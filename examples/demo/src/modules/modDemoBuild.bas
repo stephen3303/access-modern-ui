@@ -200,7 +200,8 @@ End Sub
 ' Cards and progress: rounded cards, the square fallback, progress capsules
 ' at 0, 37 and 100 percent, and a table inside a rounded card. The rounded
 ' card's Primary button shows a message (KitMsgBox) and Outline a toast
-' (KitToast), a different variant each click.
+' (KitToast), a different variant each click. A segmented control (All, Open,
+' Done) beside the table's title filters it.
 Private Sub Build_pgCards()
     Dim c As Control, x As Long, y As Long, w As Long, h As Long, i As Long, pct As Variant
     NewForm "", 0, PAGE_W, PAGE_H
@@ -233,6 +234,7 @@ Private Sub Build_pgCards()
 
     y = px(250): h = PAGE_H - y - px(16)
     Card "Items", "Items in a rounded card", CX, y, CW(), h, , 2, 2
+    Segmented "segShow", "", CX + px(220), y + px(6), px(210), "all|All;open|Open;done|Done", px(28), "ShowChanged"
     GridHeaders "hdrItems", CardCols(), CX + px(16), y + px(40), w:=CW() - px(32)
     Set c = SubF("sfItems", "subGridCards", CX + px(16), y + px(62), CW() - px(32), h - px(78)): Anchor c, 2, 2
     SaveForm "pgCards"

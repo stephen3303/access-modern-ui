@@ -61,6 +61,7 @@ Public Function TestKit(ByVal root As String) As String
     Txt "reqA", "", 0, px(660), px(80), px(30)
     Txt "reqB", "", px(100), px(660), px(80), px(30)
     Toggle "tglTest", "", px(220), px(663), onChange:="ToggleChanged"
+    Segmented "segTest", "", px(700), px(660), px(240), "day|Day;week|Week;month|Month", onChange:="SegmentChanged"
     SecretBox "secret", "", px(400), px(700), px(160), px(30)     ' clear of the ring, required and toggle fields
     SaveForm "frmTest", "testHost"
     DoCmd.OpenForm "frmTest"
@@ -248,6 +249,33 @@ Public Function TestKit(ByVal root As String) As String
     Check Not host.tglTest_ring.Visible, "Focus ring stayed after focus left"
     host.ringA.SetFocus: host.tglTest.SetFocus
     Check host.ringA.BorderColor = CLR_INPUT_BORDER, "Input kept its focus ring while the switch had the focus"
+    ' Segmented control: starts on the first item, a click picks and calls onChange
+    ' once, the picked item and a locked control ignore clicks, SetSegment is quiet.
+    Check SegmentValue(host, "segTest") = "day", "Unbound segmented control did not start on its first item"
+    Check host.segTest_th1.Left = host.segTest_th0.Left + host.segTest_th0.Width, "Segmented options are not side by side"
+    Check host.segTest_b2.Left + host.segTest_b2.Width <= host.segTest_bg.Left + host.segTest_bg.Width, "Segmented option overruns its track"
+    Check InStr(Nz(host.segTest_th1.Properties("ControlSource").Value, ""), "PillPng(") > 0, "Segmented thumb is not drawn"
+    Check host.segTest_t0.FormatConditions.Count = 1, "Segmented caption has no picked format"
+    SegmentClick host, "segTest", "week"
+    Check SegmentValue(host, "segTest") = "week", "Segmented click did not pick its item"
+    Check host.segmentChanges = 1, "Segmented onChange did not run"
+    SegmentClick host, "segTest", "week"
+    Check host.segmentChanges = 1, "Click on the picked item ran onChange"
+    SetSegment host, "segTest", "month"
+    Check SegmentValue(host, "segTest") = "month" And host.segmentChanges = 1, "SetSegment did not pick quietly"
+    On Error Resume Next
+    SetSegment host, "segTest", "year": badName = Err.Number: Err.Clear
+    On Error GoTo 0
+    Check badName = 5 And SegmentValue(host, "segTest") = "month", "SetSegment accepted an unknown item"
+    host.segTest_val.Locked = True
+    SegmentClick host, "segTest", "day"
+    Check SegmentValue(host, "segTest") = "month" And host.segmentChanges = 1, "Locked segmented control changed"
+    host.segTest_val.Locked = False
+    Check Not host.segTest_ring.Visible, "Segmented focus ring shows without focus"
+    host.segTest_b1.SetFocus
+    Check host.segTest_ring.Visible, "Focused segmented option shows no ring"
+    host.txtFocusSink.SetFocus
+    Check Not host.segTest_ring.Visible, "Segmented focus ring stayed after focus left"
     host.ringA.SetFocus
     Check host.ringA.BorderColor = CLR_PRIMARY, "Focused input lacks its focus ring"
     host.ringB.SetFocus
@@ -352,6 +380,22 @@ Public Function TestKit(ByVal root As String) As String
     On Error GoTo 0
     DoCmd.Close acForm, F.Name, acSaveNo
     Check badView = 5, "SecretBox accepted a continuous form"
+    NewForm "", 1, px(300), px(100)
+    On Error Resume Next
+    Segmented "seg", "", 0, 0, px(200), "a|A;b|B": badView = Err.Number: Err.Clear
+    On Error GoTo 0
+    DoCmd.Close acForm, F.Name, acSaveNo
+    Check badView = 5, "Segmented accepted a continuous form"
+    NewForm "", 0, px(300), px(100)
+    On Error Resume Next
+    Segmented "seg1", "", 0, 0, px(200), "a|A": badName = Err.Number: Err.Clear
+    Segmented "seg2", "", 0, 0, px(200), "a|A;a|Again": badScale = Err.Number: Err.Clear
+    Segmented "seg3", "", 0, 0, px(100), "a|A;b|B;c|C": badView = Err.Number: Err.Clear
+    On Error GoTo 0
+    DoCmd.Close acForm, F.Name, acSaveNo
+    Check badName = 5, "Segmented accepted one item"
+    Check badScale = 5, "Segmented accepted a repeated key"
+    Check badView = 5, "Segmented accepted options narrower than 40px"
     ' Splash: CloseSplash and SplashStatus do nothing without one, the footer clears the
     ' subtitle, and the bitmap that hides Access's splash is 58 bytes.
     CloseSplash
