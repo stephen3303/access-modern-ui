@@ -507,13 +507,20 @@ function Exit-ReviewLock {
     [pscustomobject]@{ Released = $released }
 }
 
+# True for a fully qualified path: C:\x, a UNC path \\server\share\x, or /x off Windows.
+# IsPathRooted alone also accepts C:x (relative to drive C's current folder) and \x
+# (relative to the current drive), which still depend on where the process is.
+function Test-FullPath([string]$Path) {
+    $Path -match '^[A-Za-z]:[\\/]' -or $Path -match '^[\\/]{2}[^\\/]' -or ([IO.Path]::DirectorySeparatorChar -eq '/' -and $Path.StartsWith('/'))
+}
+
 # Folder for captures and snapshots: ACCESS_REVIEW_OUTPUT, or %LOCALAPPDATA%\AccessReview.
 # A relative setting would resolve against whichever folder the server or Access happens
 # to be in, so it is refused.
 function Get-ReviewOutputBase {
     $base = Get-ReviewSetting 'ACCESS_REVIEW_OUTPUT'
     if (-not $base) { return (Join-Path $env:LOCALAPPDATA 'AccessReview') }
-    if (-not [IO.Path]::IsPathRooted($base)) { throw "ACCESS_REVIEW_OUTPUT: '$base' is not a full path." }
+    if (-not (Test-FullPath $base)) { throw "ACCESS_REVIEW_OUTPUT: '$base' is not a full path." }
     [IO.Path]::GetFullPath($base)
 }
 
@@ -533,7 +540,7 @@ function Test-PathInFolder([string]$Path, [string]$FolderPath) {
 function Assert-ReviewFileAllowed([string]$Path) {
     $allowed = @(((Get-ReviewSetting 'ACCESS_REVIEW_ALLOWED_FOLDERS') -split ';') | ForEach-Object { $_.Trim() } | Where-Object { $_ })
     foreach ($a in $allowed) {
-        if (-not [IO.Path]::IsPathRooted($a)) { throw "ACCESS_REVIEW_ALLOWED_FOLDERS: '$a' is not a full path." }
+        if (-not (Test-FullPath $a)) { throw "ACCESS_REVIEW_ALLOWED_FOLDERS: '$a' is not a full path." }
     }
     $inside = @($allowed | Where-Object { Test-PathInFolder $Path $_ })
     if ($allowed.Count -and -not $inside.Count) {
@@ -1001,10 +1008,16 @@ function Save-ReviewSnapshot {
     $dir = Get-ReviewSnapshotDir $Label
     $names = if ($Forms) { $Forms } else { Get-ReviewFormNames }
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
-    if (-not $Forms) { Get-ChildItem -LiteralPath $dir -File | Where-Object { $_.Extension -in '.txt', '.failed' } | Remove-Item }
+    if (-not $Forms) { Get-ChildItem -LiteralPath $dir -File | Where-Object { $_.Extension -in '.txt', '.failed', '.list' } | Remove-Item }
     $dialogs = @(); $saved = @(); $failed = @()
+    $badList = Join-Path $dir 'unsaved-names.list'
     foreach ($n in $names) {
-        if ($n -match '[\\/:*?"<>|]') { $failed += [pscustomobject]@{ Form = $n; Error = "The name has a character that can't be used in a file name." }; continue }
+        if ($n -match '[\\/:*?"<>|]') {
+            # No file can carry this name, so it goes in a list compare_snapshots reads.
+            $known = if (Test-Path -LiteralPath $badList) { @(Get-Content -LiteralPath $badList -Encoding UTF8) } else { @() }
+            if ($known -notcontains $n) { Add-Content -LiteralPath $badList -Value $n -Encoding UTF8 }
+            $failed += [pscustomobject]@{ Form = $n; Error = "The name has a character that can't be used in a file name." }; continue
+        }
         $path = Join-Path $dir "$n.txt"; $mark = Join-Path $dir "$n.failed"
         # Clear this form's earlier result first, so a failed save never leaves an old
         # definition behind to be compared as if it were this build's.

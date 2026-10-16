@@ -149,6 +149,9 @@ try {
     [IO.File]::WriteAllText((Join-Path $a 'frmBroken.failed'), 'SaveAsText failed')
     $cmp = Compare-FormSnapshotFolder -BeforeDir $b -AfterDir $a
     Check 'failed snapshot not compared' (($cmp.FormsRemoved -join ',') -eq 'frmOld' -and ($cmp.NotCompared -join ',') -eq 'frmBroken (snapshot failed in after)')
+    [IO.File]::WriteAllText((Join-Path $b 'unsaved-names.list'), "frm:Odd`r`n")
+    $cmp = Compare-FormSnapshotFolder -BeforeDir $b -AfterDir $a
+    Check 'unsaveable name not compared' (@($cmp.NotCompared) -contains 'frm:Odd (snapshot failed in before)')
     Check 'report lists not compared' ((Format-FormSnapshotReport $cmp 'x') -match '\? form frmBroken \(snapshot failed in after\), not compared')
 } finally { Remove-Item -Recurse -Force $root }
 

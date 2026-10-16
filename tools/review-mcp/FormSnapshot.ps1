@@ -174,7 +174,12 @@ function Compare-FormSnapshotFolder {
     param([Parameter(Mandatory)][string]$BeforeDir, [Parameter(Mandatory)][string]$AfterDir, [string[]]$Forms)
     foreach ($d in $BeforeDir, $AfterDir) { if (-not (Test-Path -LiteralPath $d -PathType Container)) { throw "No snapshot at $d." } }
     $list = { param($dir) @(Get-ChildItem -LiteralPath $dir -Filter *.txt | ForEach-Object { $_.BaseName } | Sort-Object) }
-    $failedIn = { param($dir) @(Get-ChildItem -LiteralPath $dir -Filter *.failed | ForEach-Object { $_.BaseName }) }
+    # Forms whose save failed: a <form>.failed marker, or a line in unsaved-names.list
+    # for a name no file can carry.
+    $failedIn = { param($dir)
+        $l = Join-Path $dir 'unsaved-names.list'
+        @(@(Get-ChildItem -LiteralPath $dir -Filter *.failed | ForEach-Object { $_.BaseName }) +
+          @(if (Test-Path -LiteralPath $l) { Get-Content -LiteralPath $l -Encoding UTF8 | Where-Object { $_ } })) }
     $bn = & $list $BeforeDir; $an = & $list $AfterDir
     # A form whose snapshot failed on either side can't be compared; it is listed as such
     # instead of looking added or removed.
