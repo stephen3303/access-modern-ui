@@ -280,6 +280,25 @@ Public Function PersonnelNeedsPassword(ByVal username As String) As Boolean
     PersonnelNeedsPassword = (Len(Nz(DLookup("password_hash", PERSON_TABLE, crit), "")) = 0)
 End Function
 
+' The person_id of an active person with sign-in name username, or 0.
+Public Function PersonIdFor(ByVal username As String) As Long
+    PersonIdFor = Nz(DLookup("person_id", PERSON_TABLE, "is_active AND username=" & SqlText(Trim$(username))), 0)
+End Function
+
+' True when the Windows account running Access is username's saved account,
+' which proves who they are, so they may choose their first app password
+' themselves. Anyone else needs a Personnel admin to set it.
+Public Function PersonnelCanSetFirstPassword(ByVal username As String) As Boolean
+    If Len(WinAccount()) = 0 Or Not PersonnelNeedsPassword(username) Then Exit Function
+    PersonnelCanSetFirstPassword = (StrComp(Nz(DLookup("windows_account", PERSON_TABLE, "username=" & SqlText(Trim$(username))), ""), _
+        WinAccount(), vbTextCompare) = 0)
+End Function
+
+' True when the Windows account running Access is saved for any person.
+Public Function WindowsAccountKnown() As Boolean
+    If Len(WinAccount()) > 0 Then WindowsAccountKnown = Not IsNull(DLookup("person_id", PERSON_TABLE, "windows_account=" & SqlText(WinAccount())))
+End Function
+
 ' Set a person's app password (salted hash). Returns "" or why the password
 ' is refused.
 Public Function PersonnelSetPassword(ByVal personId As Long, ByVal password As String) As String
