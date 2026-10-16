@@ -790,6 +790,16 @@ Write app-specific helpers next to the builds that use them. Examples:
   are the soft badge pairs, so they read in every palette. Initials are the first letters of
   the first and last words (ETN1 Rivera is ER). It is bound, so it follows the record on a
   continuous form with no code.
+- **Dropdown menu**: `KitMenu` puts a record's or page's secondary actions (Duplicate,
+  Archive, Delete) behind one ghost button, the MDL2 More glyph (E712, 32 x 28px) at the
+  right of a card's title row, instead of a row of buttons. The menu is a `CLR_DIALOG`
+  pop-up with a `CLR_INPUT_BORDER` hairline, 160 to 320px wide to fit its captions, 32px
+  rows with a 10pt MDL2 icon and a 9pt caption, `CLR_OUT_HOVER` behind the row under the
+  mouse or keys, and 9px separator rows with a `CLR_BORDER` line. It opens 4px under the
+  button, left edges lined up, and flips right-aligned or above to stay on the monitor. Put
+  destructive actions last, after a separator, as `!Caption` (`CLR_DESTRUCTIVE`), and
+  confirm them with `KitMsgBox`; show an action that doesn't apply as disabled (`~key`)
+  rather than leaving it out, so the menu keeps its shape. Keep it to about seven items.
 - **Empty states**: a centered muted 10pt label shown in place of an empty list. Hide the
   list's subform while it shows (`SetVisible`): a subform always covers a label.
 - **Toasts** (`KitToast`, `dlgToast`): a 360px borderless pop-up on `CLR_SURFACE` with

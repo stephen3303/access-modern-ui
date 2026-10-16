@@ -14,6 +14,7 @@ kit/forms/dlgAppearance.vba   code-behind for the palette picker
 kit/forms/dlgColumns.vba      code-behind for the column chooser (BuildColumnsDialog, ChooseGridColumns)
 kit/forms/dlgDatePick.vba     code-behind for the date picker (BuildDatePicker)
 kit/forms/dlgFilter.vba       code-behind for the header filter (BuildFilterDialog, GridFilter)
+kit/forms/dlgMenu.vba         code-behind for the dropdown menu (BuildMenuDialog, KitMenu)
 kit/forms/dlgMessage.vba      code-behind for the message dialog (BuildMessageDialog, KitMsgBox)
 kit/forms/dlgToast.vba        code-behind for the toast (BuildToast, KitToast)
 kit/forms/dlgInput.vba        code-behind for the input dialog (BuildInputDialog, KitInputBox)
@@ -45,6 +46,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 | modKitUI | Run-time page helpers: `GridFit`, `GridHighlight`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSwitch`, `ToggleFocus`, `SegmentClick`, `SetSegment`, `SegmentValue`, `ShowAlert`, `HideAlert`, `SetBreadcrumb`, `CrumbClick`, `SetStep`, `CurrentStep`, `StepClick`, `OpenSection`, `SectionOpen`, `AccordionClick`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `KitToast`, `KitInputBox`, `CheckRequired`, `SplashStatus`, `SetCount`, `StyleChip` (catalog below) |
 | modGridOut | `PrintGrid` and `ExportGrid`: print or export a table as the user sees it |
 | modGridFilter | Click-to-filter table headers: `GridFilter` (a caption funnel's click), `SetGridFilter`, `SetColumnFilter`, `ClearGridFilters`, `GridFilterWhere`, `GridColumnValues`, and `BuildFilterDialog` for `dlgFilter` |
+| modMenu | Dropdown action menus: `KitMenu anchor, "key|Caption|glyph", ...` opens a short list of actions under a button and returns the picked key ("" when closed with nothing picked); `BuildMenuDialog` builds `dlgMenu`. Separators (`"-"`), destructive (`!Caption`) and disabled (`~key`) items, hover and keyboard, closes on a click outside; placed below the button, or above or right-aligned to stay on its monitor |
 | modCsv | UTF-8 text files, RFC 4180 CSV read/write, query-to-CSV export |
 | modCrypto | SHA-256 through Windows CNG, salted password hashing |
 | modTrust | Startup check for an untrusted folder: `BuildTrustCheck mainForm` (build step, in place of `StartUpForm`) adds an `AutoExec` macro and `dlgTrust`, a page explaining how to add the folder as a Trusted Location. `TrustNeeded` and `InTrustedLocation` read the Trust Center settings (never change them), `ShowTrustHelp` opens the page. It replaces any `AutoExec` the app has |
@@ -60,7 +62,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
    - Set `FIXED` to the colors that must never change with the palette.
    - Run the script. It writes `src\themes\light\modTheme.bas` and `src\modules\modPalette.bas`, and prints a contrast check.
 3. In the app's own modules, provide the names the kit calls (listed below).
-4. For the palette picker, copy `examples\modules\modBuildAppearance.bas` to `src\modules` and `kit\forms\dlgAppearance.vba` to `src\forms`. For date fields, copy `kit\forms\dlgDatePick.vba` to `src\forms` too, for messages copy `kit\forms\dlgMessage.vba` and `kit\forms\dlgToast.vba`, for questions copy `kit\forms\dlgInput.vba`, for the column chooser copy `kit\forms\dlgColumns.vba`, for header filters copy `kit\forms\dlgFilter.vba`, and for the splash screen copy `kit\forms\frmSplash.vba`: `SaveForm` attaches code-behind from `src\forms` only, so without them `dlgDatePick`, `dlgMessage`, `dlgToast`, `dlgInput`, `dlgColumns`, `dlgFilter` and `frmSplash` build with no code.
+4. For the palette picker, copy `examples\modules\modBuildAppearance.bas` to `src\modules` and `kit\forms\dlgAppearance.vba` to `src\forms`. For date fields, copy `kit\forms\dlgDatePick.vba` to `src\forms` too, for messages copy `kit\forms\dlgMessage.vba` and `kit\forms\dlgToast.vba`, for questions copy `kit\forms\dlgInput.vba`, for the column chooser copy `kit\forms\dlgColumns.vba`, for dropdown menus copy `kit\forms\dlgMenu.vba`, for header filters copy `kit\forms\dlgFilter.vba`, and for the splash screen copy `kit\forms\frmSplash.vba`: `SaveForm` attaches code-behind from `src\forms` only, so without them `dlgDatePick`, `dlgMessage`, `dlgToast`, `dlgInput`, `dlgColumns`, `dlgFilter`, `dlgMenu` and `frmSplash` build with no code.
 5. Write a `BuildAll` entry point that calls `UseBuildPalette`, sets `g_SrcRoot`, and builds the forms. The design guide (section 2) describes what it does.
 6. For startup, call `BuildTrustCheck "frmMain"` (or the login form, or `frmSplash` when the app has a splash screen) last in the startup step, instead of setting `StartUpForm`. When Access would ask to enable content, users then see how to trust the folder.
 
@@ -71,8 +73,8 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 | `CLR_*` roles, `FONT_UI`, `THEME_DARK` | modUIKit | modTheme (generated) |
 | `PALETTE_COUNT`, `PaletteKey`, `PaletteName`, `PaletteIsDark`, `PaletteSwatch`, `PaletteOf` | modDarkMode, dlgAppearance | modPalette (generated) |
 | `APP_NAME` | modPng, modKitUI, modKitUpdate, `BuildSplash`, modDarkMode, modGridCols (registry key for saved settings) | modGlobals |
-| `HandleError`, `LogError`, `RaiseAgain` | modDarkMode, modCsv, modKitUI, modKitUpdate, modGridCols, modGridFilter | modErrors (`examples/modules`) |
-| `MeasureText(s, size, weight)` (Segoe UI text width in twips; size in points, weight 400 normal / 700 bold) | modTextUI, modPng, `TitleTip`/`PageHeader` | modWrap |
+| `HandleError`, `LogError`, `RaiseAgain` | modDarkMode, modCsv, modKitUI, modKitUpdate, modGridCols, modGridFilter, modMenu | modErrors (`examples/modules`) |
+| `MeasureText(s, size, weight)` (Segoe UI text width in twips; size in points, weight 400 normal / 700 bold) | modTextUI, modPng, modMenu, `Breadcrumb`, `TitleTip`/`PageHeader` | modWrap |
 | `ShowTip(frm, nm)` | the "?" marks from `TitleTip` | modUI |
 | `frmMain` with `PageKey` and `Reopen pg` | `SetPalette` (reopens the window) | frmMain |
 | `dlgAppearance` form | `ShowAppearance` | `Build_dlgAppearance` + dlgAppearance.vba |
@@ -81,6 +83,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 | `dlgToast` form | `KitToast` | call the kit's `BuildToast` with the app's dialogs + copy `kit\forms\dlgToast.vba` to src\forms |
 | `dlgColumns` form | `ChooseGridColumns` (a table's Columns button) | call the kit's `BuildColumnsDialog` with the app's dialogs + copy `kit\forms\dlgColumns.vba` to src\forms |
 | `dlgFilter` form | `GridFilter` (a caption's funnel, `GridHeaders ..., filterSf`) | call the kit's `BuildFilterDialog` with the app's dialogs + copy `kit\forms\dlgFilter.vba` to src\forms |
+| `dlgMenu` form | `KitMenu` (a button's dropdown) | call the kit's `BuildMenuDialog` with the app's dialogs + copy `kit\forms\dlgMenu.vba` to src\forms |
 | `dlgInput` form | `KitInputBox` | call the kit's `BuildInputDialog` with the app's dialogs + copy `kit\forms\dlgInput.vba` to src\forms |
 | `frmSplash` form (optional) | the startup form, `SplashStatus` | call the kit's `BuildSplash` + copy `kit\forms\frmSplash.vba` to src\forms; pass `frmSplash` to `BuildTrustCheck` |
 | `BandLabels()`, `BandBack(label)` | `BandCF` | modUI |

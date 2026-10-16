@@ -78,6 +78,40 @@ Err_Handler:
     HandleError "pgList.CrumbGo"
 End Sub
 
+' More (the detail card's menu button): the open item's actions.
+Private Sub btnMore_Click()
+    Dim id As Long, flagged As Boolean, k As String
+    On Error GoTo Err_Handler
+    If Not Me.sfDetail.Visible Then Exit Sub
+    If Not SaveDetail(Me, "sfDetail") Then Exit Sub
+    id = Me.sfDetail.Form!id
+    flagged = Nz(Me.sfDetail.Form!flagged, False)
+    k = KitMenu(Me.btnMore, "done|Mark complete|E73E", "flag|" & IIf(flagged, "Remove flag", "Flag for review") & "|E7C1", _
+        "-", "del|!Delete item|E74D")
+    Select Case k
+        Case "done"
+            CurrentDb.Execute "UPDATE demo_item SET status='Complete', percent_done=100 WHERE id=" & id, dbFailOnError
+            Me.sfDetail.Form.Requery
+            ItemSaved id
+            KitToast "Marked complete.", "success"
+        Case "flag"
+            CurrentDb.Execute "UPDATE demo_item SET flagged=" & IIf(flagged, "False", "True") & " WHERE id=" & id, dbFailOnError
+            Me.sfDetail.Form.Requery
+            KitToast IIf(flagged, "Flag removed.", "Flagged for review."), "info"
+        Case "del"
+            If KitMsgBox("Delete """ & Me.sfDetail.Form!name & """? This can't be undone.", vbYesNo + vbExclamation + vbDefaultButton2, _
+                "Delete item") = vbYes Then
+                CurrentDb.Execute "DELETE FROM demo_item WHERE id=" & id, dbFailOnError
+                RefreshPage
+                ShowOverdue
+                KitToast "Item deleted.", "destructive"
+            End If
+    End Select
+    Exit Sub
+Err_Handler:
+    HandleError "pgList.btnMore_Click"
+End Sub
+
 ' The detail panel saved an item: show the change in the list.
 Public Sub ItemSaved(ByVal id As Long)
     Me.sfList.Form.Requery

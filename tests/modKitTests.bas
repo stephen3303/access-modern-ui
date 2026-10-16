@@ -27,6 +27,7 @@ Public Function TestKit(ByVal root As String) As String
     Btn "ringSave", "Save", px(110), 0, px(80), px(30)
     SaveForm "subRing"
     BuildToast
+    BuildMenuDialog
     NewForm "test_rows", 0, px(300), px(40)
     Ev F, "BeforeUpdate"
     Txt "txtDesc", "description", 0, 0, px(280), px(30)
@@ -366,6 +367,42 @@ Public Function TestKit(ByVal root As String) As String
     Check host.avTest = "AL" And host.avTest.FormatConditions.Count = 5, "Avatar does not show its initials"
     Check InStr(Nz(host.avTest_bg.Properties("ControlSource").Value, ""), "PillPng(Choose(AvatarTone(") > 0, "Avatar circle is not drawn by tone"
     Check host.avTest_bg.Width = px(32) And host.avTest.Width = px(32) And host.avTest.FontSize = 10, "Avatar is not 32px with 10pt initials"
+    ' Dropdown menu: placed under its button (right-aligned or above when it would
+    ' run off), sized to its items, separators and disabled items skipped by the
+    ' keys, a pick returns the key and closes it, Esc returns nothing.
+    Dim mx As Long, my As Long, key As Integer
+    MenuSpot 100, 100, 130, 130, 200, 150, 0, 0, 1000, 800, 4, mx, my
+    Check mx = 100 And my = 134, "Menu is not under its button"
+    MenuSpot 900, 100, 930, 130, 200, 150, 0, 0, 1000, 800, 4, mx, my
+    Check mx = 730 And my = 134, "Menu at the right edge is not right-aligned"
+    MenuSpot 100, 700, 130, 730, 200, 150, 0, 0, 1000, 800, 4, mx, my
+    Check mx = 100 And my = 546, "Menu at the bottom is not above its button"
+    Check MenuOpen(host.tglTest, Array("edit|Edit R&D|E70F", "-", "~arch|Archive", "del|!Delete|E74D")), "Menu did not open"
+    Check IsFormOpen("dlgMenu"), "Menu form is not open"
+    With Forms("dlgMenu")
+        Check .Controls("lblCap0").Caption = "Edit R&&D" And .Controls("lblIcon0").Caption = ChrW(&HE70F), "Menu item caption or icon differs"
+        Check .Controls("ruleSep1").Visible And Not .Controls("lblCap1").Visible, "Menu separator is not a line"
+        Check .Controls("lblCap2").ForeColor = CLR_MUTED_FG And .Controls("lblCap3").ForeColor = CLR_DESTRUCTIVE, "Disabled or destructive item colors differ"
+        Check Not .Controls("lblCap4").Visible, "Menu shows unused rows"
+        Check .InsideHeight = px(4 + 32 + 9 + 32 + 32 + 4), "Menu is not sized to its items"
+        key = vbKeyDown: MenuKey Forms("dlgMenu"), key
+        Check .Controls("boxRow0").Visible, "Down did not light the first item"
+        key = vbKeyDown: MenuKey Forms("dlgMenu"), key
+        Check .Controls("boxRow3").Visible And Not .Controls("boxRow0").Visible, "Down did not skip the separator and the disabled item"
+        MenuPick Forms("dlgMenu"), 2
+        Check IsFormOpen("dlgMenu"), "Disabled item closed the menu"
+    End With
+    key = vbKeyReturn: MenuKey Forms("dlgMenu"), key
+    Check Not IsFormOpen("dlgMenu") And MenuResult() = "del", "Enter did not pick the lit item"
+    Check MenuOpen(host.tglTest, Array("a|Alpha", "b|Beta")), "Menu did not open again"
+    key = vbKeyEscape: MenuKey Forms("dlgMenu"), key
+    Check Not IsFormOpen("dlgMenu") And MenuResult() = "", "Esc did not close the menu with nothing picked"
+    On Error Resume Next
+    MenuOpen host.tglTest, Array("a|A", "b|B", "c|C", "d|D", "e|E", "f|F", "g|G", "h|H", "i|I", "j|J", "k|K"): badName = Err.Number: Err.Clear
+    MenuOpen host.tglTest, Array("nokey"): badScale = Err.Number: Err.Clear
+    On Error GoTo 0
+    Check badName = 5 And badScale = 5 And Not IsFormOpen("dlgMenu"), "Menu took too many items or a bad one"
+    DoCmd.SelectObject acForm, "frmTest"        ' the menu was the active window
     host.ringA.SetFocus
     Check host.ringA.BorderColor = CLR_PRIMARY, "Focused input lacks its focus ring"
     host.ringB.SetFocus

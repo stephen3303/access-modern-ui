@@ -110,6 +110,7 @@ Private Sub BuildUserInterface()
     BuildToast                     ' the kit's dlgToast, for KitToast
     BuildColumnsDialog             ' the kit's dlgColumns, for ChooseGridColumns
     BuildFilterDialog              ' the kit's dlgFilter, for the header funnels (GridFilter)
+    BuildMenuDialog                ' the kit's dlgMenu, for KitMenu (the detail card's More button)
     BuildSplash "frmMain", "access-modern-ui demo"   ' the kit's frmSplash, the startup form
     Build_frmMain
 End Sub
@@ -302,6 +303,10 @@ Private Sub Build_pgList()
     c.TextAlign = 2: c.Visible = False: Anchor c, 2, 0
     x = CX + lw + px(12)
     Card "Detail", "Details", x, y, DETAIL_W, h, , 1, 2
+    ' More: the open item's actions in a dropdown menu (KitMenu).
+    Set c = Btn("btnMore", ChrW(&HE712), x + DETAIL_W - px(44), y + px(6), px(32), px(28), "ghost")
+    c.FontName = "Segoe MDL2 Assets": c.FontWeight = 400: c.ControlTipText = "More actions"
+    Anchor c, 1, 0
     Set c = SubF("sfDetail", "", x + px(16), y + px(40), DETAIL_W - px(32), h - px(56)): Anchor c, 1, 2
     c.Visible = False
     Set c = Lbl("lblDetailEmpty", "Select an item to see its details.", x + px(16), y + px(120), DETAIL_W - px(32), px(20), _
