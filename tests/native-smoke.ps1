@@ -39,6 +39,7 @@ try {
  Copy-Item (Join-Path $repo 'kit/forms/dlgToast.vba') $formDir
  Copy-Item (Join-Path $repo 'kit/forms/dlgInput.vba') $formDir
  Copy-Item (Join-Path $repo 'kit/forms/dlgMenu.vba') $formDir
+ Copy-Item (Join-Path $repo 'kit/forms/dlgHelp.vba') $formDir
  Copy-Item (Join-Path $PSScriptRoot 'testHost.vba') $formDir
  Copy-Item (Join-Path $PSScriptRoot 'testRefuse.vba') $formDir
  Add-VbaLineNumbersToFolder $formDir

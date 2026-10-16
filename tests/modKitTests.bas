@@ -743,6 +743,69 @@ Public Function TestKit(ByVal root As String) As String
     SetGridColumns sf, "flt", DefaultLayout(3)
     Check host.fltFilter0.Visible, "Shown column's funnel stays hidden"
     DoCmd.Close acForm, "frmTestFilter", acSaveNo
+    ' Help (modKitHelp): the topic file, the list, search and the help window.
+    Dim helpPath As String, helpHtml As String, helpFrm As Form, helpErr As Long
+    helpPath = root & "\help_test.txt"
+    WriteTextFile helpPath, "Notes for the author." & vbCrLf & _
+        "=== start | Getting Started" & vbCrLf & "Intro **bold** & <b>" & vbCrLf & "more text." & vbCrLf & vbCrLf & _
+        "# Steps" & vbCrLf & "- one" & vbCrLf & "- two" & vbCrLf & _
+        "=== detail | Detail" & vbCrLf & "Costs 5*2 [x] 100%." & vbCrLf & _
+        "=== detail.roles | Roles" & vbCrLf & "Who can sign."
+    LoadHelpTopics helpPath
+    Check DCount("*", HELP_TABLE) = 3, "Help topics not loaded one per topic"
+    Check DLookup("sort_order", HELP_TABLE, "topic_key='detail.roles'") = 3, "Help topics not in file order"
+    Check InStr(DLookup("body", HELP_TABLE, "topic_key='start'"), "Notes") = 0, "Lines above the first topic loaded"
+    Check HelpTitleFor("detail.roles") = "Detail  >  Roles", "Subtopic heading lacks its parent"
+    helpHtml = HelpBodyHtml("start")
+    Check InStr(helpHtml, "<div>Intro <strong>bold</strong> &amp; &lt;b&gt; more text.</div>") > 0, "Help paragraph not joined, escaped or bolded"
+    Check InStr(helpHtml, "<font size=4><strong>Steps</strong></font>") > 0, "Help heading not drawn"
+    Check InStr(helpHtml, "<ul><li>one</li><li>two</li></ul>") > 0 And Right$(helpHtml, 5) = "</ul>", "Help bullets not listed, or trailing spacer kept"
+    Check InStr(HelpBodyHtml("start", "BOLD"), "BACKGROUND-COLOR:") > 0, "Search term not marked in the topic"
+    Check HelpRows("") = 3 And HelpRows("sign") = 1 And HelpRows("Sign ") = 1, "Help search does not match text ignoring case"
+    Check HelpRows("*") = 1 And HelpRows("[x") = 1 And HelpRows("0%") = 1 And HelpRows("#") = 0, "Help search treats wildcards as wildcards"
+    Check HelpRows("o'b") = 0 And HelpRows("zzz") = 0, "Help search matched missing text"
+    Set rows = CurrentDb.OpenRecordset(HelpTopicsSql())
+    rows.MoveLast
+    Check Left$(rows.Fields(1), 6) = "      " And Left$(rows.Fields(0), 6) = "detail", "Subtopic not indented in the list"
+    rows.Close
+    WriteTextFile helpPath, "=== a | A" & vbCrLf & "=== A | Again"
+    helpErr = 0: On Error Resume Next: LoadHelpTopics helpPath: helpErr = Err.Number: On Error GoTo 0
+    Check helpErr = 5, "Repeated help key not refused"
+    WriteTextFile helpPath, "=== a A"
+    helpErr = 0: On Error Resume Next: LoadHelpTopics helpPath: helpErr = Err.Number: On Error GoTo 0
+    Check helpErr = 5, "Help topic line without | not refused"
+    WriteTextFile helpPath, "=== start | Getting Started" & vbCrLf & "Intro." & vbCrLf & "=== detail | Detail" & vbCrLf & _
+        "=== detail.roles | Roles" & vbCrLf & "Who can sign."
+    LoadHelpTopics helpPath
+    Kill helpPath
+    BuildHelpDialog
+    DoCmd.OpenForm "dlgHelp", OpenArgs:="detail"
+    Set helpFrm = Forms("dlgHelp")
+    Check helpFrm.lstTopics = "detail" And helpFrm.lblHeader.Caption = "Detail", "Help window not open on its topic"
+    Check helpFrm.Modal = False And helpFrm.lstTopics.ListCount = 3, "Help window modal, or topics not listed"
+    Check HelpTopicOf(helpFrm) = "detail" And HelpTopicOf(Nothing) = "", "Form's HelpTopic not read"
+    helpFrm.SetFocus
+    Check HelpContextTopic() = "detail", "F1 in the help window changed its topic"
+    KitHelp "nope"
+    Check helpFrm.lstTopics = "start" And HelpCurrentTopic() = "start", "Unknown topic did not show the first topic"
+    KitHelp "detail.roles"
+    Check helpFrm.lblHeader.Caption = "Detail  >  Roles", "Open help did not switch topic"
+    HelpSearch helpFrm, "sign"
+    Check helpFrm.lstTopics.ListCount = 1 And Not helpFrm.lblNoMatch.Visible, "Help search did not narrow the list"
+    Check InStr(helpFrm.txtBody, "BACKGROUND-COLOR:") > 0, "Help search not marked in the topic shown"
+    HelpSearch helpFrm, "zzz"
+    Check helpFrm.lstTopics.ListCount = 0 And helpFrm.lblNoMatch.Visible, "No-match note not shown"
+    HelpSearch helpFrm, "intro"
+    HelpShowFirstMatch helpFrm
+    Check HelpCurrentTopic() = "start", "Enter did not show the first match"
+    HelpSearch helpFrm, ""
+    Check helpFrm.lstTopics.ListCount = 3 And Not helpFrm.lblNoMatch.Visible, "Clearing the search did not list every topic"
+    DoCmd.Close acForm, "dlgHelp", acSaveNo
+    DoCmd.OpenForm "frmTestFilter"
+    Check HelpTopicOf(Forms("frmTestFilter")) = "", "Form without HelpTopic named a topic"
+    DoCmd.Close acForm, "frmTestFilter", acSaveNo
+    BuildHelpKey
+    Check MacroExists("AutoKeys"), "F1 macro not written"
     g_Silent = False
     TestKit = checks & " kit checks passed"
 End Function
@@ -762,4 +825,20 @@ Private Function HasControl(frm As Form, ByVal nm As String) As Boolean
     On Error Resume Next
     Set c = frm.Controls(nm)
     HasControl = Not c Is Nothing
+End Function
+
+' Topics the help search finds for term.
+Private Function HelpRows(ByVal term As String) As Long
+    With CurrentDb.OpenRecordset(HelpTopicsSql(term))
+        If Not (.BOF And .EOF) Then .MoveLast: HelpRows = .RecordCount
+        .Close
+    End With
+End Function
+
+' True when the database has macro nm.
+Private Function MacroExists(ByVal nm As String) As Boolean
+    Dim m As AccessObject
+    For Each m In CurrentProject.AllMacros
+        If m.Name = nm Then MacroExists = True
+    Next
 End Function
