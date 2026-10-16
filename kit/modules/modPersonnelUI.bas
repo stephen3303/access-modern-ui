@@ -11,12 +11,19 @@ Option Explicit
 ' when their account isn't set up. The sidebar's Sign out button:
 '   If Not KitPersonnelSignOut(APP_CODE) Then DoCmd.Quit
 ' clears the session and shows the sign-in screen, so another person can
-' sign in on the same copy.
+' sign in on the same copy. A Personnel link or button for admins:
+'   =KitPersonnelManage("SABER")
+' opens the Personnel page (dlgPersonnel): the list of people, Add person
+' and Import (dlgPerson adds or changes one, and resets a password).
 '
-' Build both dialogs with the app's others: BuildPersonnelDialogs.
+' Build the dialogs with the app's others: BuildPersonnelDialogs. Help
+' topics for them are in kit\help\personnel.txt, to copy into the app's
+' help file.
 
 Public Const SETUP_FORM As String = "dlgPersonnelSetup"
 Public Const SIGNIN_FORM As String = "dlgSignIn"
+Public Const PERSONNEL_FORM As String = "dlgPersonnel"
+Public Const PERSON_FORM As String = "dlgPerson"
 
 ' What the open Personnel dialog is for (the dialogs read these).
 Private m_appTable As String
@@ -41,7 +48,11 @@ Public Function KitPersonnelStart(ByVal appTable As String, ByVal appCode As Str
         If Not RunDialog(SETUP_FORM) Then Exit Function
         If PersonnelStatus(appTable) <> PERSONNEL_READY Then Exit Function
     End If
-    If SignedInPersonID() > 0 Then KitPersonnelStart = True: Exit Function    ' the setup's creator
+    If SignedInPersonID() > 0 Then                   ' the setup's creator: add the first people
+        RunDialog PERSON_FORM, "new"
+        KitPersonnelStart = True
+        Exit Function
+    End If
     If PersonnelSignInWindows(appCode) Then KitPersonnelStart = True: Exit Function
     m_signInWhy = "notset"
     CloseSplash
@@ -62,6 +73,21 @@ Public Function KitPersonnelSignOut(ByVal appCode As String) As Boolean
     Exit Function
 Fail:
     HandleError "modPersonnelUI.KitPersonnelSignOut", appCode
+End Function
+
+' The Personnel page (dlgPersonnel), for directory admins; anyone else is
+' told to ask one. For a sidebar link: =KitPersonnelManage("SABER").
+Public Function KitPersonnelManage(ByVal appCode As String)
+    On Error GoTo Fail
+    If Not SignedInIsAdmin() Then
+        KitMsgBox "Only a Personnel admin can add or change people. Ask one to make the change.", vbInformation, "Personnel"
+        Exit Function
+    End If
+    m_appCode = appCode
+    RunDialog PERSONNEL_FORM
+    Exit Function
+Fail:
+    HandleError "modPersonnelUI.KitPersonnelManage", appCode, "The Personnel page couldn't be opened."
 End Function
 
 ' For the dialogs: the app's code and linked table, why the setup screen is
@@ -99,10 +125,13 @@ End Function
 ' Build
 ' ---------------------------------------------------------------------------
 
-' Build step: dlgPersonnelSetup and dlgSignIn (code in kit\forms).
+' Build step: dlgPersonnelSetup, dlgSignIn, dlgPersonnel and dlgPerson
+' (code in kit\forms).
 Public Sub BuildPersonnelDialogs()
     Build_dlgPersonnelSetup
     Build_dlgSignIn
+    Build_dlgPersonnel
+    Build_dlgPerson
 End Sub
 
 ' dlgPersonnelSetup: three panels in one dialog, shown one at a time by Tag
@@ -244,4 +273,96 @@ Private Sub Build_dlgSignIn()
     Set c = Btn("btnClose", "Close app", x + w - btnW, y, btnW, px(32), "outline"): c.Cancel = True
     F.Section(acDetail).Height = y + px(32) + pad
     SaveForm SIGNIN_FORM
+End Sub
+
+' dlgPersonnel, the Personnel page for directory admins: a search box, Import
+' and Add person, the list of people (double-click or Edit to change one)
+' and Close.
+Private Sub Build_dlgPersonnel()
+    Const DLG_W As Long = 11520         ' 768 px
+    Dim c As Control, pad As Long, w As Long, x As Long, y As Long, btnW As Long, listH As Long, colW As String
+    pad = Sp(SP_DIALOG)
+    x = pad: w = DLG_W - 2 * pad: btnW = px(110): listH = px(340)
+    NewDialog "Personnel", DLG_W, px(540)
+    Ev F, "OnLoad"
+    y = pad
+    Lbl "lblTitle", "Personnel", x, y, w - px(260), px(26), 13, True
+    y = y + px(26) + Sp(16)
+    Set c = Txt("txtSearch", "", x, y, px(260), px(30), 9)
+    c.Format = "@;""Search people..."""
+    Ev c, "OnChange"
+    Btn "btnImport", "Import...", x + w - 2 * btnW - Sp(SP_ITEM_GAP), y, btnW, px(30), "outline"
+    Btn "btnAdd", "Add person", x + w - btnW, y, btnW, px(30)
+    y = y + px(30) + Sp(SP_ROW_GAP)
+    ' person_id, Name, Sign-in name, Windows account, Can open, Status
+    colW = "0;" & px(230) & ";" & px(120) & ";" & px(170) & ";" & px(80) & ";" & px(80)
+    Set c = Lst("lstPeople", "", x, y, w, listH, 6, colW)
+    Ev c, "OnDblClick"
+    Set c = Lbl("lblNone", "No people match your search.", x + px(10), y + px(30), px(300), px(20), 9, False, CLR_MUTED_FG)
+    c.Visible = False
+    y = y + listH + Sp(16)
+    Lbl "lblTip", "Double-click a person to change their details, reset their password or take away access.", _
+        x, y, w - 2 * px(96) - Sp(SP_ITEM_GAP) - Sp(16), px(30), 8, False, CLR_MUTED_FG
+    Btn "btnEdit", "Edit", x + w - 2 * px(96) - Sp(SP_ITEM_GAP), y, px(96), px(30), "outline"
+    Set c = Btn("btnClose", "Close", x + w - px(96), y, px(96), px(30), "outline"): c.Cancel = True
+    F.Section(acDetail).Height = y + px(30) + pad
+    SaveForm PERSONNEL_FORM
+End Sub
+
+' dlgPerson: add or change one person. OpenArgs "new" or a person_id. Name,
+' rank, command and email; sign-in name and Windows account; Active,
+' Personnel admin and "Can open <app>"; an app password typed twice; a line
+' for what went wrong; Save and Close. Adding stays open after Save, ready
+' for the next person.
+Private Sub Build_dlgPerson()
+    Const DLG_W As Long = 8400          ' 560 px
+    Dim c As Control, pad As Long, w As Long, x As Long, x2 As Long, y As Long, half As Long, gap As Long, btnW As Long
+    pad = Sp(SP_DIALOG): gap = Sp(SP_ROW_GAP)
+    x = pad: w = DLG_W - 2 * pad: half = (w - Sp(16)) \ 2: x2 = x + half + Sp(16): btnW = px(96)
+    NewDialog "Person", DLG_W, px(640)
+    Ev F, "OnLoad"
+    y = pad
+    Lbl "lblTitle", "Add person", x, y, w, px(26), 13, True
+    y = y + px(26) + Sp(16)
+    PersonRow "First", "First name", "Last", "Last name", x, x2, y, half
+    PersonRow "Middle", "Middle initial", "Rank", "Rank", x, x2, y, half
+    PersonRow "Command", "Command", "Email", "Email", x, x2, y, half
+    PersonRow "User", "Sign-in name", "Account", "Windows account (DOMAIN\user)", x, x2, y, half
+    y = y - gap + px(4)                             ' the hint sits under the sign-in name row
+    Lbl "lblUserHint", "Blank: made from the Windows account, or the first initial and last name.", _
+        x, y, w, px(16), 8, False, CLR_MUTED_FG
+    y = y + px(16) + Sp(16)
+    Chk "chkActive", "", x, y + px(2)
+    Lbl "lblActive", "Active (can sign in)", x + px(24), y, half - px(24), px(20), 9
+    Chk "chkAdmin", "", x2, y + px(2)
+    Lbl "lblAdmin", "Personnel admin", x2 + px(24), y, half - px(24), px(20), 9
+    y = y + px(20) + gap
+    Chk "chkApp", "", x, y + px(2)
+    Lbl "lblApp", "Can open " & APP_NAME, x + px(24), y, w - px(24), px(20), 9
+    y = y + px(20) + Sp(16)
+    FieldLabel "lblPwd", "App password", x, y, half, ""
+    FieldLabel "lblPwd2", "Type it again", x2, y, half, ""
+    y = y + px(18)
+    Set c = Txt("txtPwd", "", x, y, half, px(30)): c.InputMask = SECRET_MASK
+    Set c = Txt("txtPwd2", "", x2, y, half, px(30)): c.InputMask = SECRET_MASK
+    y = y + px(30) + px(4)
+    Lbl "lblPwdHint", "", x, y, w, px(32), 8, False, CLR_MUTED_FG         ' Form_Load: new or change
+    y = y + px(32) + gap
+    Lbl "lblError", "", x, y, w, px(36), 9, False, CLR_ERROR
+    y = y + px(36) + gap
+    Set c = Btn("btnSave", "Save", x + w - 2 * btnW - Sp(SP_ITEM_GAP), y, btnW, px(32)): c.Default = True
+    Set c = Btn("btnClose", "Close", x + w - btnW, y, btnW, px(32), "outline"): c.Cancel = True
+    F.Section(acDetail).Height = y + px(32) + pad
+    SaveForm PERSON_FORM
+End Sub
+
+' Two labelled boxes side by side (txt<k1>, txt<k2>); moves y below them.
+Private Sub PersonRow(ByVal k1 As String, ByVal cap1 As String, ByVal k2 As String, ByVal cap2 As String, _
+        ByVal x As Long, ByVal x2 As Long, y As Long, ByVal half As Long)
+    FieldLabel "lbl" & k1, cap1, x, y, half, ""
+    FieldLabel "lbl" & k2, cap2, x2, y, half, ""
+    y = y + px(18)
+    Txt "txt" & k1, "", x, y, half, px(30)
+    Txt "txt" & k2, "", x2, y, half, px(30)
+    y = y + px(30) + Sp(SP_ROW_GAP)
 End Sub

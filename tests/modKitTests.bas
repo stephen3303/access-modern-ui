@@ -1140,6 +1140,45 @@ Public Function TestKit(ByVal root As String) As String
     Check InStr(PersonnelSignIn("alee", "long enough 1", "TEST"), "access") > 0, "Sign-in ignored the app access"
     peErr = 0: On Error Resume Next: PersonnelSaveWindowsAccount: peErr = Err.Number: On Error GoTo 0
     Check peErr = 5, "Windows account saved with nobody signed in"
+    ' Personnel admin: changing people, the list, import.
+    Dim peRs As DAO.Recordset, peMsg As String, peFile As Integer
+    Check PersonnelSignInWindows("TEST", True) And SignedInIsAdmin(), "Admin not signed in for the admin checks"
+    peErr = 0: On Error Resume Next: UpdatePerson peId, "Pat", "O'Neil", "LT", WinAccount(), "poneil", False, True: peErr = Err.Number: On Error GoTo 0
+    Check peErr = 5 And DLookup("is_admin", PERSON_TABLE, "person_id=" & peId), "Admin took away their own admin access"
+    peErr = 0: On Error Resume Next: UpdatePerson pe2, "Ann", "Lee", "YN1", "", DLookup("username", PERSON_TABLE, "person_id=" & peId), False, True: peErr = Err.Number: On Error GoTo 0
+    Check peErr = 5, "A person was given someone else's sign-in name"
+    UpdatePerson pe2, "Ann", "Lee", "YN1", "TESTDOM\alee", "alee", False, True, "B", "USS Test", "ann.lee@test.mil"
+    Check DLookup("display_name", PERSON_TABLE, "person_id=" & pe2) = "YN1 A. Lee" And DLookup("windows_account", PERSON_TABLE, "person_id=" & pe2) = "TESTDOM\alee" And _
+        DLookup("command", PERSON_TABLE, "person_id=" & pe2) = "USS Test", "A person's changes not saved"
+    PersonnelSignOut
+    peErr = 0: On Error Resume Next: UpdatePerson peId, "Pat", "O'Neil", "LT", WinAccount(), "poneil", False, True: peErr = Err.Number: On Error GoTo 0
+    Check peErr = 5, "The last active admin was taken away"
+    Set peRs = CurrentDb.OpenRecordset(PersonnelPeopleSql("lee", "TEST"), dbOpenSnapshot)
+    Check Not peRs.EOF And peRs.Fields(0) = pe2 And peRs.Fields(4) = "No" And peRs.Fields(5) = "Active", "Personnel list wrong for a search"
+    peRs.MoveNext: Check peRs.EOF, "Personnel search matched too many"
+    peRs.Close
+    Set peRs = CurrentDb.OpenRecordset(PersonnelPeopleSql("[*", "TEST"), dbOpenSnapshot)
+    Check peRs.EOF, "Personnel search treated [ or * as a wildcard"
+    peRs.Close
+    peFile = FreeFile
+    Open root & "\people.csv" For Output As #peFile
+    Print #peFile, "First name,Last name,Rank,Sign-in name,Windows account"
+    Print #peFile, "Bo,Chen,LTJG,bchen,"
+    Print #peFile, ",NoFirst,,,"
+    Print #peFile, "Ann,Lee,,alee,"
+    Close #peFile
+    peMsg = PersonnelImport(root & "\people.csv", "TEST")
+    Check InStr(peMsg, "Added 1 person") > 0 And InStr(peMsg, "Skipped 2") > 0 And InStr(peMsg, "Row 4") > 0, "CSV import summary wrong: " & peMsg
+    Check PersonCanUse(PersonIdFor("bchen"), "TEST"), "Imported person can't open the app"
+    CurrentDb.Execute "CREATE TABLE zz_pe_people (first_name TEXT(60), last_name TEXT(60), username TEXT(64))", dbFailOnError
+    CurrentDb.Execute "INSERT INTO zz_pe_people VALUES ('Cy', 'Diaz', 'cdiaz')", dbFailOnError
+    DoCmd.TransferSpreadsheet acExport, acSpreadsheetTypeExcel12Xml, "zz_pe_people", root & "\people.xlsx", True
+    CurrentDb.TableDefs.Delete "zz_pe_people"
+    peMsg = PersonnelImport(root & "\people.xlsx", "TEST")
+    Check InStr(peMsg, "Added 1 person") > 0 And PersonIdFor("cdiaz") > 0 And Not HasTableNamed("zz_personnel_import"), "Excel import failed: " & peMsg
+    peErr = 0: On Error Resume Next: PersonnelImport root & "\people.txt", "TEST": peErr = Err.Number: On Error GoTo 0
+    Check peErr = 5, "Import accepted a file type it can't read"
+    Kill root & "\people.csv": Kill root & "\people.xlsx"
     ' Personnel screens (modPersonnelUI): built, and open in their first state.
     Dim peFrm As Form, peCtl As Control, peLow As Long
     Check PersonnelCanSetFirstPassword("alee") = False And PersonIdFor("alee") = pe2 And WindowsAccountKnown(), "First-password or account rules wrong"
@@ -1159,6 +1198,18 @@ Public Function TestKit(ByVal root As String) As String
     Set peFrm = Forms(SIGNIN_FORM)
     Check Not peFrm.txtAccount.Visible And peFrm.txtUser.Visible And peFrm.lblUser.Top < peFrm.txtAccount.Top, "Sign-in kept the not-set-up row after sign out"
     DoCmd.Close acForm, SIGNIN_FORM, acSaveNo
+    DoCmd.OpenForm PERSONNEL_FORM
+    Set peFrm = Forms(PERSONNEL_FORM)
+    Check peFrm.lstPeople.ListCount = DCount("*", PERSON_TABLE) + 1 And Not peFrm.lblNone.Visible, "Personnel page doesn't list everyone"
+    DoCmd.Close acForm, PERSONNEL_FORM, acSaveNo
+    DoCmd.OpenForm PERSON_FORM, , , , , , "new"
+    Set peFrm = Forms(PERSON_FORM)
+    Check peFrm.lblTitle.Caption = "Add person" And peFrm.chkActive And peFrm.chkApp And Not peFrm.chkAdmin And IsNull(peFrm.txtFirst), "Add person didn't open empty"
+    DoCmd.Close acForm, PERSON_FORM, acSaveNo
+    DoCmd.OpenForm PERSON_FORM, , , , , , CStr(pe2)
+    Set peFrm = Forms(PERSON_FORM)
+    Check peFrm.txtUser = "alee" And peFrm.txtAccount = "TESTDOM\alee" And peFrm.txtMiddle = "B" And Not peFrm.lblUserHint.Visible, "Change person didn't show the person"
+    DoCmd.Close acForm, PERSON_FORM, acSaveNo
     PersonnelSignOut
     CurrentDb.TableDefs.Delete PERSON_TABLE: CurrentDb.TableDefs.Delete PERSON_APP_TABLE
     g_Silent = False
@@ -1172,6 +1223,14 @@ Private Function RowCount(g As Form) As Long
         .MoveLast
         RowCount = .RecordCount
     End With
+End Function
+
+' True when the current database has a table named nm.
+Private Function HasTableNamed(ByVal nm As String) As Boolean
+    Dim td As DAO.TableDef
+    For Each td In CurrentDb.TableDefs
+        If StrComp(td.Name, nm, vbTextCompare) = 0 Then HasTableNamed = True: Exit Function
+    Next
 End Function
 
 ' True when frm has a control named nm.
