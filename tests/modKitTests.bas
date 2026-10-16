@@ -27,6 +27,7 @@ Public Function TestKit(ByVal root As String) As String
     Btn "ringSave", "Save", px(110), 0, px(80), px(30)
     SaveForm "subRing"
     BuildToast
+    BuildAIDialog
     BuildMenuDialog
     BuildPopoverDialog
     NewForm "test_rows", 0, px(300), px(40)
@@ -1316,6 +1317,52 @@ Public Function TestKit(ByVal root As String) As String
     Else
         SetAppClassification clsKeep
     End If
+    ' AI service connection: settings, request and reply formats, and the refusals that need no network.
+    Dim aiJson As String, aiE(1 To 6) As Long, aiKeep As String, aiSys As String
+    aiKeep = GetSetting(APP_NAME, "Classification", "Level", "")
+    AIConfigure "anthropic"
+    Check AIProvider() = "anthropic" And AIEndpoint() = "https://api.anthropic.com/v1/messages" And AIKeyVar() = "ANTHROPIC_API_KEY" And Len(AIModel()) > 0, "Anthropic defaults wrong"
+    AIConfigure "openai"
+    Check AIEndpoint() = "https://api.openai.com/v1/chat/completions" And AIKeyVar() = "OPENAI_API_KEY", "OpenAI defaults wrong"
+    On Error Resume Next
+    AIConfigure "bogus": aiE(1) = Err.Number: Err.Clear
+    AIConfigure "custom": aiE(2) = Err.Number: Err.Clear
+    AIConfigure "custom", "m", "http://example.com/v1/chat/completions": aiE(3) = Err.Number: Err.Clear
+    AIConfigure "openai", , , , , , "Nonsense": aiE(4) = Err.Number: Err.Clear
+    On Error GoTo 0
+    Check aiE(1) = 5 And aiE(2) = 5 And aiE(3) = 5 And aiE(4) = 5, "AIConfigure took an unknown service, a custom service with no address, a plain http address or an unknown level"
+    AIConfigure "custom", "llama3", "http://localhost:11434/v1/chat/completions", "NO_SUCH_AI_KEY_VAR_FOR_TESTS"
+    Check AIProvider() = "custom" And AIModel() = "llama3" And AIEndpoint() = "http://localhost:11434/v1/chat/completions", "Custom service not saved"
+    Dim aiRoles(0 To 1) As String, aiTexts(0 To 1) As String
+    aiRoles(0) = "user": aiTexts(0) = "Say ""hi""" & vbLf & "caf" & ChrW(233) & " " & ChrW(55357) & ChrW(56832)
+    aiRoles(1) = "assistant": aiTexts(1) = "Hi"
+    aiJson = AIRequestBody("custom", aiRoles, aiTexts, 2, "Be brief")
+    Check InStr(aiJson, """role"":""system"",""content"":""Be brief""") > 0 And InStr(aiJson, "\""hi\""\ncaf\u00E9 \uD83D\uDE00") > 0, "OpenAI-format body wrong or not escaped"
+    AIConfigure "anthropic", "test-model"
+    aiJson = AIRequestBody("anthropic", aiRoles, aiTexts, 2, "Be brief")
+    Check InStr(aiJson, """system"":""Be brief""") > 0 And InStr(aiJson, """model"":""test-model""") > 0 And InStr(aiJson, """role"":""system""") = 0, "Anthropic-format body wrong"
+    aiJson = "{""id"":""x"",""type"":""message"",""content"":[{""type"":""text"",""text"":""One \""two\"" \u00e9\nthree""},{""type"":""text"",""text"":""Four""}],""stop_reason"":""end_turn"",""text"":""no""}"
+    Check AIReplyText("anthropic", aiJson) = "One ""two"" " & ChrW(233) & vbLf & "three" & vbCrLf & "Four", "Anthropic reply not read"
+    aiJson = "{""choices"":[{""index"":0,""message"":{""role"":""assistant"",""content"":""Hello \""there\""""},""finish_reason"":""stop""}]}"
+    Check AIReplyText("openai", aiJson) = "Hello ""there""", "OpenAI reply not read"
+    Check AIReplyText("openai", "{""choices"":[{""message"":{""role"":""assistant"",""content"":null}}]}") = "", "A null reply wasn't empty"
+    ' Refusals: classification above the AI's limit, then no key. Neither sends anything.
+    AIConfigure "anthropic"
+    AISetKey ""
+    SetAppClassification "CUI"
+    On Error Resume Next
+    aiSys = AIAsk("hi"): aiE(5) = Err.Number: aiSys = Err.Description: Err.Clear
+    On Error GoTo 0
+    Check aiE(5) = AI_ERR And InStr(aiSys, "not permitted") > 0 And Not AIReady(), "AI used in an app above its classification limit"
+    AIConfigure "anthropic", , , , , , "CUI"
+    SetAppClassification "UNCLASSIFIED"
+    AIConfigure "anthropic", , , "NO_SUCH_AI_KEY_VAR_FOR_TESTS"
+    On Error Resume Next
+    aiSys = AIAsk("hi"): aiE(6) = Err.Number: aiSys = Err.Description: Err.Clear
+    On Error GoTo 0
+    Check aiE(6) = AI_ERR And InStr(aiSys, "No API key") > 0 And InStr(aiSys, "NO_SUCH_AI_KEY_VAR_FOR_TESTS") > 0, "A request went out with no key"
+    DeleteSetting APP_NAME, "AI"
+    If Len(aiKeep) = 0 Then DeleteSetting APP_NAME, "Classification" Else SetAppClassification aiKeep
     PersonnelSignOut
     CurrentDb.TableDefs.Delete PERSON_TABLE: CurrentDb.TableDefs.Delete PERSON_APP_TABLE
     g_Silent = False
