@@ -724,6 +724,26 @@ Public Function Toggle(ByVal nm As String, ByVal src As String, ByVal x As Long,
     Set Toggle = c
 End Function
 
+' Keyboard reach for a clickable label (a link, a close mark, a crumb): a
+' transparent button over it that takes a Tab stop, Enter and Space, and the
+' same click. A label can't take the focus, so without one the action is
+' mouse-only. caption is the button's name for screen readers (a transparent
+' button draws none). While it has the focus its label turns CLR_PRIMARY,
+' underlined unless it is an MDL2 glyph (FocusMark); offColor is the label's
+' own color, put back when the focus leaves. Returns the button, named nm.
+Public Function KeyButton(ByVal nm As String, ByVal lblName As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, _
+        ByVal h As Long, ByVal onClick As String, ByVal caption As String, Optional ByVal offColor As Long = CLR_MUTED_FG, _
+        Optional ByVal sec As Integer = acDetail, Optional ByVal parentCtl As String = "") As Control
+    Dim c As Control
+    Set c = Mk(acCommandButton, nm, x, y, w, h, sec, parentCtl)
+    c.Transparent = True
+    c.Caption = caption
+    c.OnClick = onClick
+    c.OnGotFocus = "=FocusMark([Form],""" & lblName & """,True," & offColor & ")"
+    c.OnLostFocus = "=FocusMark([Form],""" & lblName & """,False," & offColor & ")"
+    Set KeyButton = c
+End Function
+
 ' Segmented control: two to six options side by side on a rounded track, one
 ' of them picked, like a web "toggle group" or iOS segmented control (Week |
 ' Month | Year, List | Board). The picked option sits on a raised CLR_SURFACE
@@ -810,6 +830,7 @@ Public Function Segmented(ByVal nm As String, ByVal src As String, ByVal x As Lo
         Set c = Mk(acCommandButton, nm & "_b" & i, sx, y, px(segPx), h, sec, parentCtl)
         c.Transparent = True
         c.Tag = onChange
+        c.Caption = caps(i)                ' its name for screen readers (not drawn)
         c.ControlTipText = caps(i)
         ' A command button raises Click for both halves of a double click, so
         ' OnDblClick stays empty (a second click on the picked option is ignored).
@@ -834,8 +855,8 @@ End Function
 ' panel: give it room for the lines it may need (h 64px fits a title and two
 ' lines; an untitled alert under 48px is compact, one line centered top to
 ' bottom, for a page's header row). dismiss adds a close mark on the right that hides the alert
-' (HideAlert). Parts: <nm> the panel, <nm>_bar, <nm>_icon, <nm>_title, <nm>_msg
-' and <nm>_x when dismissible. Raises error 5 for an unknown variant. Change it
+' (HideAlert). Parts: <nm> the panel, <nm>_bar, <nm>_icon, <nm>_title, <nm>_msg,
+' and when dismissible <nm>_x and its KeyButton <nm>_xk (Tab, Enter or Space). Raises error 5 for an unknown variant. Change it
 ' at run time with ShowAlert and HideAlert (modKitUI). Returns the panel.
 Public Function Alert(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
         Optional ByVal vrnt As String = "info", Optional ByVal title As String = "", Optional ByVal msg As String = "", _
@@ -861,6 +882,8 @@ Public Function Alert(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVa
         c.FontName = "Segoe MDL2 Assets"
         c.TextAlign = 2
         c.ControlTipText = "Dismiss"
+        KeyButton nm & "_xk", nm & "_x", c.Left, c.Top, c.Width, c.Height, "=HideAlert([Form],""" & nm & """)", _
+            "Dismiss", CLR_MUTED_FG, sec, parentCtl
     End If
     Set Alert = pnl
 End Function
@@ -874,8 +897,8 @@ End Function
 ' the deepest path needs (2 to 12). A path wider than w folds the crumbs after
 ' the first into one ellipsis (its tooltip names them; a click goes to the
 ' deepest of them). Parts: <prefix> an invisible frame holding the trail's
-' place and width, <prefix><i> the crumbs and <prefix>_s<i> the chevrons
-' before them. Raises error 5 for a bad slot count or more items than slots.
+' place and width, <prefix><i> the crumbs, <prefix><i>_k their KeyButtons (the
+' current page's is hidden) and <prefix>_s<i> the chevrons before them. Raises error 5 for a bad slot count or more items than slots.
 Public Sub Breadcrumb(ByVal prefix As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal slots As Long, _
         ByVal handler As String, ParamArray items() As Variant)
     Dim i As Long, c As Control, path As Variant
@@ -892,6 +915,8 @@ Public Sub Breadcrumb(ByVal prefix As String, ByVal x As Long, ByVal y As Long, 
         End If
         Set c = Link(prefix & i, "", x, y, px(40), px(20), "=CrumbClick([Form],""" & prefix & """," & i & ")", 9, CLR_MUTED_FG)
         c.Visible = False
+        Set c = KeyButton(prefix & i & "_k", prefix & i, x, y, px(40), px(20), "=CrumbClick([Form],""" & prefix & """," & i & ")", "")
+        c.Visible = False
     Next
     path = items
     LayoutCrumbs F, prefix, path
@@ -902,14 +927,15 @@ End Sub
 ' Steps before the current one are done: a CLR_PRIMARY circle with a check
 ' mark and a CLR_PRIMARY connector after it. The current step is a CLR_PRIMARY
 ' circle with its number and a bold CLR_FG caption; later steps are a
-' CLR_INPUT_BORDER ring with a CLR_MUTED_FG number and caption. current is
+' CLR_MUTED_FG ring with a CLR_MUTED_FG number and caption. current is
 ' 1-based; steps + 1 shows every step done. handler names a Public Sub or
 ' Function on the form taking the step number, called when the user clicks a
 ' done step (to go back to it); "" makes no step clickable. Change the step
 ' with SetStep. The steps share w equally (at least 64px each) and take 56px
 ' down. Parts: <prefix> an invisible frame (its Tag keeps the state),
 ' <prefix>_f<i> and _r<i> the filled and ringed circles, _n<i> the number,
-' _l<i> the caption and _c<i> the connector after step i (i from 1).
+' _l<i> the caption, _k<i> its KeyButton (a Tab stop on done steps when there
+' is a handler) and _c<i> the connector after step i (i from 1).
 ' Raises error 5 for fewer than 2 or more than 8 steps or too little width.
 Public Sub Stepper(ByVal prefix As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal current As Long, _
         ByVal handler As String, ParamArray captions() As Variant)
@@ -931,7 +957,7 @@ Public Sub Stepper(ByVal prefix As String, ByVal x As Long, ByVal y As Long, ByV
         c.Properties("ControlSource") = "=PillPng(" & CLR_PRIMARY & "," & D & "," & D & ")"
         Set c = Mk(acImage, prefix & "_r" & i, cx - px(D \ 2), y, px(D), px(D), acDetail, "")
         ImageProps c
-        c.Properties("ControlSource") = "=RingPng(" & CLR_INPUT_BORDER & "," & D & "," & D & ")"
+        c.Properties("ControlSource") = "=RingPng(" & CLR_MUTED_FG & "," & D & "," & D & ")"
         click = "=StepClick([Form],""" & prefix & """," & i & ")"
         Set c = Lbl(prefix & "_n" & i, CStr(i), cx - px(D \ 2), y, px(D), px(D), 9, True, CLR_MUTED_FG)
         c.TextAlign = 2
@@ -939,6 +965,8 @@ Public Sub Stepper(ByVal prefix As String, ByVal x As Long, ByVal y As Long, ByV
         Set c = Lbl(prefix & "_l" & i, CStr(captions(i - 1)), x + (i - 1) * slot + px(4), y + px(D + 8), slot - px(8), px(18), 9, False, CLR_MUTED_FG)
         c.TextAlign = 2
         c.OnClick = click
+        ' Done steps take a Tab stop (StepPaint), so going back works from the keyboard.
+        KeyButton prefix & "_k" & i, prefix & "_l" & i, x + (i - 1) * slot, y, slot, px(56), click, CStr(captions(i - 1))
     Next
     StepPaint F, prefix
 End Sub
@@ -982,6 +1010,9 @@ Public Sub Accordion(ByVal prefix As String, ByVal x As Long, ByVal y As Long, B
         Set c = Mk(acCommandButton, prefix & "_h" & i, x, yy, w, px(40), acDetail, "")
         c.Transparent = True
         c.OnClick = "=AccordionClick([Form],""" & prefix & """," & i & ")"
+        c.OnGotFocus = "=FocusMark([Form],""" & prefix & "_t" & i & """,True," & CLR_FG & ")"
+        c.OnLostFocus = "=FocusMark([Form],""" & prefix & "_t" & i & """,False," & CLR_FG & ")"
+        c.Caption = p(0)                   ' its name for screen readers (AccordionLayout adds the state)
         yy = yy + px(41)
     Next
     F.Controls(prefix).Tag = IIf(oneOpen, "single", "") & "|" & hs
@@ -1134,15 +1165,15 @@ Public Function StatTone(ByVal v As Variant, ByVal upIsGood As Boolean) As Long
 End Function
 
 ' Star rating (a web "rating"): n stars (5 by default) for a number field,
-' filled CLR_AMBER_500 up to the value and outlined CLR_INPUT_BORDER after it.
+' filled CLR_AMBER_500 up to the value and outlined CLR_MUTED_FG after it.
 ' A click on star i sets the value to i; a click on the star already the
 ' value clears it to 0, as on most review sites. readOnly:=True builds the
 ' stars only, for showing a rating on every row of a continuous form. size is
 ' a star's box, 24px by default. onChange names a Public Sub in the form's
 ' code-behind called after the user changes it. Parts (i from 1): <nm>_val a
 ' hidden text box bound to src (Read Me!<nm>_val or RatingValue), <nm>_s<i>
-' the stars (calculated, so they follow the record) and <nm>_b<i> the
-' transparent buttons over them. Raises error 5 for fewer than 3 or more than
+' the stars (calculated, so they follow the record), <nm>_b<i> the
+' transparent buttons over them (each a Tab stop) and <nm>_ring their focus ring. Raises error 5 for fewer than 3 or more than
 ' 10 stars, and for clickable stars on a continuous form.
 Public Function Rating(ByVal nm As String, ByVal src As String, ByVal x As Long, ByVal y As Long, _
         Optional ByVal stars As Long = 5, Optional ByVal size As Long = 360, Optional ByVal readOnly As Boolean = False, _
@@ -1156,9 +1187,15 @@ Public Function Rating(ByVal nm As String, ByVal src As String, ByVal x As Long,
     v.Tag = CStr(stars)
     e = "Nz([" & nm & "_val],0)"
     fsize = CInt((size \ 15) * 0.55 + 0.5)
+    If Not readOnly Then
+        Set c = Mk(acImage, nm & "_ring", x - px(4), y - px(2), stars * size + px(8), size + px(4), acDetail, "")
+        ImageProps c
+        c.Properties("ControlSource") = "=RingPng(" & CLR_PRIMARY & "," & (stars * size + px(8)) \ 15 & "," & (size + px(4)) \ 15 & ")"
+        c.Visible = False
+    End If
     For i = 1 To stars
         Set c = RO(nm & "_s" & i, "=IIf(" & e & ">=" & i & ",ChrW(59189),ChrW(59188))", x + (i - 1) * size, y, size, size, _
-            fsize, False, CLR_INPUT_BORDER)
+            fsize, False, CLR_MUTED_FG)
         c.FontName = "Segoe MDL2 Assets": c.TextAlign = 2
         VCenter c, size, fsize, True
         CF c, e & ">=" & i, -1, CLR_AMBER_500
@@ -1167,7 +1204,10 @@ Public Function Rating(ByVal nm As String, ByVal src As String, ByVal x As Long,
             c.Transparent = True
             c.Tag = onChange
             c.ControlTipText = i & IIf(i = 1, " star", " stars")
+            c.Caption = c.ControlTipText       ' its name for screen readers (not drawn)
             c.OnClick = "=RatingClick([Form],""" & nm & """," & i & ")"
+            c.OnGotFocus = "=ToggleFocus([Form],""" & nm & """,True)"
+            c.OnLostFocus = "=ToggleFocus([Form],""" & nm & """,False)"
         End If
     Next
     Set Rating = v
@@ -1220,6 +1260,7 @@ Public Function Slider(ByVal nm As String, ByVal src As String, ByVal x As Long,
         c.Tag = onChange
         c.TabStop = (i = 0)
         c.ControlTipText = Trim$(Format$(minV + i * stepV, IIf(Len(fmt) > 0, fmt, "General Number")))
+        c.Caption = c.ControlTipText           ' its name for screen readers (not drawn)
         c.OnClick = "=SliderClick([Form],""" & nm & """," & i & ")"
         c.OnGotFocus = "=ToggleFocus([Form],""" & nm & """,True)"
         c.OnLostFocus = "=ToggleFocus([Form],""" & nm & """,False)"
@@ -1275,7 +1316,8 @@ End Sub
 ' user types (each keystroke) and with "" when the clear mark empties it;
 ' filter the page there. placeholder shows while it is empty. The box takes
 ' the focus ring on its frame. Parts: <nm>_f the frame (border and fill),
-' <nm>_ico, <nm> the text box (borderless, between the two marks) and <nm>_x.
+' <nm>_ico, <nm> the text box (borderless, between the two marks), <nm>_x and
+' its KeyButton <nm>_xk.
 ' Read the text with SearchText; set it in code with SetSearch.
 Public Function SearchBox(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal handler As String, _
         Optional ByVal placeholder As String = "Search...", Optional ByVal h As Long = 480) As Control
@@ -1297,6 +1339,8 @@ Public Function SearchBox(ByVal nm As String, ByVal x As Long, ByVal y As Long, 
     Set c = Link(nm & "_x", ChrW(&HE711), x + w - px(28), y, px(20), h, "=SearchClear([Form],""" & nm & """)", 8, CLR_MUTED_FG)
     c.FontName = "Segoe MDL2 Assets": c.TextAlign = 2: c.ControlTipText = "Clear": c.Visible = False
     VCenter c, h, 8, True
+    Set c = KeyButton(nm & "_xk", nm & "_x", c.Left, c.Top, c.Width, c.Height, "=SearchClear([Form],""" & nm & """)", "Clear search")
+    c.Visible = False
     Set SearchBox = t
 End Function
 

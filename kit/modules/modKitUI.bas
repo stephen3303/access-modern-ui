@@ -896,6 +896,22 @@ Fail:
     LogError "modKitUI.ToggleFocus", nm
 End Function
 
+' A KeyButton's focus (set by the builder): label nm in CLR_PRIMARY,
+' underlined unless it is an MDL2 glyph, while its button has the focus, and
+' offColor (a build-palette color, shown through Th) when it leaves. An
+' input's focus ring comes off, as for any button.
+Public Function FocusMark(frm As Form, ByVal nm As String, ByVal hasFocus As Boolean, ByVal offColor As Long)
+    Dim c As Control
+    On Error GoTo Fail
+    If hasFocus Then FocusRingClear
+    Set c = frm.Controls(nm)
+    c.ForeColor = IIf(hasFocus, Th(CLR_PRIMARY), Th(offColor))
+    If c.FontName <> "Segoe MDL2 Assets" Then c.FontUnderline = hasFocus
+    Exit Function
+Fail:
+    LogError "modKitUI.FocusMark", nm
+End Function
+
 ' A Segmented option's click (set by the builder): pick option key, move the
 ' thumb and bold its caption, then call the control's onChange. Does nothing
 ' when key is already picked, while the value is disabled or locked, or on a
@@ -986,7 +1002,7 @@ End Function
 
 Private Sub AlertParts(frm As Form, ByVal nm As String, ByVal v As Boolean)
     Dim s As Variant, c As Control
-    For Each s In Array("", "_bar", "_icon", "_title", "_msg", "_x")
+    For Each s In Array("", "_bar", "_icon", "_title", "_msg", "_x", "_xk")
         Set c = Nothing
         On Error Resume Next
         Set c = frm.Controls(nm & s)
@@ -1059,6 +1075,7 @@ Public Sub LayoutCrumbs(frm As Object, ByVal prefix As String, path As Variant)
         Set c = frm.Controls(prefix & i)
         If i >= n Or (i >= 1 And i < fold) Then
             c.Visible = False
+            ShowKey frm.Controls(prefix & i & "_k"), False
             If i > 0 Then frm.Controls(prefix & "_s" & i).Visible = False
         Else
             If i > 0 Then
@@ -1083,10 +1100,29 @@ Public Sub LayoutCrumbs(frm As Object, ByVal prefix As String, path As Variant)
             End If
             c.Left = x: c.Top = frame.Top
             c.ForeColor = Th(IIf(i = n - 1, CLR_FG, CLR_MUTED_FG))
+            c.FontUnderline = False
             c.Visible = True
+            ' The current page's crumb is no link, so its KeyButton is hidden.
+            With frm.Controls(prefix & i & "_k")
+                .Left = c.Left: .Top = c.Top: .Width = c.Width
+                .Caption = IIf(i = fold And fold > 0, folded, caps(i))
+            End With
+            ShowKey frm.Controls(prefix & i & "_k"), (i < n - 1)
             x = x + c.Width
         End If
     Next
+End Sub
+
+' Show or hide a crumb's KeyButton. The one just pressed has the focus when
+' its handler sets a new path, and Access refuses to hide a focused control
+' (error 2165), so SetVisible moves the focus first; in design view (the
+' builder) nothing has the focus.
+Private Sub ShowKey(c As Control, ByVal v As Boolean)
+    On Error Resume Next
+    c.Visible = v
+    If Err.Number = 0 Then Exit Sub
+    On Error GoTo 0
+    SetVisible c, v
 End Sub
 
 ' Width of a crumb with caption s (9pt, with a little room for Access's margins).
@@ -1143,6 +1179,10 @@ Public Sub StepPaint(frm As Object, ByVal prefix As String)
         capLbl.ForeColor = Th(IIf(i = cur, CLR_FG, CLR_MUTED_FG))
         capLbl.FontWeight = IIf(i = cur, 600, 400)
         If i < n Then frm.Controls(prefix & "_c" & i).BackColor = Th(IIf(done, CLR_PRIMARY, CLR_INPUT_BORDER))
+        With frm.Controls(prefix & "_k" & i)
+            .TabStop = done And Len(t(0)) > 0
+            .Caption = "Step " & i & " of " & n & ", " & capLbl.Caption & IIf(done, ", done", IIf(i = cur, ", current", ""))
+        End With
     Next
 End Sub
 
@@ -1192,6 +1232,7 @@ Public Sub AccordionLayout(frm As Object, ByVal prefix As String)
         frm.Controls(prefix & "_t" & i).Top = y
         frm.Controls(prefix & "_v" & i).Top = y
         frm.Controls(prefix & "_v" & i).Caption = ChrW(IIf(b.Visible, &HE70D, &HE76C))
+        frm.Controls(prefix & "_h" & i).Caption = frm.Controls(prefix & "_t" & i).Caption & IIf(b.Visible, ", expanded", ", collapsed")
         frm.Controls(prefix & "_u" & i).Top = y + px(40)
         y = y + px(41)
         If b.Visible Then
@@ -1269,6 +1310,7 @@ End Sub
 Private Sub SearchNotify(frm As Form, ByVal nm As String, ByVal text As String)
     Dim handler As String
     SetVisible frm.Controls(nm & "_x"), Len(text) > 0
+    SetVisible frm.Controls(nm & "_xk"), Len(text) > 0
     handler = Nz(frm.Controls(nm & "_f").Tag, "")
     If Len(handler) > 0 Then CallByName frm, handler, VbMethod, text
 End Sub

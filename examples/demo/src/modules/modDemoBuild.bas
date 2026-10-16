@@ -340,6 +340,7 @@ Private Sub Build_subPrefs()
     FieldLbl "lblRows", "ROWS PER PAGE", px(4), px(4), px(140)
     Set c = Link("lnkRowsHelp", ChrW(&HE9CE), px(112), px(2), px(20), px(20), "=RowsHelp()", 10, CLR_MUTED_FG)
     c.FontName = "Segoe MDL2 Assets": c.TextAlign = 2: c.ControlTipText = "What is this?"
+    KeyButton "lnkRowsHelp_k", "lnkRowsHelp", c.Left, c.Top, c.Width, c.Height, "=RowsHelp()", "What is rows per page?"
     Slider "sldRows", "", px(4), px(30), px(360), 10, 50, 5, "RowsChanged", True
     x2 = px(420)
     FieldLbl "lblUseful", "HOW USEFUL IS THIS DEMO?", x2, px(4), px(220)
