@@ -1034,6 +1034,26 @@ Public Function TestKit(ByVal root As String) As String
     DoCmd.RunMacro "AutoKeys.^S"
     Check Screen.ActiveControl.Name = "txtOther", "Ctrl+F moved the focus on a form without a search box"
     DoCmd.Close acForm, "frmKeysNoSearch", acSaveNo
+    ' File pickers (modKitFiles): the parts that need no window.
+    Dim fileErr As Long
+    Check FileFilterText("CSV file|*.csv|Text|*.txt;*.log") = "CSV file (*.csv)" & vbNullChar & "*.csv" & vbNullChar & _
+        "Text (*.txt;*.log)" & vbNullChar & "*.txt;*.log" & vbNullChar & vbNullChar, "File filter not in Windows' form"
+    fileErr = 0: On Error Resume Next: FileFilterText "CSV file|*.csv|Text": fileErr = Err.Number: On Error GoTo 0
+    Check fileErr = 5, "Unpaired file filter not refused"
+    Check KitSafeFileName("Q3: a/b *final*?.") = "Q3_ a_b _final__" And KitSafeFileName(" # ") = "_" And KitSafeFileName("...") = "file", "Unsafe file name characters kept"
+    RememberFolder "test", root & "\some file.csv"
+    Check LastFolder("test") = root, "Chosen file's folder not remembered"
+    RememberFolder "test", root
+    Check LastFolder("test") = root And LastFolder("other") = "", "Folder not remembered per purpose"
+    RememberFolder "test", Environ$("SystemDrive") & "\report.csv"
+    Check LastFolder("test") = Environ$("SystemDrive") & "\", "Drive root remembered without its backslash"
+    RememberFolder "test", root
+    Check WithoutFilterExtension("Q3 report.CSV", "CSV file|*.csv|Excel workbook|*.xlsx") = "Q3 report" And _
+        WithoutFilterExtension("Q3.report", "CSV file|*.csv") = "Q3.report" And WithoutFilterExtension("notes.log", "Text|*.txt;*.log") = "notes", _
+        "Suggested name keeps a filter's extension"
+    SaveSetting APP_NAME, "Files", "Folder_test", root & "\gone"
+    Check LastFolder("test") = "", "Missing remembered folder offered"
+    DeleteSetting APP_NAME, "Files"
     g_Silent = False
     TestKit = checks & " kit checks passed"
 End Function
