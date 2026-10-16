@@ -27,18 +27,21 @@ Option Explicit
 '       If LockWait(Err.Number, attempt) Then Resume TryAgain
 '       HandleError "pgItems.CloseItem"
 '
-' For bound forms, add this to the form's code-behind:
+' For bound forms, add these to the form's code-behind:
+'   Private Sub Form_BeforeUpdate(Cancel As Integer)
+'       KitNoteEdits Me                ' (with any checks of your own)
+'   End Sub
 '   Private Sub Form_Error(DataErr As Integer, Response As Integer)
 '       KitFormError Me, DataErr, Response
 '   End Sub
-' It replaces Access's Write Conflict window with a KitMsgBox: Yes keeps the
-' user's changes on top of the other user's saved record (they save again),
-' No drops them and shows the other user's. A lock gets "wait a moment, then
-' save again", with the user's changes kept. Other errors are left to Access.
-' The question comes after the failed save is over: from KitSaveRecord when
-' it was saving, or, for a save Access started itself (moving to another
-' record, closing), from the form's timer, borrowed for one tick and then
-' put back as it was.
+' and save with KitSaveRecord (the Save button, Ctrl+S). On a write conflict
+' the user is asked in a KitMsgBox, naming the fields they changed: Yes puts
+' their changes back over the other user's saved record (the other user's
+' changes to other fields stay), for them to save again; No drops theirs.
+' A save Access starts itself (moving to another record, closing) keeps
+' Access's own Write Conflict window: the kit can't safely ask from inside
+' it. A lock gets "wait a moment, then save again", with the changes kept.
+' Other errors are left to Access.
 
 Public Const LOCK_TRIES As Long = 5            ' retries after the first try
 Public Const LOCK_WAIT_MS As Long = 120        ' first wait; each retry waits longer
@@ -54,15 +57,13 @@ Private m_testAnswer As Long    ' tests only: the conflict answer, 0 to ask
 Private m_inSave As Boolean     ' KitSaveRecord is running (its retries wait with DoEvents)
 Private m_saving As Boolean     ' KitSaveRecord is saving: KitFormError leaves locks and conflicts to it
 Private m_formLock As Long      ' the lock error KitFormError passed on to KitSaveRecord
-' A write conflict noted by KitFormError, resolved once the failed save is
-' over (Undo, Refresh and setting values fail inside Form_Error).
-Private m_conflictForm As String
+Private m_conflictForm As String ' the form whose save hit a write conflict, for SaveTry to resolve
+' The user's edits, noted by KitNoteEdits before each save (inside
+' Form_Error, OldValue already holds the other user's saved values).
+Private m_editForm As String
 Private m_names As Collection   ' changed controls
 Private m_fields As Collection  ' what the user calls them, for the message
 Private m_vals As Collection    ' the user's values
-Private m_timerForm As String   ' the form whose timer KitLocksTick borrowed
-Private m_oldOnTimer As String  ' that form's own timer settings
-Private m_oldInterval As Long
 
 ' True for the errors a moment's wait can clear (see the top of the module).
 Public Function IsLockError(ByVal errNum As Long) As Boolean
@@ -131,11 +132,12 @@ Public Sub KitFormError(frm As Form, ByVal DataErr As Integer, Response As Integ
     On Error GoTo Fail
     Select Case DataErr
         Case ERR_WRITE_CONFLICT, ERR_DATA_CHANGED
-            Response = acDataErrContinue
-            NoteConflict frm
-            ' A save Access started itself (moving to another record, closing)
-            ' has no KitSaveRecord to finish it: borrow the form's timer.
-            If Not m_saving Then StartConflictTimer frm
+            ' Only a KitSaveRecord save, with the edits noted: SaveTry asks once
+            ' the failed save is over. Any other save keeps Access's window.
+            If m_saving And m_editForm = frm.Name Then
+                Response = acDataErrContinue
+                m_conflictForm = frm.Name
+            End If
         Case Else
             If IsLockError(DataErr) Then
                 Response = acDataErrContinue
@@ -151,24 +153,29 @@ Fail:
     LogError "modKitLocks.KitFormError", frm.Name & " error " & DataErr
 End Sub
 
-' The form's timer, borrowed by KitFormError: the failed save is over, so
-' put the form's timer back and let the user decide. Public only so the
-' form's OnTimer can call it.
-Public Function KitLocksTick() As Boolean
-    Dim frm As Form, nm As String
-    On Error GoTo Fail
-    nm = m_timerForm
-    m_timerForm = ""
-    If Len(nm) = 0 Then Exit Function
-    Set frm = Forms(nm)
-    frm.TimerInterval = m_oldInterval
-    frm.OnTimer = m_oldOnTimer
-    If m_conflictForm = nm Then ResolveConflict frm  ' unless a KitSaveRecord got there first
-    Exit Function
-Fail:
-    m_conflictForm = ""
-    LogError "modKitLocks.KitLocksTick", nm
-End Function
+' A bound form's BeforeUpdate (see the top of the module): note which
+' bound controls the user changed and their values, so a write conflict can
+' name them and, on Yes, put back only those.
+Public Sub KitNoteEdits(frm As Form)
+    Dim c As Control, src As String
+    Set m_names = New Collection
+    Set m_fields = New Collection
+    Set m_vals = New Collection
+    m_editForm = frm.Name
+    For Each c In frm.Controls
+        Select Case c.ControlType
+            Case acTextBox, acComboBox, acCheckBox, acToggleButton, acListBox, acOptionGroup
+                src = c.ControlSource
+                If Len(src) > 0 And Left$(src, 1) <> "=" Then
+                    If Not SameValue(c.Value, c.OldValue) Then
+                        m_names.Add c.Name
+                        m_fields.Add FieldCaption(c, src)
+                        m_vals.Add c.Value
+                    End If
+                End If
+        End Select
+    Next
+End Sub
 
 ' Tests only: answer the next conflicts with vbYes or vbNo instead of
 ' asking (0 asks again).
@@ -218,38 +225,17 @@ Fail:
     RaiseAgain "modKitLocks.SaveTry", frm.Name
 End Function
 
-' Form_Error, during the failed save: note which bound controls the user
-' changed and their values, for ResolveConflict to use afterwards.
-Private Sub NoteConflict(frm As Form)
-    Dim c As Control, src As String
-    Set m_names = New Collection
-    Set m_fields = New Collection
-    Set m_vals = New Collection
-    m_conflictForm = frm.Name
-    For Each c In frm.Controls
-        Select Case c.ControlType
-            Case acTextBox, acComboBox, acCheckBox, acToggleButton, acListBox, acOptionGroup
-                src = c.ControlSource
-                If Len(src) > 0 And Left$(src, 1) <> "=" Then
-                    If Not SameValue(c.Value, c.OldValue) Then
-                        m_names.Add c.Name
-                        m_fields.Add FieldCaption(c, src)
-                        m_vals.Add c.Value
-                    End If
-                End If
-        End Select
-    Next
-End Sub
-
-' After the failed save: drop the user's changes, show the other user's
-' saved record, then ask. Yes puts the noted values back on top (the record
-' is changed again, for them to save); No leaves the other user's version.
+' After the failed save: drop the user's changes, read the record again
+' (the other user's saved version), then ask. Yes puts the noted values back
+' on top (the record is changed again, for them to save); No leaves the
+' other user's version.
 Private Sub ResolveConflict(frm As Form)
     Dim i As Long, list As String, answer As Long, names As Collection, vals As Collection, fields As Collection
     Set names = m_names: Set vals = m_vals: Set fields = m_fields
     m_conflictForm = ""
+    m_editForm = ""
     frm.Undo
-    frm.Refresh                     ' the other user's saved values
+    ReloadRecord frm                ' Refresh alone leaves the record out of date (error 440 on the next edit)
     If names Is Nothing Then Exit Sub
     If names.Count = 0 Then Exit Sub
     For i = 1 To fields.Count
@@ -269,16 +255,66 @@ Private Sub ResolveConflict(frm As Form)
     Next
 End Sub
 
-' Run ResolveConflict from the form's timer, once Access has finished the
-' save it started; the form's own timer settings come back first.
-Private Sub StartConflictTimer(frm As Form)
-    If m_timerForm = frm.Name Then Exit Sub         ' already borrowed
-    m_timerForm = frm.Name
-    m_oldOnTimer = frm.OnTimer
-    m_oldInterval = frm.TimerInterval
-    frm.OnTimer = "=KitLocksTick()"
-    frm.TimerInterval = 1
+' Read frm's current record again: requery, then go back to it by its
+' primary key (by position when the key can't be found).
+Private Sub ReloadRecord(frm As Form)
+    Dim crit As String, pos As Long, rs As DAO.Recordset
+    pos = frm.CurrentRecord
+    crit = KeyCriteria(frm)
+    frm.Requery
+    If Len(crit) > 0 Then
+        Set rs = frm.RecordsetClone
+        rs.FindFirst crit
+        If Not rs.NoMatch Then frm.Bookmark = rs.Bookmark: Exit Sub
+    End If
+    If pos > 1 Then DoCmd.GoToRecord acDataForm, frm.Name, acGoTo, pos
 End Sub
+
+' A FindFirst criteria for frm's current record from the primary key of
+' the table behind its first field ("[id]=12"), or "" when there is none.
+Private Function KeyCriteria(frm As Form) As String
+    Dim rs As DAO.Recordset, tbl As String, ix As DAO.Index, kf As DAO.Field, f As DAO.Field, crit As String, found As Boolean
+    On Error GoTo Fail
+    Set rs = frm.Recordset
+    tbl = rs.Fields(0).SourceTable
+    If Len(tbl) = 0 Then Exit Function
+    For Each ix In CurrentDb.TableDefs(tbl).Indexes
+        If ix.Primary Then
+            For Each kf In ix.Fields
+                found = False
+                For Each f In rs.Fields
+                    If f.SourceTable = tbl And StrComp(f.SourceField, kf.Name, vbTextCompare) = 0 Then
+                        crit = crit & IIf(Len(crit) > 0, " AND ", "") & "[" & f.Name & "]=" & SqlLiteral(f.Value, f.Type)
+                        found = True
+                        Exit For
+                    End If
+                Next
+                If Not found Then Exit Function     ' a key field the form doesn't load
+            Next
+            KeyCriteria = crit
+            Exit Function
+        End If
+    Next
+    Exit Function
+Fail:
+    KeyCriteria = ""                ' no key to go by: ReloadRecord uses the position
+End Function
+
+' v as a Jet SQL literal for a field of DAO type t.
+Private Function SqlLiteral(ByVal v As Variant, ByVal t As Integer) As String
+    If IsNull(v) Then
+        SqlLiteral = "Null"
+    Else
+        Select Case t
+            Case dbText, dbMemo, dbChar, dbGUID
+                SqlLiteral = "'" & Replace(CStr(v), "'", "''") & "'"
+            Case dbDate
+                SqlLiteral = Format$(v, "\#mm\/dd\/yyyy hh\:nn\:ss\#")
+            Case Else
+                SqlLiteral = Str$(v)
+        End Select
+    End If
+End Function
 
 ' What the user calls the field c shows: its attached label's caption
 ' without a trailing colon or "*", else the field name.
