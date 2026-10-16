@@ -1045,6 +1045,12 @@ Public Function TestKit(ByVal root As String) As String
     Check LastFolder("test") = root, "Chosen file's folder not remembered"
     RememberFolder "test", root
     Check LastFolder("test") = root And LastFolder("other") = "", "Folder not remembered per purpose"
+    RememberFolder "test", Environ$("SystemDrive") & "\report.csv"
+    Check LastFolder("test") = Environ$("SystemDrive") & "\", "Drive root remembered without its backslash"
+    RememberFolder "test", root
+    Check WithoutFilterExtension("Q3 report.CSV", "CSV file|*.csv|Excel workbook|*.xlsx") = "Q3 report" And _
+        WithoutFilterExtension("Q3.report", "CSV file|*.csv") = "Q3.report" And WithoutFilterExtension("notes.log", "Text|*.txt;*.log") = "notes", _
+        "Suggested name keeps a filter's extension"
     SaveSetting APP_NAME, "Files", "Folder_test", root & "\gone"
     Check LastFolder("test") = "", "Missing remembered folder offered"
     DeleteSetting APP_NAME, "Files"

@@ -77,9 +77,10 @@ Public Function KitPickFolder(ByVal title As String, Optional ByVal purpose As S
     Dim start As String
     On Error GoTo Fail
     start = LastFolder(purpose)
+    CloseSplash                                 ' never open behind the splash screen
     With Application.FileDialog(4)              ' msoFileDialogFolderPicker
         .Title = title
-        If Len(start) > 0 Then .InitialFileName = start & "\"
+        If Len(start) > 0 Then .InitialFileName = WithSlash(start)
         If .Show Then KitPickFolder = .SelectedItems(1)
     End With
     If Len(KitPickFolder) > 0 Then RememberFolder purpose, KitPickFolder
@@ -155,8 +156,28 @@ Public Sub RememberFolder(ByVal purpose As String, ByVal path As String)
         If InStrRev(path, "\") = 0 Then Exit Sub
         path = Left$(path, InStrRev(path, "\") - 1)
     End If
+    If path Like "?:" Then path = path & "\"    ' "C:" alone is the drive's current folder, not its root
     If Len(path) > 0 Then SaveSetting APP_NAME, SETTINGS_KEY, "Folder_" & purpose, path
 End Sub
+
+' fileName without its extension when that extension is one of filters'
+' patterns ("Report.csv" for "CSV file|*.csv" gives "Report").
+Public Function WithoutFilterExtension(ByVal fileName As String, ByVal filters As String) As String
+    Dim parts() As String, pats() As String, i As Long, j As Long, p As Long
+    WithoutFilterExtension = fileName
+    p = InStrRev(fileName, ".")
+    If p = 0 Then Exit Function
+    parts = Split(filters, "|")
+    For i = 1 To UBound(parts) Step 2
+        pats = Split(parts(i), ";")
+        For j = 0 To UBound(pats)
+            If StrComp(Trim$(pats(j)), "*" & Mid$(fileName, p), vbTextCompare) = 0 Then
+                WithoutFilterExtension = Left$(fileName, p - 1)
+                Exit Function
+            End If
+        Next
+    Next
+End Function
 
 ' ---------------------------------------------------------------------------
 ' Helpers
@@ -170,6 +191,12 @@ Private Function FileWindow(ByVal saving As Boolean, ByVal title As String, ByVa
     filt = FileFilterText(filters)
     startDir = LastFolder(purpose)
     defExt = FirstExtension(filters)
+    ' Without its extension the name takes the type the user picks in the
+    ' window (Windows adds it), so switching to Excel saves a .xlsx.
+    If saving Then defaultName = WithoutFilterExtension(defaultName, filters)
+    ' The folder in the name too: Windows can prefer the folder it used last
+    ' over lpstrInitialDir, but never over a path in lpstrFile.
+    If Len(startDir) > 0 Then defaultName = WithSlash(startDir) & defaultName
     buf = Left$(defaultName, MAX_PATH_W - 1) & String$(MAX_PATH_W - Len(Left$(defaultName, MAX_PATH_W - 1)), vbNullChar)
     CloseSplash                                 ' never open behind the splash screen
     With ofn
@@ -192,6 +219,11 @@ Private Function FileWindow(ByVal saving As Boolean, ByVal title As String, ByVa
     Exit Function
 Fail:
     RaiseAgain "modKitFiles.FileWindow", title
+End Function
+
+' folder ending in one "\".
+Private Function WithSlash(ByVal folder As String) As String
+    If Right$(folder, 1) = "\" Then WithSlash = folder Else WithSlash = folder & "\"
 End Function
 
 ' The first pattern's extension without "*." ("csv"), or "" for "*.*".
