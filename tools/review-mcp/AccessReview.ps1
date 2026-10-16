@@ -575,6 +575,7 @@ function Open-ReviewApp {
     $Path = (Resolve-Path -LiteralPath $Path -ErrorAction SilentlyContinue).ProviderPath
     if (-not $Path -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw 'Open only an existing, already trusted front end; this tool never creates one.' }
     Assert-ReviewFileAllowed $Path
+    if ($OutputDirectory -and -not (Test-FullPath $OutputDirectory)) { throw "output_dir '$OutputDirectory' is not a full path." }
     if (-not $OutputDirectory) {
         $OutputDirectory = Join-Path (Get-ReviewOutputBase) (Get-Date -Format 'yyyyMMdd-HHmmss')
     }
@@ -776,7 +777,7 @@ function Set-ReviewPalette {
     catch {
         # Access error 2517: Run can't find the procedure. Anything else is a real failure
         # inside it (or a timeout) and is reported as it is.
-        if ($_.Exception.Message -match '2517|can.t find the procedure') { throw "Could not run the palette procedure '$proc' (ACCESS_REVIEW_PALETTE_PROCEDURE); the front end needs a public Sub $proc(ByVal i As Long). $($_.Exception.Message)" }
+        if ($_.Exception.Message -match '2517|find the procedure') { throw "Could not run the palette procedure '$proc' (ACCESS_REVIEW_PALETTE_PROCEDURE); the front end needs a public Sub $proc(ByVal i As Long). $($_.Exception.Message)" }
         throw "The palette procedure '$proc' failed: $($_.Exception.Message)"
     }
     $script:Review.Palette = $Name
