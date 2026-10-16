@@ -171,7 +171,12 @@ Public Function KitHelp(Optional ByVal topic As String = "")
         Exit Function
     End If
     If Len(topic) = 0 Then topic = HelpContextTopic()
-    If IsFormOpen("dlgHelp") Then
+    If IsFormOpen("dlgHelp") And ModalFormActive() And ActiveFormName() <> "dlgHelp" Then
+        ' Help is open beside the page, but a modal dialog has the focus now,
+        ' so the open window can't take it: reopen help as a dialog.
+        DoCmd.Close acForm, "dlgHelp", acSaveNo
+        DoCmd.OpenForm "dlgHelp", WindowMode:=acDialog, OpenArgs:=topic
+    ElseIf IsFormOpen("dlgHelp") Then
         HelpShow Forms("dlgHelp"), topic
         Forms("dlgHelp").SetFocus
     ElseIf ModalFormActive() Then
@@ -327,6 +332,11 @@ End Function
 
 Private Function FirstTopic() As String
     FirstTopic = Nz(DLookup("topic_key", HELP_TABLE, "sort_order=" & Nz(DMin("sort_order", HELP_TABLE), 0)), "")
+End Function
+
+Private Function ActiveFormName() As String
+    On Error Resume Next
+    ActiveFormName = Screen.ActiveForm.Name
 End Function
 
 Private Function ModalFormActive() As Boolean
