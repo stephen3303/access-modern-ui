@@ -75,8 +75,17 @@ Public Function KitRelinkAll(ByVal bePath As String, Optional ByVal fromPath As 
     Set db = CurrentDb
     Set tables = KitLinkedTables(fromPath)
     If tables.Count = 0 Then Exit Function
-    ' Shared, read-only, with the links' password: just to look.
+    ' Shared, read-only, with the links' password: just to look. A file
+    ' that won't open (wrong password, not Access, corrupt, in use) is a
+    ' refusal like a missing table: error 5, links unchanged.
+    On Error Resume Next
     Set be = DBEngine.OpenDatabase(bePath, False, True, ConnectRest(db.TableDefs(tables(1)).Connect))
+    If Err.Number <> 0 Then
+        d = Err.Description
+        On Error GoTo Fail
+        Err.Raise 5, "modKitBackend", "That file can't be opened as the data file. " & d
+    End If
+    On Error GoTo Fail
     For Each nm In tables
         If Not HasTableDef(be, db.TableDefs(nm).SourceTableName) Then missing = missing & IIf(Len(missing) > 0, ", ", "") & nm
     Next

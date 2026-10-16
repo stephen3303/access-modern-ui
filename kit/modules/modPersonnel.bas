@@ -225,6 +225,7 @@ End Function
 Public Function PersonnelSignInWindows(ByVal appCode As String, Optional ByVal quiet As Boolean = False) As Boolean
     Dim id As Variant, sid As String
     On Error GoTo Fail
+    id = Null                                   ' Empty would skip the DOMAIN\user lookup
     sid = WinSid()
     If Len(sid) > 0 Then id = DLookup("person_id", PERSON_TABLE, "windows_sid=" & SqlText(sid))
     If IsNull(id) And Len(WinAccount()) > 0 Then

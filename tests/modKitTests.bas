@@ -1055,7 +1055,7 @@ Public Function TestKit(ByVal root As String) As String
     Check LastFolder("test") = "", "Missing remembered folder offered"
     DeleteSetting APP_NAME, "Files"
     ' Back-end links and version checks (modKitBackend).
-    Dim be1 As String, be2 As String, beDb As DAO.Database, beErr As Long
+    Dim be1 As String, be2 As String, beDb As DAO.Database, beErr As Long, beFile As Integer
     be1 = root & "\be_one.accdb": be2 = root & "\be_two.accdb"
     Set beDb = DBEngine.CreateDatabase(be1, dbLangGeneral)
     beDb.Execute "CREATE TABLE be_items (id LONG PRIMARY KEY, name TEXT(60))", dbFailOnError
@@ -1094,6 +1094,10 @@ Public Function TestKit(ByVal root As String) As String
     beDb.Close
     beErr = 0: On Error Resume Next: KitRelinkAll be1: beErr = Err.Number: On Error GoTo 0
     Check beErr = 5 And KitBackendPath("be_items") = be2, "Relink to a file missing a table changed the links"
+    beFile = FreeFile: Open root & "\junk.accdb" For Output As #beFile: Print #beFile, "not a database": Close #beFile
+    beErr = 0: On Error Resume Next: KitRelinkAll root & "\junk.accdb": beErr = Err.Number: On Error GoTo 0
+    Kill root & "\junk.accdb"
+    Check beErr = 5 And KitBackendPath("be_items") = be2, "A file that won't open wasn't refused as the data file"
     CurrentDb.TableDefs.Delete "be_items": CurrentDb.TableDefs.Delete "be_notes"
     Check KitVersionProblem(3, 3, "", "2026-10-16 10:00") = "", "Matching versions reported a problem"
     Check InStr(KitVersionProblem(4, 3, "", "x", "Copy it from S:\App."), "newer version") > 0 And _
