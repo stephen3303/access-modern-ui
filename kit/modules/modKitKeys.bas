@@ -141,7 +141,7 @@ Private Function AskShortcut(frm As Object, ByVal action As String) As Boolean
     Exit Function
 NoHandler:
     Select Case Err.Number
-        Case 438, 2465
+        Case 438, 2465: Err.Clear
         Case Else: RaiseAgain "modKitKeys.AskShortcut", frm.Name & " " & action
     End Select
 End Function
@@ -149,12 +149,13 @@ End Function
 Private Function IsDirty(frm As Object) As Boolean
     On Error Resume Next                        ' an unbound form has no Dirty
     IsDirty = frm.Dirty
+    Err.Clear                                   ' else RunCode reports the key's action as failed
 End Function
 
 Private Function HasSearch(frm As Object) As Boolean
     Dim c As Control
     On Error Resume Next
     Set c = frm.Controls("txtSearch")
-    If c Is Nothing Then Exit Function
-    HasSearch = c.Visible And c.Enabled
+    If Not c Is Nothing Then HasSearch = c.Visible And c.Enabled
+    Err.Clear                                   ' a form without one: not a failure
 End Function

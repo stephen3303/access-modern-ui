@@ -1023,6 +1023,17 @@ Public Function TestKit(ByVal root As String) As String
     DoCmd.RunMacro "AutoKeys.^S"
     DoCmd.RunMacro "AutoKeys.^N"
     DoCmd.Close acForm, "frmKeysPlain", acSaveNo
+    ' A form with no search box: Ctrl+F does nothing, without an error.
+    NewForm "", 0, px(400), px(80)
+    Txt "txtOther", "", 0, 0, px(150), px(30)
+    SaveForm "frmKeysNoSearch"
+    DoCmd.OpenForm "frmKeysNoSearch"
+    Forms("frmKeysNoSearch").SetFocus
+    Forms("frmKeysNoSearch").txtOther.SetFocus
+    DoCmd.RunMacro "AutoKeys.^F"
+    DoCmd.RunMacro "AutoKeys.^S"
+    Check Screen.ActiveControl.Name = "txtOther", "Ctrl+F moved the focus on a form without a search box"
+    DoCmd.Close acForm, "frmKeysNoSearch", acSaveNo
     g_Silent = False
     TestKit = checks & " kit checks passed"
 End Function
