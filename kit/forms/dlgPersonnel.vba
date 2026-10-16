@@ -27,7 +27,17 @@ Private Sub LoadPeople(ByVal term As String)
     keep = Me.lstPeople.Value
     Me.lstPeople.RowSource = PersonnelPeopleSql(term, PersonnelUiAppCode())
     Me.lblNone.Visible = (Me.lstPeople.ListCount <= 1)      ' the headings row only
-    If Not IsNull(keep) Then Me.lstPeople.Value = keep
+    Me.lstPeople.Value = Null
+    If IsNull(keep) Then Exit Sub
+    ' Restore the pick only when the search still shows that person, so Edit
+    ' never opens someone the list no longer shows. Row 0 is the headings.
+    Dim i As Long
+    For i = 1 To Me.lstPeople.ListCount - 1
+        If CStr(Me.lstPeople.ItemData(i)) = CStr(keep) Then
+            Me.lstPeople.Value = keep
+            Exit For
+        End If
+    Next i
 End Sub
 
 Private Sub txtSearch_Change()
