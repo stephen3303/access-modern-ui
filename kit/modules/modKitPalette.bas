@@ -349,13 +349,13 @@ Public Sub PaletteRun(frm As Form, ByVal r As Long)
     If r < 0 Or r >= m_count Then Exit Sub
     expr = m_items(m_hits(r))(3)
     PaletteClose frm
-    ' Give the focus back to the app window first: a page that saves its open
-    ' record (a required field still empty) must do it from its own form.
+    ' From the app window's Timer, not from inside this event: a page that
+    ' saves its open record (a required field still empty) must do it there.
     If IsFormOpen(SHELL_FORM) Then
-        Forms(SHELL_FORM).SetFocus
-        DoEvents
+        ShellRunLater Forms(SHELL_FORM), expr
+    Else
+        Eval expr
     End If
-    Eval expr
 End Sub
 
 ' dlgPalette's Deactivate: close it from its Timer (Access can't close a
