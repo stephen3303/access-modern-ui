@@ -9,7 +9,7 @@ End Sub
 Public Function TestKit(ByVal root As String) As String
     Dim grid As Form, host As Form, c As Control, cols As Variant, i As Long
     Dim rows As DAO.Recordset, ids As Object, height As Long
-    Dim text As String, fitted As String, measured As Long
+    Dim text As String, fitted As String, measured As Long, reply As String
     Dim db As DAO.Database, badName As Long, badScale As Long, badView As Long
     ' A kit error message (HandleError) would sit unseen behind the hidden Access
     ' and stall the run while it reports success; g_Silent raises it instead, so
@@ -831,6 +831,74 @@ Public Function TestKit(ByVal root As String) As String
     DoCmd.Close acForm, "frmClassBanner", acSaveNo
     DoCmd.DeleteObject acForm, "frmClassBanner"
     On Error Resume Next
+    DeleteSetting APP_NAME, "Classification"
+    On Error GoTo 0
+    ' AI service: profiles, request bodies, JSON paths, bindings and the classification limit (nothing is sent).
+    On Error Resume Next
+    DeleteSetting APP_NAME, AI_SETTINGS_KEY
+    DeleteSetting APP_NAME, "Classification"
+    On Error GoTo 0
+    Check JsonQuote("a""b\c" & vbLf & ChrW(233)) = """a\""b\\c\n\u00E9""", "JSON string not escaped"
+    Check JsonPath("{""choices"":[{""message"":{""content"":""hi \u00e9\n""}}]}", "choices[0].message.content") = "hi " & ChrW(233) & vbLf, "JSON path not read"
+    Check JsonPath("{""a"":{""b"":[1,2.5,true,null]}}", "a.b[1]") = 2.5 And JsonPath("{""a"":{""b"":[1]}}", "a.b[3]") = Empty, "JSON number or missing index wrong"
+    Check IsEmpty(JsonPath("not json", "a")) And IsEmpty(JsonPath("{""a"":1}", "b")), "Bad JSON or missing key not Empty"
+    Check Len(AIPreset("nope")) = 0 And InStr(AIPreset("OpenAI"), "choices[0]") > 0, "AI presets wrong"
+    KitAIUseProvider "anthropic"
+    Check KitAISetting("ResponsePath") = "content[0].text" And KitAISetting("MaxTokens") = "1024" And KitAISetting("MaxClass") = "UNCLASSIFIED", "Anthropic profile or defaults wrong"
+    KitAISetKey "test-key"
+    Check Join(AIHeaderList(), "|") = "x-api-key: test-key|anthropic-version: 2023-06-01|content-type: application/json", "AI headers not filled"
+    Check JsonPath(AIRequestBody("Say ""hi""", "Be brief"), "messages[0].content") = "Say ""hi""" And JsonPath(AIRequestBody("x", "s"), "max_tokens") = 1024, "AI request body wrong"
+    Check JsonPath(AIRequestBody("{prompt}", "s"), "messages[0].content") = "{prompt}", "A prompt was read as a placeholder"
+    Check KitAIReady(), "Anthropic profile with a key is not ready"
+    KitAISetKey ""
+    KitAISetting "KeyEnv", "KIT_TEST_NO_SUCH_VARIABLE"
+    Check Not KitAIReady() And InStr(AIProblem(), "API key") > 0, "A missing key was not reported"
+    KitAIUseProvider "custom"
+    KitAISetting "Endpoint", "http://example.com/v1"
+    Check InStr(AIProblem(), "https://") > 0, "A plain http endpoint was allowed"
+    KitAISetting "Endpoint", "http://localhost:11434/api"
+    KitAISetting "Payload", "{""prompt"":{prompt}}": KitAISetting "ResponsePath", "response"
+    Check KitAIReady(), "A local http endpoint was refused"
+    badName = 0
+    On Error Resume Next
+    KitAIUseProvider "no such provider"
+    badName = Err.Number
+    On Error GoTo 0
+    Check badName = 5, "An unknown provider was accepted"
+    Check AIReplyText("{""response"":""ok""}", 200) = "ok", "Reply text not read"
+    badName = 0
+    On Error Resume Next
+    reply = AIReplyText("{""error"":{""message"":""bad key""}}", 401)
+    badName = Err.Number
+    text = Err.Description
+    On Error GoTo 0
+    Check badName = 3000 And InStr(text, "bad key") > 0 And InStr(text, "401") > 0, "A service error was not reported"
+    KitAIBind "frmAiTest", "txtAsk", "input"
+    KitAIBind "frmAiTest", "txtNotes", "context"
+    KitAIBind "frmAiTest", "txtReply", "output"
+    KitAIBind "frmAiTest", "txtReply2", "output"
+    Check KitAIRole("frmAiTest", "txtAsk") = "input" And KitAIRole("frmAiTest", "txtReply") = "" And KitAIRole("frmAiTest", "txtReply2") = "output", "AI roles wrong"
+    Check UBound(KitAIControls("frmAiTest", "output")) = 0 And UBound(KitAIControls("frmOther", "input")) = -1, "AI controls per form wrong"
+    Check KitAIUnbind("frmAiTest", "txtNotes") And Not KitAIUnbind("frmAiTest", "txtNotes") And UBound(KitAIBindings()) = 1, "AI unbind wrong"
+    badName = 0
+    On Error Resume Next
+    KitAIBind "frmAiTest", "txtAsk", "boss"
+    badName = Err.Number
+    On Error GoTo 0
+    Check badName = 5, "A bad AI role was accepted"
+    SetAppClassification "SECRET"
+    KitAISetKey "test-key"
+    KitAIUseProvider "anthropic"
+    badName = 0
+    On Error Resume Next
+    reply = KitAISend("hello")
+    badName = Err.Number
+    text = Err.Description
+    On Error GoTo 0
+    Check badName = 5 And InStr(text, "Nothing was sent") > 0, "A message was sent above the service's classification"
+    KitAISetKey ""
+    On Error Resume Next
+    DeleteSetting APP_NAME, AI_SETTINGS_KEY
     DeleteSetting APP_NAME, "Classification"
     On Error GoTo 0
     Check FederalHoliday(#10/12/2026#) = "Columbus Day", "Columbus Day 2026 missing"
