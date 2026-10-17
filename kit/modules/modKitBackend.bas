@@ -69,12 +69,14 @@ End Sub
 ' source tables. Returns how many tables were relinked.
 Public Function KitRelinkAll(ByVal bePath As String, Optional ByVal fromPath As String = "") As Long
     Dim db As DAO.Database, nm As Variant, td As DAO.TableDef, be As DAO.Database, missing As String
-    Dim n As Long, d As String, src As String, tables As Collection
+    Dim n As Long, d As String, src As String, tables As Collection, busy As Boolean
     On Error GoTo Fail
     KitCheckBackendPath bePath
     Set db = CurrentDb
     Set tables = KitLinkedTables(fromPath)
     If tables.Count = 0 Then Exit Function
+    KitBusy "Connecting to the data file..."    ' a file on a share can take a while
+    busy = True
     ' Shared, read-only, with the links' password: just to look. A file
     ' that won't open (wrong password, not Access, corrupt, in use) is a
     ' refusal like a missing table: error 5, links unchanged.
@@ -99,15 +101,18 @@ Public Function KitRelinkAll(ByVal bePath As String, Optional ByVal fromPath As 
         KitRelinkAll = KitRelinkAll + 1
     Next
     db.TableDefs.Refresh
+    KitBusyEnd
     Exit Function
 Fail:
+    ' Clean-up resets Err, so keep the error and put it back.
+    n = Err.Number: d = Err.Description: src = Err.Source
     If Not be Is Nothing Then
-        n = Err.Number: d = Err.Description: src = Err.Source
         On Error Resume Next
         be.Close
         On Error GoTo 0
-        Err.Number = n: Err.Description = d: Err.Source = src
     End If
+    If busy Then KitBusyEnd
+    Err.Number = n: Err.Description = d: Err.Source = src
     RaiseAgain "modKitBackend.KitRelinkAll", bePath & " (" & nm & ")"
 End Function
 

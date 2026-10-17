@@ -462,6 +462,47 @@ Public Sub BuildToast()
     SaveForm "dlgToast"
 End Sub
 
+' The busy pop-up KitBusy shows (dlgBusy, code in forms\dlgBusy.vba): a
+' 360px borderless pop-up on CLR_SURFACE with a 1px CLR_INPUT_BORDER edge,
+' the status line in 10pt text (room for 2 lines) and, 12px under it, a 4px
+' CLR_SECONDARY_BG track with a 72px CLR_PRIMARY bar that slides along it
+' while the app waits. It is not modal, has no title bar and never takes
+' the focus. dlgBusy shrinks to the lines the message takes and centres
+' itself over Access. Build it with the app's other dialogs.
+Public Sub BuildBusy()
+    Dim c As Control, w As Long, h As Long, msgH As Long, pad As Long, y As Long
+    w = px(360): pad = px(20)
+    msgH = 2 * CLng(10 * 20 * 1.36)                 ' 2 lines of 10pt text
+    y = pad + msgH + px(12)
+    h = y + px(4) + pad
+    NewForm "", 0, w, h
+    With F
+        .Caption = "Working"
+        .PopUp = True
+        .Modal = False
+        .BorderStyle = 0
+        .AutoCenter = False
+        .AutoResize = True
+        .ControlBox = False
+        .MinMaxButtons = 0
+        .CloseButton = False
+        .ShortcutMenu = False
+        .Section(acDetail).BackColor = CLR_SURFACE
+        .Section(acDetail).AlternateBackColor = CLR_SURFACE
+        .OnClose = "=BackdropOnClose()"             ' clears a dim a VBA reset left (modBackdrop)
+    End With
+    Ev F, "OnTimer"
+    Lbl "lblMsg", "Working", pad, pad, w - 2 * pad, msgH, 10, False, CLR_FG
+    Box "boxTrack", pad, y, w - 2 * pad, px(4), CLR_SECONDARY_BG
+    Box "boxBar", pad, y, px(72), px(4), CLR_PRIMARY
+    ' Hairline edges, placed as BuildToast places them.
+    Rule "ruleTop", 0, 15, w, 0, CLR_INPUT_BORDER
+    Rule "ruleBottom", 0, h, w, 0, CLR_INPUT_BORDER
+    Rule "ruleLeft", 15, 0, 0, h, CLR_INPUT_BORDER
+    Rule "ruleRight", w, 0, 0, h, CLR_INPUT_BORDER
+    SaveForm "dlgBusy"
+End Sub
+
 ' The input dialog KitInputBox opens (dlgInput, code in forms\dlgInput.vba):
 ' dlgMessage's look without the icon. The prompt in 10pt text wraps across a
 ' 380px column (room for 6 lines, scrolling for more), a 30px input sits 12px

@@ -37,6 +37,7 @@ try {
  Copy-Item (Join-Path $repo 'kit/forms/subGrid.vba') $formDir
  Copy-Item (Join-Path $repo 'kit/forms/dlgMessage.vba') $formDir
  Copy-Item (Join-Path $repo 'kit/forms/dlgToast.vba') $formDir
+ Copy-Item (Join-Path $repo 'kit/forms/dlgBusy.vba') $formDir
  Copy-Item (Join-Path $repo 'kit/forms/dlgInput.vba') $formDir
  Copy-Item (Join-Path $repo 'kit/forms/dlgMenu.vba') $formDir
  Copy-Item (Join-Path $repo 'kit/forms/dlgHelp.vba') $formDir

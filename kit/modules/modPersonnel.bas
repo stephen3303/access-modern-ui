@@ -162,10 +162,20 @@ End Function
 ' Link the Personnel tables to path (replacing any links to another file),
 ' after checking it with PersonnelFileProblem (error 5 with its words).
 Public Sub LinkPersonnelFile(ByVal path As String)
-    Dim problem As String
+    Dim problem As String, n As Long, d As String, src As String
+    KitBusy "Connecting to the Personnel file..."   ' a file on a share can take a while
+    On Error GoTo Fail
     problem = PersonnelFileProblem(path)
     If Len(problem) > 0 Then Err.Raise 5, "modPersonnel.LinkPersonnelFile", problem
     KitLinkTables path, Array(PERSON_TABLE, PERSON_APP_TABLE), PersonnelKeyFor(path)
+    KitBusyEnd
+    Exit Sub
+Fail:
+    ' KitBusyEnd resets Err, so keep the error and put it back.
+    n = Err.Number: d = Err.Description: src = Err.Source
+    KitBusyEnd
+    Err.Number = n: Err.Description = d: Err.Source = src
+    RaiseAgain "modPersonnel.LinkPersonnelFile", path
 End Sub
 
 ' Create a new, encrypted Personnel file at path with the site key siteKey
@@ -530,8 +540,11 @@ End Function
 ' skipped. Returns what happened, for a message.
 Public Function PersonnelImport(ByVal path As String, ByVal appCode As String) As String
     Dim rows As Collection, row As Variant, n As Long, added As Long, skipped As Long, why As String, problem As String
+    Dim num As Long, d As String, src As String, busy As Boolean
     On Error GoTo Fail
     PersonnelRequireAdmin
+    KitBusy "Importing people..."
+    busy = True
     Set rows = ImportRows(path)
     For Each row In rows
         n = n + 1
@@ -543,6 +556,8 @@ Public Function PersonnelImport(ByVal path As String, ByVal appCode As String) A
             If skipped <= 5 Then why = why & vbCrLf & "- Row " & (n + 1) & ": " & problem   ' row 1 is the headers
         End If
     Next
+    KitBusyEnd
+    busy = False
     If n = 0 Then PersonnelImport = "That file has no people in it.": Exit Function
     PersonnelImport = "Added " & added & IIf(added = 1, " person", " people") & "."
     If skipped > 0 Then
@@ -551,6 +566,10 @@ Public Function PersonnelImport(ByVal path As String, ByVal appCode As String) A
     End If
     Exit Function
 Fail:
+    ' KitBusyEnd resets Err, so keep the error and put it back.
+    num = Err.Number: d = Err.Description: src = Err.Source
+    If busy Then KitBusyEnd
+    Err.Number = num: Err.Description = d: Err.Source = src
     RaiseAgain "modPersonnel.PersonnelImport", path
 End Function
 

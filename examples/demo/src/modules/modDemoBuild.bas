@@ -112,6 +112,7 @@ Private Sub BuildUserInterface()
     BuildInputDialog               ' the kit's dlgInput, for KitInputBox
     BuildDatePicker                ' the kit's dlgDatePick, for DateBox
     BuildToast                     ' the kit's dlgToast, for KitToast
+    BuildBusy                      ' the kit's dlgBusy, for KitBusy (relinks, lock waits, exports)
     BuildColumnsDialog             ' the kit's dlgColumns, for ChooseGridColumns
     BuildFilterDialog              ' the kit's dlgFilter, for the header funnels (GridFilter)
     BuildMenuDialog                ' the kit's dlgMenu, for KitMenu (the detail card's More button)

@@ -886,6 +886,13 @@ Write app-specific helpers next to the builds that use them. Examples:
   `CLR_WARN_TEXT`, destructive `CLR_ERROR`), then the message in 10pt `CLR_FG`, up to
   3 lines. It sits 16px in from `frmMain`'s bottom-right corner, holds for 3 seconds,
   fades over about a third of a second and closes; a click closes it at once.
+- **Busy** (`KitBusy`, `dlgBusy`): for work the user could take for a hang (a relink to
+  a share, a wait on another user's lock, an import or export). The app is dimmed and a
+  360px borderless pop-up on `CLR_SURFACE` with a 1px `CLR_INPUT_BORDER` edge sits in the
+  middle of Access: a short status line in 10pt `CLR_FG` ("Exporting...", up to 2 lines),
+  and 12px under it a 4px `CLR_SECONDARY_BG` track with a 72px `CLR_PRIMARY` bar sliding
+  back and forth. It never takes the focus and has no Cancel. Don't use it for work
+  under about a second; there the change on screen is the feedback.
 - **Search box placeholder**: `Format = "@;""Search by ..."""`.
 - **Keyboard shortcuts**: every app has the kit's Ctrl+S (save), Ctrl+N (new), Ctrl+F (find)
   and F1 (help) through `BuildShortcutKeys`. A page that has a New button answers
@@ -1165,7 +1172,7 @@ The Appearance dialog grows by itself, because it is built from `PALETTE_COUNT`.
 6. For each page, write a `Build_pg<Name>` using `PageHeader`, cards, grids and buttons,
    and a `src/forms/pg<Name>.vba` where every handler uses the standard error handler.
 7. Copy the dialogs: `dlgAppearance`, `BuildMessageDialog` (for `Notify` and `HandleError`),
-   `BuildToast` (for `KitToast`),
+   `BuildToast` (for `KitToast`), `BuildBusy` (for `KitBusy`),
    `BuildInputDialog` (for `KitInputBox`),
    `BuildDatePicker` (for date fields), and the help window: `LoadHelpTopics` with
    `help.txt`, `BuildHelpDialog`, and `BuildShortcutKeys` in the startup step for Ctrl+S, Ctrl+N,

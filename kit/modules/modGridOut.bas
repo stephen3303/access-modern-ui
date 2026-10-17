@@ -77,6 +77,7 @@ End Sub
 ' Returns the number of rows written.
 Public Function ExportGrid(gridForm As Form, ByVal path As String) As Long
     Dim sql As String, n As Long, d As String, s As String
+    KitBusy "Exporting..."
     On Error GoTo Fail
     sql = GridSql(gridForm, GridColumns(gridForm), True)
     If FileExists(path) Then Kill path
@@ -89,11 +90,13 @@ Public Function ExportGrid(gridForm As Form, ByVal path As String) As Long
     Else
         ExportGrid = ExportSqlToCsv(sql, path)
     End If
+    KitBusyEnd
     Exit Function
 Fail:
     ' Clean-up resets Err, so keep the error and put it back.
     n = Err.Number: d = Err.Description: s = Err.Source
     DropQuery
+    KitBusyEnd
     Err.Number = n: Err.Description = d: Err.Source = s
     RaiseAgain "modGridOut.ExportGrid", "file " & path
 End Function
