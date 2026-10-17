@@ -1153,6 +1153,61 @@ Public Function TestKit(ByVal root As String) As String
     DoCmd.RunMacro "AutoKeys.^S"
     Check Screen.ActiveControl.Name = "txtOther", "Ctrl+F moved the focus on a form without a search box"
     DoCmd.Close acForm, "frmKeysNoSearch", acSaveNo
+    ' App shell (modKitShell): the first page, swapping pages from the timer,
+    ' a page that refuses to be left, the hooks, hiding an item, collapsing.
+    Dim shellFrm As Form, shellErr As Long, shellTop As Long, shellW As Long
+    On Error Resume Next
+    ShellBuild "Shell", "", Array("a|Alpha|subRing"), Empty, px(500), px(400): shellErr = Err.Number: Err.Clear
+    ShellBuild "Shell", "", Array("a|Alpha|subRing|"), Empty, px(500), px(400): badName = Err.Number: Err.Clear
+    ShellBuild "Shell", "", Array("a|Alpha|subRing|E80F"), Array("help|Help|E897|KitHelp()"), px(500), px(400): badScale = Err.Number: Err.Clear
+    On Error GoTo 0
+    Check shellErr = 5 And badName = 5 And badScale = 5, "ShellBuild took a bad page or link"
+    NewForm "", 0, px(200), px(60)
+    SaveForm "subLeave", "testLeave"
+    ShellBuild "Shell", "Test", Array("a|Alpha|subRing|E80F", "b|Beta|subLeave|E8A5", "c|Gamma|subRing|E8FD"), _
+        Array("help|Help|E897|=KitHelp()"), px(500), px(400)
+    SaveForm "frmMain", "testShell"
+    TempVars("ShellLeave") = True
+    DoCmd.OpenForm "frmMain"
+    Set shellFrm = Forms("frmMain")
+    Check ShellPageKey() = "a" And shellFrm.sfPage.SourceObject = "subRing", "Shell didn't open on its first page"
+    Check shellFrm.nb_a.BackStyle = 1 And shellFrm.nb_b.BackStyle = 0 And shellFrm.nt_a.FontWeight = 600 And shellFrm.nt_b.FontWeight = 400, _
+        "Shell didn't light its page"
+    Check shellFrm.nb_help.VerticalAnchor = 1 And shellFrm.nt_help.OnClick = "=KitHelp()", "Shell link isn't at the foot of the sidebar"
+    ShellGo "b"
+    Check shellFrm.TimerInterval = 10 And ShellPageKey() = "a", "ShellGo didn't wait for the calling event"
+    ShellTimer shellFrm
+    Check ShellPageKey() = "b" And shellFrm.sfPage.SourceObject = "subLeave" And shellFrm.nb_b.BackStyle = 1 And shellFrm.nb_a.BackStyle = 0, _
+        "Shell didn't swap pages"
+    Check TempVars("ShellShown") = "b", "Shell didn't call PageShown"
+    TempVars("ShellLeave") = False
+    ShellGo "c"
+    Check shellFrm.TimerInterval = 0 And ShellPageKey() = "b" And Not shellFrm.CanLeavePage(), "Shell left a page that refused"
+    TempVars("ShellLeave") = True
+    ShellShow shellFrm, "secret"
+    Check ShellPageKey() = "c", "Shell didn't follow RoutePage"
+    ShellShow shellFrm, "detail"
+    Check ShellPageKey() = "detail" And shellFrm.sfPage.SourceObject = "subLeave" And shellFrm.nb_c.BackStyle = 0, _
+        "Shell didn't show a page from PageForm"
+    ShellShow shellFrm, "nope"
+    Check ShellPageKey() = "a" And shellFrm.sfPage.SourceObject = "subRing", "Shell didn't fall back to its first page"
+    shellTop = shellFrm.nb_b.Top
+    ShellShowItem shellFrm, "b", False
+    Check Not shellFrm.nt_b.Visible And Not shellFrm.nb_b.Visible And shellFrm.nb_c.Top = shellTop And shellFrm.ni_c.Top = shellTop _
+        And shellFrm.nt_c.Top = shellTop, "Hiding a sidebar item left a gap"
+    ShellShowItem shellFrm, "b", True
+    Check shellFrm.nt_b.Visible And shellFrm.nb_c.Top = shellTop + px(38), "Showing a sidebar item didn't make room"
+    shellW = shellFrm.sfPage.Width
+    ShellCollapse shellFrm, True, False
+    Check shellFrm.boxSide.Width = SHELL_RAIL_W And shellFrm.sfPage.Left = SHELL_RAIL_W And shellFrm.sfPage.Width = shellW + SHELL_W - SHELL_RAIL_W, _
+        "Collapsed sidebar didn't give its width to the page"
+    Check Not shellFrm.nt_a.Visible And Not shellFrm.nt_help.Visible And Not shellFrm.lblBrand.Visible And shellFrm.ni_a.Visible _
+        And shellFrm.nb_a.Width = px(44) And shellFrm.ni_help.Left = px(8) And shellFrm.lnkCollapse.Left = px(14), "Collapsed sidebar isn't a rail of glyphs"
+    ShellCollapse shellFrm, False, False
+    Check shellFrm.boxSide.Width = SHELL_W And shellFrm.sfPage.Left = SHELL_W And shellFrm.sfPage.Width = shellW And shellFrm.nt_a.Visible _
+        And shellFrm.lblBrand.Visible And shellFrm.nb_a.Width = px(176) And shellFrm.ni_a.Left = px(20), "Opened sidebar didn't come back"
+    DoCmd.Close acForm, "frmMain", acSaveNo
+    Check Not IsFormOpen("frmMain"), "Shell didn't close"
     ' File pickers (modKitFiles): the parts that need no window.
     Dim fileErr As Long
     Check FileFilterText("CSV file|*.csv|Text|*.txt;*.log") = "CSV file (*.csv)" & vbNullChar & "*.csv" & vbNullChar & _

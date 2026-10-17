@@ -127,13 +127,9 @@ Err_Handler:
     HandleError "modDemo.DemoAppearance"
 End Function
 
-' Go to a page (deferred until the calling event finishes; frmMain.QueueNav).
+' Go to a page (deferred until the calling event finishes; ShellGo).
 Public Function NavTo(ByVal key As String)
-    On Error GoTo Err_Handler
-    If IsFormOpen("frmMain") Then Forms("frmMain").QueueNav key
-    Exit Function
-Err_Handler:
-    HandleError "modDemo.NavTo"
+    NavTo = ShellGo(key)
 End Function
 
 ' Items filter for the demo pages: a status chip ("" for all), search text

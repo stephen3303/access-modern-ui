@@ -51,6 +51,8 @@ try {
  Copy-Item (Join-Path $PSScriptRoot 'testConflict.vba') $formDir
  Copy-Item (Join-Path $PSScriptRoot 'testStamp.vba') $formDir
  Copy-Item (Join-Path $PSScriptRoot 'testKeys.vba') $formDir
+Copy-Item (Join-Path $PSScriptRoot 'testShell.vba') $formDir
+Copy-Item (Join-Path $PSScriptRoot 'testLeave.vba') $formDir
  Add-VbaLineNumbersToFolder $formDir
  $arg=[string]$OutputDirectory
  $result=$access.Run('TestKit',[ref]$arg)
