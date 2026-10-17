@@ -102,8 +102,6 @@ End Sub
 Public Sub GridRightClick(ByVal grid As String)
     On Error GoTo Err_Handler
     If Not Me.sfDetail.Visible Then Exit Sub
-    ' GridClick kept the open item (it can't be saved yet), and said why.
-    If Nz(Me.sfList.Form.txtSel, 0) <> Nz(Me.sfDetail.Form!id, 0) Then Exit Sub
     ItemActions True
     Exit Sub
 Err_Handler:
