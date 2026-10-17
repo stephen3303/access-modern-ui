@@ -997,6 +997,30 @@ A page that lists records and shows the selected one beside the list:
 
 ---
 
+### 6.9 AI-connected screens
+
+The kit talks to an AI service through `modKitAI` (no screens) and offers three windows
+in `modKitAIUI`: a chat (`KitAIChat`), the settings (`KitAISettings`) and a window where
+the user connects parts of a form to the AI (`KitAIConnectParts`).
+
+- **Keys are never in code or settings.** `KeyEnv` names an environment variable,
+  `KeyFile` a file, and a key typed in the settings lasts the session only. A form that
+  needs the service reads nothing but `KitAISend` or `KitAIAsk`.
+- **Services are settings, not code.** Provider (`openai`, `anthropic`, `gemini`), address
+  and model change in the settings window. Anything that speaks OpenAI's chat format
+  (Azure OpenAI, Ollama, LM Studio, gateways) uses `openai` with its own address.
+- **Connected parts.** A form that offers AI on its own controls calls
+  `KitAIApplyBindings Me` in `Form_Load`. The user picks the button, the question box and
+  the answer box once; it is saved per Windows user. Use a button made for the purpose:
+  connecting one replaces its click for that session.
+- **Other systems.** `KitAIContextFromSql` puts query rows in a prompt,
+  `KitAISetReplyHandler` receives each message and reply, and `KitAISetMessageFilter` can
+  change or stop a message before it leaves (to remove names, or to check
+  `ClassificationPermitted`).
+- **Waiting.** A request keeps Access responsive and can be cancelled (`KitAICancel`); the
+  chat window's Send reads Cancel while it waits.
+- What is sent leaves the computer. Say in the app which service is approved for which data.
+
 ## 7. Color palettes
 
 ### 7.1 Mechanism

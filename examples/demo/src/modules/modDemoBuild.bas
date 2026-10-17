@@ -117,6 +117,7 @@ Private Sub BuildUserInterface()
     BuildMenuDialog                ' the kit's dlgMenu, for KitMenu (the detail card's More button)
     BuildHelpDialog                ' the kit's dlgHelp, for KitHelp (Help in the sidebar and F1)
     BuildPopoverDialog             ' the kit's dlgPopover, for KitPopover (the Preferences section's help)
+    BuildAIDialogs                 ' the kit's chat, settings and connect windows, for Ask AI in the sidebar
     BuildSplash "frmMain", "access-modern-ui demo"   ' the kit's frmSplash, the startup form
     Build_frmMain
 End Sub
@@ -422,6 +423,10 @@ Private Sub Build_frmMain()
         VCenter c, px(34), 10, True
         y = y + px(38)
     Next
+    Set c = Link("lnkAI", "Ask AI", px(12), ox + PAGE_H - px(204), px(176), px(34), "=KitAIChat()", 10, CLR_NAV_FG)
+    c.LeftMargin = px(12)
+    VCenter c, px(34), 10, True
+    Anchor c, 0, 1
     Set c = Link("lnkClass", "Classification", px(12), ox + PAGE_H - px(166), px(176), px(34), "=DemoClassification()", 10, CLR_NAV_FG)
     c.LeftMargin = px(12)
     VCenter c, px(34), 10, True

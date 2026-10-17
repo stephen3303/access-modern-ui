@@ -1323,6 +1323,144 @@ Public Function TestKit(ByVal root As String) As String
     DoCmd.Close acForm, PERSON_FORM, acSaveNo
     PersonnelSignOut
     CurrentDb.TableDefs.Delete PERSON_TABLE: CurrentDb.TableDefs.Delete PERSON_APP_TABLE
+    ' AI: JSON, each service's request and reply formats, key sources, a mocked round
+    ' trip with the hooks and a query's data, connected parts of a form, and the dialogs.
+    Dim aiRoot As Variant, aiReply As String, aiProblem As String, aiHist As Collection, aiPath As String, aiErr As Long
+    Dim aiFrm As Form, aiSh As Object
+    Check JsonQuote("a""b\c" & vbLf & ChrW(233)) = """a\""b\\c\n\u00E9""", "JsonQuote escaped wrongly"
+    Set aiRoot = JsonParse("{""a"":[1,2.5,{""b"":""x\ny\u00E9""}],""t"":true,""n"":null,""e"":{}}")
+    Check JsonGet(aiRoot, "a.2.b") = "x" & vbLf & "y" & ChrW(233), "JSON string escapes misread"
+    Check JsonText(aiRoot, "a.0") = "1" And JsonCount(aiRoot, "a") = 3 And JsonGet(aiRoot, "t") = True, "JSON numbers, arrays or booleans misread"
+    Check IsNull(JsonGet(aiRoot, "n")) And IsEmpty(JsonGet(aiRoot, "zz.y")) And JsonText(aiRoot, "e", "none") = "none", "JSON null or missing path misread"
+    aiErr = 0
+    On Error Resume Next
+    JsonParse "{""a"":": aiErr = Err.Number: Err.Clear
+    JsonParse "[1,2] x": badName = Err.Number: Err.Clear
+    On Error GoTo 0
+    Check aiErr = 5 And badName = 5, "Bad JSON accepted"
+    Set aiHist = New Collection
+    aiHist.Add Array("user", "Hi"): aiHist.Add Array("assistant", "Hello"): aiHist.Add Array("user", "Q?")
+    Set aiRoot = JsonParse(KitAIRequestBody("openai", "m1", "Be brief", aiHist, 50))
+    Check JsonText(aiRoot, "model") = "m1" And JsonText(aiRoot, "messages.0.role") = "system" And JsonText(aiRoot, "messages.2.role") = "assistant" And _
+        JsonCount(aiRoot, "messages") = 4 And JsonText(aiRoot, "max_tokens") = "50", "OpenAI request wrong"
+    Check InStr(KitAIRequestBody("openai", "m1", "", aiHist, 0), "max_tokens") = 0 And InStr(KitAIRequestBody("openai", "m1", "", aiHist, 0), "system") = 0, "OpenAI request sent a limit or system prompt it should leave out"
+    Set aiRoot = JsonParse(KitAIRequestBody("anthropic", "m1", "Be brief", aiHist, 0))
+    Check JsonText(aiRoot, "system") = "Be brief" And JsonText(aiRoot, "max_tokens") = "1024" And JsonCount(aiRoot, "messages") = 3 And JsonText(aiRoot, "messages.1.role") = "assistant", "Anthropic request wrong"
+    Set aiRoot = JsonParse(KitAIRequestBody("gemini", "m1", "Be brief", aiHist, 50))
+    Check JsonText(aiRoot, "contents.1.role") = "model" And JsonText(aiRoot, "contents.2.parts.0.text") = "Q?" And _
+        JsonText(aiRoot, "systemInstruction.parts.0.text") = "Be brief" And JsonText(aiRoot, "generationConfig.maxOutputTokens") = "50", "Gemini request wrong"
+    Check Join(KitAIHeaders("openai", "k1"), "|") = "Authorization: Bearer k1" And Join(KitAIHeaders("gemini", "k1"), "|") = "x-goog-api-key: k1" And _
+        Join(KitAIHeaders("anthropic", "k1"), "|") = "x-api-key: k1|anthropic-version: 2023-06-01" And Join(KitAIHeaders("openai", "k1", "api-key"), "|") = "api-key: k1", "Key headers wrong"
+    Check UBound(KitAIHeaders("openai", "")) = -1 And Join(KitAIHeaders("anthropic", ""), "|") = "anthropic-version: 2023-06-01", "A missing key was sent as a header"
+    Check KitAIReplyProblem("openai", 200, "{""choices"":[{""message"":{""content"":""Hello there""}}]}", aiReply) = "" And aiReply = "Hello there", "OpenAI reply misread"
+    Check KitAIReplyProblem("anthropic", 200, "{""content"":[{""type"":""text"",""text"":""A""},{""type"":""tool_use""},{""type"":""text"",""text"":""B""}]}", aiReply) = "" And aiReply = "AB", "Anthropic reply misread"
+    Check KitAIReplyProblem("gemini", 200, "{""candidates"":[{""content"":{""parts"":[{""text"":""G1""},{""text"":""G2""}]}}]}", aiReply) = "" And aiReply = "G1G2", "Gemini reply misread"
+    Check InStr(KitAIReplyProblem("gemini", 200, "{""promptFeedback"":{""blockReason"":""SAFETY""}}", aiReply), "SAFETY") > 0, "Gemini block not reported"
+    aiProblem = KitAIReplyProblem("openai", 401, "{""error"":{""message"":""bad key""}}", aiReply)
+    Check InStr(aiProblem, "didn't accept the API key") > 0 And InStr(aiProblem, "bad key") > 0 And Len(aiReply) = 0, "Rejected key not reported"
+    Check InStr(KitAIReplyProblem("openai", 429, "{}", aiReply), "429") > 0 And InStr(KitAIReplyProblem("openai", 500, "not json", aiReply), "HTTP 500") > 0, "HTTP errors not reported"
+    Check InStr(KitAIReplyProblem("openai", 200, "garbage", aiReply), "couldn't read") > 0 And InStr(KitAIReplyProblem("openai", 200, "{""choices"":[{""message"":{""content"":""""}}]}", aiReply), "no text") > 0, "Unreadable or empty answers not reported"
+    On Error Resume Next
+    DeleteSetting APP_NAME, "AI"
+    On Error GoTo 0
+    KitAISetKey ""
+    Check KitAIValue("Provider") = "openai" And KitAIValue("Model") = "gpt-4o-mini" And KitAIValue("MaxTokens") = "1024" And KitAIValue("TimeoutSec") = "60", "AI defaults wrong"
+    KitAIUseProvider "anthropic"
+    Check KitAIValue("Endpoint") = "https://api.anthropic.com/v1/messages" And KitAIValue("KeyEnv") = "ANTHROPIC_API_KEY", "Provider defaults not used"
+    KitAIUseProvider "gemini", "", "gem-x", "KIT_TEST_AI_KEY_NOT_SET"
+    Check KitAIValue("Model") = "gem-x" And InStr(KitAIValue("Endpoint"), "{model}") > 0 And KitAIApiKey() = "" And KitAIKeySource() = "", "Provider options or a missing key wrong"
+    aiErr = 0
+    On Error Resume Next
+    KitAIUseProvider "nope": aiErr = Err.Number: Err.Clear
+    On Error GoTo 0
+    Check aiErr = 5, "Unknown AI provider accepted"
+    Set aiSh = CreateObject("WScript.Shell")
+    aiSh.Environment("Process")("KIT_TEST_AI_KEY_NOT_SET") = "env-key"
+    Check KitAIApiKey() = "env-key" And InStr(KitAIKeySource(), "KIT_TEST_AI_KEY_NOT_SET") > 0 And InStr(KitAIKeySource(), "env-key") = 0, "Key from an environment variable not found, or the source names the key"
+    aiSh.Environment("Process").Remove "KIT_TEST_AI_KEY_NOT_SET"
+    aiPath = root & "\ai.key"
+    WriteTextFile aiPath, vbCrLf & "  file-key  " & vbCrLf & "ignored"
+    KitAISaveSetting "KeyFile", aiPath
+    Check KitAIApiKey() = "file-key" And InStr(KitAIKeySource(), aiPath) > 0, "Key from a file not found"
+    KitAISetKey "  sess-key "
+    Check KitAIApiKey() = "sess-key" And InStr(KitAIKeySource(), "session") > 0, "Session key not used first"
+    KitAISetKey ""
+    Kill aiPath
+    KitAISaveSetting "KeyFile", ""
+    KitAIUseProvider "openai"
+    KitAISaveSetting "KeyEnv", "KIT_TEST_AI_KEY_NOT_SET"
+    aiProblem = KitAISend("Hello", aiReply)
+    Check InStr(aiProblem, "no API key") > 0 And Len(aiReply) = 0, "A missing key was not reported"
+    KitAISetKey "test-key"
+    KitAISaveSetting "Endpoint", "http://example.com/v1/chat"
+    Check InStr(KitAISend("Hello", aiReply), "https://") > 0, "A plain http address was accepted"
+    KitAISaveSetting "Endpoint", ""
+    Check Len(KitAISend("   ", aiReply)) > 0, "A blank message was sent"
+    KitAIUseMock 200, "{""choices"":[{""message"":{""content"":""Hi back""}}]}"
+    KitAIReset
+    Check KitAISend("Hello", aiReply) = "" And aiReply = "Hi back" And KitAIHistoryCount() = 2, "Mocked send failed or didn't keep the conversation"
+    Check KitAISend("Again", aiReply) = "" And KitAIHistoryCount() = 4, "Second message not added to the conversation"
+    Check KitAIAsk("On its own", False) = "Hi back" And KitAIHistoryCount() = 4, "keepHistory:=False changed the conversation"
+    KitAIReset
+    Check KitAIHistoryCount() = 0, "KitAIReset left the conversation"
+    KitAISetMessageFilter "TestAiFilter": KitAISetReplyHandler "TestAiHandler"
+    Check KitAISend("tell the secret", aiReply) = "" And g_AiSeen = "tell the [removed]=>Hi back", "Message filter or reply handler not called"
+    Check InStr(KitAISend("block me", aiReply), "stopped") > 0 And Len(aiReply) = 0, "The filter could not stop a message"
+    KitAISetMessageFilter "": KitAISetReplyHandler ""
+    KitAIUseMock 401, "{""error"":{""message"":""bad key""}}"
+    Check InStr(KitAISend("Hello", aiReply), "didn't accept") > 0 And Len(aiReply) = 0, "A refused key was not reported by KitAISend"
+    aiErr = 0
+    On Error Resume Next
+    KitAIAsk "Hello": aiErr = Err.Number: Err.Clear
+    On Error GoTo 0
+    Check aiErr = AI_ERROR, "KitAIAsk did not raise on a failed request"
+    CurrentDb.Execute "CREATE TABLE zz_ai_ctx (id LONG, note TEXT(50))", dbFailOnError
+    CurrentDb.Execute "INSERT INTO zz_ai_ctx VALUES (1, 'one')", dbFailOnError
+    CurrentDb.Execute "INSERT INTO zz_ai_ctx VALUES (2, 'two')", dbFailOnError
+    CurrentDb.Execute "INSERT INTO zz_ai_ctx VALUES (3, 'three')", dbFailOnError
+    Check KitAIContextFromSql("SELECT id, note FROM zz_ai_ctx ORDER BY id") = "id" & vbTab & "note" & vbLf & "1" & vbTab & "one" & vbLf & "2" & vbTab & "two" & vbLf & "3" & vbTab & "three", "Query context wrong"
+    Check Right$(KitAIContextFromSql("SELECT id, note FROM zz_ai_ctx ORDER BY id", 2), 21) = "(more rows not shown)", "Query context ignored its row limit"
+    KitAIUseMock 200, "{""choices"":[{""message"":{""content"":""Three rows""}}]}"
+    Check KitAIAskAboutSql("How many?", "SELECT * FROM zz_ai_ctx", aiReply) = "" And aiReply = "Three rows", "Asking about a query failed"
+    Check Len(KitAIAskAboutSql("How many?", "SELECT * FROM no_such_table", aiReply)) > 0, "A bad query was not reported"
+    CurrentDb.TableDefs.Delete "zz_ai_ctx"
+    ' Connected parts: saved per form, applied to the buttons, run with the mocked service.
+    NewForm "", 0, px(300), px(120)
+    Btn "btnAsk", "Ask", 0, 0, px(80), px(30)
+    Txt "txtQuestion", "", px(90), 0, px(150), px(30)
+    Txt "txtAnswer", "", px(90), px(40), px(150), px(30)
+    SaveForm "frmAiPart"
+    KitAIBindingSave "frmAiPart", "btnAsk", "txtQuestion", "txtAnswer", "Be brief"
+    Check KitAIBindingParts("frmAiPart", "btnAsk")(0) = "txtQuestion" And KitAIBindingParts("frmAiPart", "btnAsk")(2) = "Be brief" And UBound(KitAIBindingTriggers("frmAiPart")) = 0, "Saved connection misread"
+    DoCmd.OpenForm "frmAiPart"
+    Set aiFrm = Forms("frmAiPart")
+    KitAIApplyBindings aiFrm
+    Check aiFrm.btnAsk.OnClick = "=KitAIRun([Form],""btnAsk"")", "Connected button not pointed at KitAIRun"
+    aiFrm.txtQuestion = "Hello"
+    KitAIRun aiFrm, "btnAsk"
+    Check aiFrm.txtAnswer = "Three rows", "Connected button did not show the answer"
+    BuildAIDialogs
+    DoCmd.OpenForm AI_CONNECT_FORM, , , , , , "frmAiPart"
+    Check Forms(AI_CONNECT_FORM).cboForm = "frmAiPart" And InStr(Forms(AI_CONNECT_FORM).cboTrigger.RowSource, "btnAsk") > 0 And _
+        InStr(Forms(AI_CONNECT_FORM).txtSaved, "btnAsk") > 0, "Connect window did not list the form's parts and connections"
+    DoCmd.Close acForm, AI_CONNECT_FORM, acSaveNo
+    KitAIBindingDelete "frmAiPart", "btnAsk"
+    Check IsEmpty(KitAIBindingParts("frmAiPart", "btnAsk")) And UBound(KitAIBindingTriggers("frmAiPart")) = -1, "Connection not deleted"
+    DoCmd.Close acForm, "frmAiPart", acSaveNo
+    DoCmd.DeleteObject acForm, "frmAiPart"
+    DoCmd.OpenForm AI_CHAT_FORM
+    Set aiFrm = Forms(AI_CHAT_FORM)
+    Check InStr(aiFrm.lblService.Caption, "model gpt-4o-mini") > 0 And aiFrm.btnSend.Default And aiFrm.btnClose.Cancel And aiFrm.KeyPreview, "Chat window did not open ready"
+    DoCmd.Close acForm, AI_CHAT_FORM, acSaveNo
+    DoCmd.OpenForm AI_SETTINGS_FORM
+    Set aiFrm = Forms(AI_SETTINGS_FORM)
+    Check aiFrm.cboProvider = "openai" And aiFrm.txtModel = "gpt-4o-mini" And aiFrm.txtMax = "1024" And Len(aiFrm.txtKey.InputMask) > 0 And InStr(aiFrm.lblKeyStatus.Caption, "session") > 0, "Settings window did not show the settings"
+    DoCmd.Close acForm, AI_SETTINGS_FORM, acSaveNo
+    KitAIClearMock: KitAISetKey "": KitAIReset
+    On Error Resume Next
+    DeleteSetting APP_NAME, "AI"
+    DeleteSetting APP_NAME, "AIBindings"
+    On Error GoTo 0
     g_Silent = False
     TestKit = checks & " kit checks passed"
 End Function

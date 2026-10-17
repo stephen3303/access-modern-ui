@@ -1,0 +1,31 @@
+AI help topics for the kit's AI screens (modKitAIUI). Copy the topics below
+into the app's src\help\help.txt. The keys match the HelpTopic of dlgAIChat
+(ai), dlgAISettings (ai.settings) and dlgAIConnect (ai.connect), so F1 on
+those screens opens them.
+
+=== ai | Ask AI
+Type a question or request and press **Send** (or **Enter**; **Ctrl+Enter** starts a new line). The reply is added to the conversation above, and your next message follows on from it.
+
+# Good to know
+- **New chat** starts again, with nothing remembered.
+- **Copy reply** puts the last reply on the clipboard.
+- **Cancel** (Send while it waits) stops waiting for a reply.
+- **Settings** chooses the service, model and where the API key comes from.
+- What you type is sent to the AI service. Send only what that service is approved for.
+
+=== ai.settings | AI settings
+- **Kind of service** picks the way the app talks to the service: OpenAI or a compatible one (Azure OpenAI, Ollama, LM Studio and others), Anthropic, or Google Gemini. Picking one fills in its usual address, model and key variable.
+- **Model** is the model name the service knows. **Service address** is where requests go; {model} in it is replaced by the model name.
+- **API key** is never saved by the app. Name an **environment variable** that holds it, or a **file** whose first line is the key, or type a key for **this session only** (forgotten when Access closes). A service on this computer needs no key.
+- **Key header** is only for services that want the key in a different header, such as api-key for Azure OpenAI.
+- **Standing instructions** are sent with every message, for example "Answer in two sentences."
+- **Longest reply** limits the reply length in tokens. 0 leaves the limit out, which some models need.
+- **Test** saves and sends a short message to check the settings.
+
+=== ai.connect | Connect to AI
+Connects parts of a form to the AI without writing code: choose a form that is open, the **button** that asks, the **box with the question**, and the **box for the answer**. Leave the answer box empty to see the answer in a message.
+
+- An **instruction** tells the AI what to do with the text, for example "Summarize this note in one sentence."
+- **Connect** works at once on an open form, and the connection is applied each time the form opens.
+- Connecting a button that already does something replaces that until the form is opened again, so choose a button made for this.
+- **Disconnect** forgets the connection; the button stops asking the AI the next time the form opens.
