@@ -16,6 +16,10 @@ Option Explicit
 ' opens the Personnel page (dlgPersonnel): the list of people, Add person
 ' and Import (dlgPerson adds or changes one, and resets a password).
 '
+' To pick a person on a page or dialog (an assignee, a reviewer):
+'   PersonPickBox "txtOwner", "owner_person_id", x, y, w
+' a searchable picker (PickBox, modMenu) of the active people.
+'
 ' Build the dialogs with the app's others: BuildPersonnelDialogs. Help
 ' topics for them are in kit\help\personnel.txt, to copy into the app's
 ' help file.
@@ -96,6 +100,19 @@ End Function
 ' For the dialogs: the app's code and linked table, why the setup screen is
 ' open (PERSONNEL_NOT_SET_UP or PERSONNEL_LOST), why the sign-in screen is
 ' ("notset": this Windows account isn't set up; "signout").
+' A searchable picker (PickBox, modMenu) of the active people in the
+' Personnel file: typing part of a last or first name, a rank or a sign-in
+' name lists the matches as "Smith, John (LT)" with the sign-in name on the
+' right. nm & "Key" holds the person_id, bound to keyField ("" for none).
+' Build dlgPick with the app's dialogs (BuildPickDialog), and wire the box
+' in the form's code as PickBox says.
+Public Function PersonPickBox(ByVal nm As String, ByVal keyField As String, ByVal x As Long, ByVal y As Long, _
+        ByVal w As Long, Optional ByVal h As Long = 450) As Control
+    Set PersonPickBox = PickBox(nm, keyField, "SELECT person_id, last_name & ', ' & first_name & " & _
+        "IIf(Nz(rank, '') = '', '', ' (' & rank & ')') AS person_name, username FROM " & PERSON_TABLE & _
+        " WHERE is_active", x, y, w, h, "Type a name")
+End Function
+
 Public Function PersonnelUiAppCode() As String
     PersonnelUiAppCode = m_appCode
 End Function
