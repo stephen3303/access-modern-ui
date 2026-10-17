@@ -101,7 +101,8 @@ P = {
 }
 
 # Colors that are the same in every palette: status band pills (a band always
-# reads the same) and the
+# reads the same), the classification banner colors (the standard marking
+# colors, which must not change with the palette) and the
 # destructive button's hover shades. They are written as constants in
 # modTheme and reserved: build colors must differ from these so a palette
 # switch never repaints them.
@@ -112,6 +113,13 @@ FIXED = {
     "CLR_BAND_BELOW":          (245, 158, 11),   # amber-500
     "CLR_BAND_SIG_BELOW":      (185, 28, 28),    # red-700
     "CLR_BAND_NE":             (107, 114, 128),  # gray-500, Not Evaluated
+    "CLR_CLASS_UNCLASSIFIED":  (0, 122, 51),     # green, UNCLASSIFIED
+    "CLR_CLASS_CUI":           (80, 43, 133),    # purple, CUI and FOUO
+    "CLR_CLASS_CONFIDENTIAL":  (0, 51, 160),     # blue
+    "CLR_CLASS_SECRET":        (200, 16, 46),    # red
+    "CLR_CLASS_TOP_SECRET":    (255, 103, 31),   # orange
+    "CLR_CLASS_SCI":           (247, 234, 72),   # yellow, TOP SECRET//SCI
+    "CLR_CLASS_TEXT_DARK":     (0, 0, 0),        # text on the orange and yellow banners
     "CLR_DESTRUCTIVE_HOVER":   (185, 28, 28),
     "CLR_DESTRUCTIVE_PRESSED": (153, 27, 27),
 }
@@ -350,3 +358,15 @@ for p in PALETTES:
     low = [f"{fg}/{bg} {ratio(p['c'][fg], p['c'][bg]):.1f}" for fg, bg in PAIRS
            if ratio(p["c"][fg], p["c"][bg]) < need]
     print(f"contrast {p['name']}: " + ("ok" if not low else "below %.1f: " % need + ", ".join(low)))
+
+# Classification banners: white text on the first four colors, black on the
+# orange and yellow ones (modKitClassification.ClassificationTextColor). Same
+# 4.5:1 rule, since the fixed colors are the same in every palette.
+CLASS_PAIRS = [("CLR_WHITE", "CLR_CLASS_UNCLASSIFIED"), ("CLR_WHITE", "CLR_CLASS_CUI"),
+               ("CLR_WHITE", "CLR_CLASS_CONFIDENTIAL"), ("CLR_WHITE", "CLR_CLASS_SECRET"),
+               ("CLR_CLASS_TEXT_DARK", "CLR_CLASS_TOP_SECRET"), ("CLR_CLASS_TEXT_DARK", "CLR_CLASS_SCI")]
+def fixed_or_role(k):
+    return FIXED[k] if k in FIXED else P[k][0]
+low = [f"{fg}/{bg} {ratio(fixed_or_role(fg), fixed_or_role(bg)):.1f}" for fg, bg in CLASS_PAIRS
+       if ratio(fixed_or_role(fg), fixed_or_role(bg)) < 4.5]
+print("contrast classification banners: " + ("ok" if not low else "below 4.5: " + ", ".join(low)))

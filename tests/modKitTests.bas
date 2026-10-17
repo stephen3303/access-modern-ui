@@ -712,6 +712,51 @@ Public Function TestKit(ByVal root As String) As String
     Check ReleasedVersion(text & "\") = "1.4.0", "Release folder version misread"
     Kill text & "\" & KIT_VERSION_FILE: RmDir text
     Check ReleasedVersion(text) = "", "Missing version file read a version"
+    ' Classification: the selection limits the permitted labels, and the banner shows it.
+    On Error Resume Next
+    DeleteSetting APP_NAME, "Classification"
+    On Error GoTo 0
+    Check AppClassification() = "UNCLASSIFIED", "Default classification is not UNCLASSIFIED"
+    Check UBound(ClassificationLabels()) = 11, "Classification list is not 12 markings"
+    Check NormalizeClassification("  ts // sci ") = "TOP SECRET//SCI", "Short form with spaces not normalized"
+    Check NormalizeClassification("FOUO") = "UNCLASSIFIED//FOUO", "FOUO not normalized"
+    Check NormalizeClassification("Secret//Nofornn") = "", "Unknown marking normalized"
+    Check ClassificationLevel("secret") = 3 And ClassificationLevel("CUI") = 1 And ClassificationLevel("nope") = -1, "Classification levels wrong"
+    Check ClassificationPermitted("UNCLASSIFIED") And Not ClassificationPermitted("CUI"), "Default selection permits more than UNCLASSIFIED"
+    SetAppClassification "secret"
+    Check AppClassification() = "SECRET", "Selected classification not saved"
+    Check ClassificationPermitted("CUI") And ClassificationPermitted("SECRET//NOFORN") And ClassificationPermitted("SECRET//REL TO USA, FVEY"), "SECRET does not permit its own and lower labels"
+    Check Not ClassificationPermitted("TOP SECRET") And Not ClassificationPermitted("TOP SECRET//SCI") And Not ClassificationPermitted("bogus"), "SECRET permits a higher or unknown label"
+    Check UBound(PermittedClassifications()) = 7, "SECRET does not permit 8 labels"
+    Check PermittedClassificationList() = """UNCLASSIFIED"";""UNCLASSIFIED//FOUO"";""CUI"";""CONFIDENTIAL"";""CONFIDENTIAL//NOFORN"";""SECRET"";""SECRET//NOFORN"";""SECRET//REL TO USA, FVEY""", "Permitted value list wrong"
+    Check ClassificationProblem("CUI") = "" And Len(ClassificationProblem("TOP SECRET")) > 0 And Len(ClassificationProblem("")) > 0, "Classification problems wrong"
+    SetAppClassification "TOP SECRET//SCI"
+    Check ClassificationPermitted("TOP SECRET//SCI//NOFORN") And UBound(PermittedClassifications()) = 11, "Highest selection does not permit every label"
+    Check ClassificationColor("SECRET//NOFORN") = CLR_CLASS_SECRET And ClassificationTextColor("TS") = CLR_CLASS_TEXT_DARK And ClassificationTextColor("SECRET") = CLR_WHITE, "Marking colors wrong"
+    badName = 0
+    On Error Resume Next
+    SetAppClassification "not a marking"
+    badName = Err.Number
+    On Error GoTo 0
+    Check badName = 5 And AppClassification() = "TOP SECRET//SCI", "An unknown marking was selected"
+    SetAppClassification "CONFIDENTIAL"
+    NewForm "", 0, px(300), px(80)
+    Banner "lblClassTop", 0, px(300)
+    Banner "lblClassBottom", px(60), px(300), 1
+    SaveForm "frmClassBanner"
+    DoCmd.OpenForm "frmClassBanner", acDesign
+    Set host = Forms("frmClassBanner")
+    UpdateClassificationBanners host
+    Check host.lblClassTop.Caption = "CONFIDENTIAL" And host.lblClassBottom.BackColor = CLR_CLASS_CONFIDENTIAL, "Banners do not show the selection"
+    Check host.lblClassTop.Height = px(20) And host.lblClassTop.Tag = CLASS_BANNER_TAG, "Banner size or tag wrong"
+    SetAppClassification "TOP SECRET"
+    UpdateClassificationBanners host
+    Check host.lblClassBottom.Caption = "TOP SECRET" And host.lblClassBottom.ForeColor = CLR_CLASS_TEXT_DARK, "Banner did not follow the selection"
+    DoCmd.Close acForm, "frmClassBanner", acSaveNo
+    DoCmd.DeleteObject acForm, "frmClassBanner"
+    On Error Resume Next
+    DeleteSetting APP_NAME, "Classification"
+    On Error GoTo 0
     Check FederalHoliday(#10/12/2026#) = "Columbus Day", "Columbus Day 2026 missing"
     Check FederalHoliday(#5/25/2026#) = "Memorial Day", "Memorial Day 2026 missing"
     Check FederalHoliday(#11/26/2026#) = "Thanksgiving Day", "Thanksgiving 2026 missing"

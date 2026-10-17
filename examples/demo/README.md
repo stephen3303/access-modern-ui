@@ -11,6 +11,8 @@ test changes to it. It has one local table of fictional items and five pages:
 | Dashboard | Four `StatTile`s (open, past due with down as good, complete, average done) with change badges, and the flagged items in a card with an `EmptyState` when none are flagged |
 | List and detail | The list/detail pattern (`SelectFirstRow`, `ShowDetail`, `ClearDetail`), click-to-sort captions, `PrintGrid` and `ExportGrid` in the list's sort; the Due field is a `DateBox` whose date picker marks federal holidays and every item's due date (`MarkDate`); a compact `Toggle` switch (Flagged for review) on the detail panel's Save row; a `SecretBox` (the item's access code); an `Avatar` with the owner's initials beside the Owner field; Save confirms with a toast; a compact warning `Alert` in the header row counts open items past their due date (its close mark hides it); a `Breadcrumb` below the title (All items > status > item) whose crumbs pick the chip; the list's `SearchBox` (magnifier and clear mark, as on Tables) and its `EmptyState` when nothing matches; the detail card's More button (⋯) opens a `KitMenu` dropdown (Mark complete, Flag, Delete) |
 
+Classification banners run across the top and bottom of the main window (`Banner`), showing the app's classification in its marking color. Classification in the sidebar opens a `KitMenu` to choose it (UNCLASSIFIED to TOP SECRET//SCI); the banners change at once and a message lists the labels the choice permits (`PermittedClassifications`).
+
 Help in the sidebar, or F1, opens the kit's help window (`KitHelp`) on the page's topic, with a search box over the topic list; the topics are in `src\help\help.txt`. Ctrl+F goes to a page's search box and Ctrl+S saves a changed record (`BuildShortcutKeys`). Appearance in the sidebar switches palettes. The demo opens on the kit's splash screen
 (`BuildSplash`), which opens the main window and closes; `HideAccessSplash` replaces
 Access's own splash with `KitDemo.bmp`.
@@ -74,6 +76,13 @@ watching for Visual Basic error dialogs as well as the error log:
 - Focus ring: clicking or tabbing into the search box, the category filter or a detail
   field turns its border the palette's primary color, and leaving it restores the border,
   with no flicker and the text not moving.
+- Classification: both banners read UNCLASSIFIED (green) on a first run. Classification in the sidebar
+  opens a menu of six levels; picking SECRET turns both banners red, and the message lists
+  UNCLASSIFIED, UNCLASSIFIED//FOUO, CUI, CONFIDENTIAL, CONFIDENTIAL//NOFORN, SECRET, SECRET//NOFORN
+  and SECRET//REL TO USA, FVEY; TOP SECRET turns them orange and TOP SECRET//SCI yellow, both
+  with black text. The choice and the banners are the same after closing and reopening the demo and
+  in every palette (Navy, Midnight and the rest); the maximized window keeps the banners on its top
+  and bottom edges with the sidebar and page between them.
 - Dialogs: Appearance and the card buttons' messages open centred over Access, on its
   monitor, with Access restored, maximized, or moved partly off the edge of a screen.
 - List and detail: the first row opens on load and after each filter; a click shows that

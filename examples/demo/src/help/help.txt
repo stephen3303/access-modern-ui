@@ -18,6 +18,7 @@ Click **Help** in the sidebar, or press **F1**, to open help for the page you ar
 # Other things in the sidebar
 - **Appearance** opens the list of color palettes. Click one to switch the whole app to it.
 - **Folder trust** explains how to trust this folder, so Access stops asking to enable content.
+- **Classification** chooses the app's classification. The colored banners at the top and bottom of the window show it, and the app only permits classification labels at or below it. Choosing **SECRET**, for example, permits UNCLASSIFIED, CUI, CONFIDENTIAL and SECRET labels, but not TOP SECRET.
 
 === cards | Cards and progress
 This page shows cards, progress bars and the kit's message, toast and input dialogs.

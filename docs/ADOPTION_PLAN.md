@@ -176,8 +176,11 @@ new features in one pass.
 - [x] Copy every file in `kit/modules`, `kit/forms` and `tools/make_themes.py` over
   SABER's copies. Move anything SABER-specific out first:
   - `Banner()` from `modUIKit` goes into an app module (`modBuildUI`). The kit removed
-    the classification banner in 75fda1d. Ask Stephen whether SABER keeps it. **Default:
-    keep it as app code.**
+    the classification banner in 75fda1d and has it again (`Banner` and
+    `modKitClassification`, with `CLR_CLASS_*` fixed colors). SABER can drop its own
+    `Banner` and `ClassificationColor` and use the kit's: the selected classification then
+    limits the labels (`ClassificationPermitted`). Ask Stephen before replacing SABER's
+    own colors. **Default: keep SABER's copy until he says.**
   - Hard-coded `"SABER"` paths in `modPng` and `modDarkMode` are replaced by `APP_NAME`.
   - `SetVisible` and `StyleChip` are kit code now (modKitUtil, modKitUI): delete them
     from `modUI`, and replace `pgDetail`'s private `SetVis` with `SetVisible`. `StyleChip`'s new optional count argument keeps old calls working.

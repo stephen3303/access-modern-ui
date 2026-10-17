@@ -127,6 +127,20 @@ Err_Handler:
     HandleError "modDemo.DemoAppearance"
 End Function
 
+' Sidebar "Classification": a menu to choose the app's classification, which
+' the banners show and which limits the labels the app permits.
+Public Function DemoClassification()
+    On Error GoTo Err_Handler
+    If Not IsFormOpen("frmMain") Then Exit Function
+    If KitChooseClassification(Forms("frmMain").lnkClass) Then
+        KitMsgBox "The app's classification is now " & AppClassification() & "." & vbCrLf & vbCrLf & _
+            "Labels permitted: " & Join(PermittedClassifications(), ", ") & ".", vbInformation, "Classification"
+    End If
+    Exit Function
+Err_Handler:
+    HandleError "modDemo.DemoClassification"
+End Function
+
 ' Go to a page (deferred until the calling event finishes; frmMain.QueueNav).
 Public Function NavTo(ByVal key As String)
     On Error GoTo Err_Handler
