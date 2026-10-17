@@ -90,6 +90,19 @@ Public Const POPOVER_LINE_H As Long = 255   ' one line of 9pt text, 17px (twips)
 Private m_popTitle As String
 Private m_popText As String
 
+' The searchable picker (PickBox, below).
+Public Const PICK_ROWS As Long = 8         ' most matches the list shows
+Public Const PICK_ROW_H As Long = 32       ' a row's height (px)
+Public Const PICK_MIN_W As Long = 240      ' narrowest list (px)
+Public Const PICK_MAX_W As Long = 480      ' widest list (px), its build width
+Private Const PICK_TICK_MS As Long = 150   ' how often the list checks the box still has the focus
+Private Const PICK_TAG As String = "pick|" ' a PickBox's Tag: this, then rowSql
+
+Private m_pickBox As Control    ' the box the open list belongs to
+Private m_pickKeys As Collection ' the listed rows' keys, first row first
+Private m_pickText As Collection ' and their second columns, what the box shows
+Private m_pickHot As Long       ' the lit row, -1 for none
+
 ' Show a menu of items under button anchor and wait for the user: returns the
 ' picked item's key, or "" when the menu was closed with nothing picked.
 ' Raises error 5 for no items, more than MENU_ROWS, or a bad item. Without
@@ -533,25 +546,14 @@ End Sub
 ' further columns in muted text on the right. Rows come ordered by the
 ' second column, so leave ORDER BY out of rowSql. The key goes in a hidden
 ' box beside it, <name>Key, bound to keyField ("" for an unbound dialog):
-' read the pick there. The form's code adds:
+' read the pick there. The form's code adds (and a form the kit's builders
+' make sets Ev c, "OnKeyDown" on the box PickBox returns):
 '   Private Sub txtPerson_KeyDown(KeyCode As Integer, Shift As Integer)
 '       KitPickKey Me.txtPerson, KeyCode
 '   End Sub
 ' and KitPickShow Me.txtPerson in Form_Current on a bound form (an unbound
 ' dialog calls it after setting txtPersonKey), so the box shows the pick.
 ' ---------------------------------------------------------------------------
-
-Public Const PICK_ROWS As Long = 8         ' most matches the list shows
-Public Const PICK_ROW_H As Long = 32       ' a row's height (px)
-Public Const PICK_MIN_W As Long = 240      ' narrowest list (px)
-Public Const PICK_MAX_W As Long = 480      ' widest list (px), its build width
-Private Const PICK_TICK_MS As Long = 150   ' how often the list checks the box still has the focus
-Private Const PICK_TAG As String = "pick|" ' a PickBox's Tag: this, then rowSql
-
-Private m_pickBox As Control    ' the box the open list belongs to
-Private m_pickKeys As Collection ' the listed rows' keys, first row first
-Private m_pickText As Collection ' and their second columns, what the box shows
-Private m_pickHot As Long       ' the lit row, -1 for none
 
 ' Build a searchable picker at x, y, w wide (h tall, 30px by default): the
 ' box nm the user types in, with placeholder showing while it is empty,

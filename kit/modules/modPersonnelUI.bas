@@ -109,7 +109,7 @@ End Function
 Public Function PersonPickBox(ByVal nm As String, ByVal keyField As String, ByVal x As Long, ByVal y As Long, _
         ByVal w As Long, Optional ByVal h As Long = 450) As Control
     Set PersonPickBox = PickBox(nm, keyField, "SELECT person_id, last_name & ', ' & first_name & " & _
-        "IIf(rank Is Null, '', ' (' & rank & ')') AS person_name, username FROM " & PERSON_TABLE & _
+        "IIf(Nz(rank, '') = '', '', ' (' & rank & ')') AS person_name, username FROM " & PERSON_TABLE & _
         " WHERE is_active", x, y, w, h, "Type a name")
 End Function
 
