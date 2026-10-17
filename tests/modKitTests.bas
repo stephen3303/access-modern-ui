@@ -1201,6 +1201,10 @@ Public Function TestKit(ByVal root As String) As String
     ShellGo "c"
     Check shellFrm.TimerInterval = 0 And ShellPageKey() = "b" And Not shellFrm.CanLeavePage(), "Shell left a page that refused"
     TempVars("ShellLeave") = True
+    TempVars("ShellRefuse") = True
+    ShellGo "c"
+    Check shellFrm.TimerInterval = 0 And ShellPageKey() = "b" And Not KitTakeRefused(), "Shell left a page whose save was refused"
+    TempVars("ShellRefuse") = False
     ShellShow shellFrm, "secret"
     Check ShellPageKey() = "c", "Shell didn't follow RoutePage"
     ShellShow shellFrm, "detail"

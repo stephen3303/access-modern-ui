@@ -137,6 +137,7 @@ Private Sub ItemActions(ByVal atPointer As Boolean)
         Case "del"
             If KitMsgBox("Delete """ & Me.sfDetail.Form!name & """? This can't be undone.", vbYesNo + vbExclamation + vbDefaultButton2, _
                 "Delete item") = vbYes Then
+                ClearDetail Me, "sfDetail"      ' the panel lets go of the record first
                 CurrentDb.Execute "DELETE FROM demo_item WHERE id=" & id, dbFailOnError
                 RefreshPage
                 ShowOverdue
