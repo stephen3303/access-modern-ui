@@ -56,6 +56,7 @@ Public Const ERR_DATA_CHANGED As Long = 7878   ' "The data has been changed"
 
 Private Const LOCK_MSG As String = "Someone else is saving this record right now. Wait a moment, then save again."
 Private Const LOCK_RAISE As String = "Another user is saving the same records right now. Wait a moment, then try again."
+Private Const LOCK_BUSY As String = "Waiting for another user to finish saving..."
 
 Private Declare PtrSafe Sub Sleep Lib "kernel32" (ByVal ms As Long)
 
@@ -102,17 +103,23 @@ End Function
 ' locks don't clear, raises the lock error with a plain description for the
 ' caller's HandleError to show; any other error is raised unchanged.
 Public Function KitExecute(ByVal sql As String) As Long
-    Dim db As DAO.Database, attempt As Long, num As Long
+    Dim db As DAO.Database, attempt As Long, num As Long, d As String, src As String, busy As Boolean
     Set db = CurrentDb
 TryAgain:
     On Error GoTo Fail
     db.Execute sql, dbFailOnError
     KitExecute = db.RecordsAffected
+    If busy Then KitBusyEnd
     Exit Function
 Fail:
-    If LockWait(Err.Number, attempt) Then Resume TryAgain
-    If IsLockError(Err.Number) Then
-        num = Err.Number
+    ' KitBusy and KitBusyEnd reset Err, so keep the error to pass it on.
+    num = Err.Number: d = Err.Description: src = Err.Source
+    ' The first retry: say why the app is waiting until the retries end.
+    If attempt = 0 And IsLockError(num) Then KitBusy LOCK_BUSY: busy = True
+    If LockWait(num, attempt) Then Resume TryAgain
+    If busy Then KitBusyEnd
+    Err.Number = num: Err.Description = d: Err.Source = src
+    If IsLockError(num) Then
         LogError "modKitLocks.KitExecute", "locked after " & LOCK_TRIES & " retries: " & Left$(sql, 200)
         On Error GoTo 0
         Err.Raise num, "modKitLocks.KitExecute", LOCK_RAISE

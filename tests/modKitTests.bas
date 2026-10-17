@@ -1,5 +1,6 @@
 Option Compare Database
 Option Explicit
+Private Declare PtrSafe Function IsWindowEnabled Lib "user32" (ByVal hwnd As LongPtr) As Long
 Private checks As Long
 Private Sub Check(ByVal valid As Boolean, ByVal message As String)
     If Not valid Then Err.Raise 5, , message
@@ -27,6 +28,7 @@ Public Function TestKit(ByVal root As String) As String
     Btn "ringSave", "Save", px(110), 0, px(80), px(30)
     SaveForm "subRing"
     BuildToast
+    BuildBusy
     BuildMenuDialog
     BuildPopoverDialog
     NewForm "test_rows", 0, px(300), px(40)
@@ -576,6 +578,31 @@ Public Function TestKit(ByVal root As String) As String
     Check Forms("dlgToast").lblMsg.Caption = "Saved", "Toast lost its message"
     Check Screen.ActiveForm.Name = "frmTest", "Toast took the focus"
     DoCmd.Close acForm, "dlgToast", acSaveNo
+    ' Busy pop-up: nested messages, the dim, the focus, and closing.
+    KitBusy "Linking R&D"
+    Check IsFormOpen("dlgBusy"), "KitBusy didn't open dlgBusy"
+    Check Forms("dlgBusy").lblMsg.Caption = "Linking R&&D", "Busy pop-up took & as an access key"
+    Check AppDimmed(), "KitBusy didn't dim the app"
+    Check Screen.ActiveForm.Name = "frmTest", "Busy pop-up took the focus"
+    Check IsWindowEnabled(Application.hWndAccessApp) = 0 And IsWindowEnabled(Forms("dlgBusy").hwnd) <> 0, _
+        "Busy pop-up didn't block clicks and keys behind it"
+    KitBusy "Exporting"
+    Check KitBusyDepth() = 2 And Forms("dlgBusy").lblMsg.Caption = "Exporting", "Nested KitBusy didn't show its message"
+    KitBusyEnd
+    Check KitBusyDepth() = 1 And Forms("dlgBusy").lblMsg.Caption = "Linking R&&D", "Outer busy message didn't come back"
+    KitBusy String(120, "x")
+    Check Forms("dlgBusy").boxTrack.Top > Forms("dlgBusy").lblMsg.Top + 272, "Long busy message didn't move the track down"
+    KitBusyEnd
+    Check Abs(Forms("dlgBusy").boxTrack.Top + Forms("dlgBusy").boxTrack.Height + Forms("dlgBusy").lblMsg.Top _
+        - Forms("dlgBusy").Section(acDetail).Height) <= 15, _
+        "Busy pop-up padding below the track differs from above the message"
+    KitBusyEnd
+    Check KitBusyDepth() = 0 And Not IsFormOpen("dlgBusy"), "Last KitBusyEnd didn't close dlgBusy"
+    Check Not AppDimmed(), "Last KitBusyEnd left the app dimmed"
+    Check IsWindowEnabled(Application.hWndAccessApp) <> 0 And IsWindowEnabled(Forms("frmTest").hwnd) <> 0, _
+        "Last KitBusyEnd left the app blocked"
+    KitBusyEnd                                          ' one too many: nothing happens
+    Check KitBusyDepth() = 0, "Extra KitBusyEnd changed the busy count"
     Check SaveDetail(host, "sfRows"), "Unchanged detail panel reported a refused save"
     host.sfRefuse.Form.txtDesc = "Changed"
     Check Not SaveDetail(host, "sfRefuse"), "Refused detail save reported as saved"

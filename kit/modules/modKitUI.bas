@@ -52,6 +52,12 @@ Private m_inTitle As String
 Private m_inDefault As String
 Private m_inMasked As Boolean
 Private m_inAnswer As Variant
+' KitBusy: the messages waiting for their KitBusyEnd, newest last; whether
+' this busy work dimmed the app for dlgBusy; whether the status bar shows
+' the message (no dlgBusy, or it failed to open).
+Private m_busy As Collection
+Private m_busyPopup As Boolean
+Private m_busyStatus As Boolean
 
 ' ---------------------------------------------------------------------------
 ' Tables
@@ -1500,6 +1506,81 @@ Fail:
     On Error Resume Next
     LogError "modKitUI.KitToast", Left$(msg, 60)
     SysCmd acSysCmdSetStatus, Left$(msg, 255)
+End Function
+
+' Busy pop-up (dlgBusy, built by BuildBusy): KitBusy msg dims the app and
+' shows msg in a small pop-up in the middle of it, with a bar sliding under
+' the text, until KitBusyEnd. Use it around work the user could take for a
+' hang: relinking to a data file on a share, waiting out another user's
+' lock, an import or export. Pair every KitBusy with one KitBusyEnd, on
+' the error path too.
+'   KitBusy "Exporting the list..."
+'   On Error GoTo Fail
+'   ... the work ...
+'   KitBusyEnd
+'   Exit Sub
+' Fail:
+'   num = Err.Number: d = Err.Description: src = Err.Source
+'   KitBusyEnd                      ' resets Err, so it is read first
+'   Err.Number = num: Err.Description = d: Err.Source = src
+'   HandleError "pgItems.Export"
+' Busy work inside busy work shares the pop-up: the inner message shows
+' until its KitBusyEnd, then the outer one comes back. The pop-up never
+' takes the focus. The bar moves only while the work lets Access run
+' (DoEvents); in work that doesn't, the message still shows. An app that
+' hasn't built dlgBusy gets msg in the status bar instead, with no dim;
+' if dlgBusy fails to open, the same, and the failure is logged.
+Public Sub KitBusy(ByVal msg As String)
+    If m_busy Is Nothing Then Set m_busy = New Collection
+    m_busy.Add msg
+    On Error GoTo Fail
+    If m_busy.Count = 1 Then
+        m_busyPopup = BusyFormBuilt()       ' without it, the status bar, quietly: the kit calls KitBusy itself
+        If m_busyPopup Then DimApp          ' never raises
+    End If
+    If Not m_busyPopup Then GoTo StatusBar
+    If Not IsFormOpen("dlgBusy") Then DoCmd.OpenForm "dlgBusy", WindowMode:=acHidden
+    Forms("dlgBusy").ShowBusy msg
+    Exit Sub
+Fail:
+    LogError "modKitUI.KitBusy", Left$(msg, 60)
+StatusBar:
+    On Error Resume Next
+    SysCmd acSysCmdSetStatus, Left$(msg, 255)
+    m_busyStatus = True
+End Sub
+
+' End the latest KitBusy: the message before it comes back, or after the
+' last one the pop-up closes and the dim goes. Never raises, so it is safe
+' in an error handler; it does reset Err, so read Err first.
+Public Sub KitBusyEnd()
+    Dim msg As String
+    On Error Resume Next
+    If KitBusyDepth() = 0 Then Exit Sub
+    m_busy.Remove m_busy.Count
+    If m_busy.Count > 0 Then
+        msg = m_busy(m_busy.Count)
+        If IsFormOpen("dlgBusy") Then Forms("dlgBusy").ShowBusy msg
+        If m_busyStatus Then SysCmd acSysCmdSetStatus, Left$(msg, 255)
+        Exit Sub
+    End If
+    If IsFormOpen("dlgBusy") Then DoCmd.Close acForm, "dlgBusy", acSaveNo
+    If m_busyStatus Then SysCmd acSysCmdClearStatus
+    If m_busyPopup Then UndimApp
+    m_busyStatus = False
+    m_busyPopup = False
+End Sub
+
+' True when the app has a dlgBusy form (BuildBusy).
+Private Function BusyFormBuilt() As Boolean
+    On Error Resume Next
+    BusyFormBuilt = (Len(CurrentProject.AllForms("dlgBusy").Name) > 0)
+End Function
+
+' KitBusy calls still waiting for their KitBusyEnd. dlgBusy closes itself
+' when this is 0, so a VBA reset during busy work can't leave it showing.
+Public Function KitBusyDepth() As Long
+    If Not m_busy Is Nothing Then KitBusyDepth = m_busy.Count
 End Function
 
 ' InputBox in the kit's look: opens the input dialog (dlgInput, built by
