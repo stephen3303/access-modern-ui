@@ -576,10 +576,23 @@ Public Function PickBox(ByVal nm As String, ByVal keyField As String, ByVal rowS
     Set PickBox = c
 End Function
 
+' What the user has typed in box. An empty box's Text while it has the focus
+' is its placeholder (the Format's second section), which is not typing.
+Private Function PickTyped(box As Control) As String
+    Dim t As String, f As String, i As Long
+    t = Nz(box.Text, "")
+    f = Nz(box.Format, "")
+    i = InStr(f, ";")
+    If i > 0 And Len(t) > 0 Then
+        If t = Replace(Mid$(f, i + 1), """", "") Then t = ""
+    End If
+    PickTyped = t
+End Function
+
 ' A PickBox's Change (PickBox sets it): list the rows matching what is typed.
 Public Function KitPickChanged(frm As Form, ByVal nm As String)
     On Error GoTo Fail
-    PickList frm.Controls(nm), Nz(frm.Controls(nm).Text, "")
+    PickList frm.Controls(nm), PickTyped(frm.Controls(nm))
     Exit Function
 Fail:
     HandleError "modMenu.KitPickChanged", nm
@@ -593,7 +606,7 @@ Public Sub KitPickKey(box As Control, KeyCode As Integer)
     Select Case KeyCode
         Case vbKeyDown, vbKeyUp
             If Not PickOpenFor(box) Then
-                If KeyCode = vbKeyDown Then PickList box, Nz(box.Text, ""): KeyCode = 0
+                If KeyCode = vbKeyDown Then PickList box, PickTyped(box): KeyCode = 0
                 Exit Sub
             End If
             If m_pickKeys.Count > 0 Then
@@ -749,6 +762,7 @@ End Sub
 ' (hidden, then shown without taking the focus) when it isn't open.
 Private Sub PickList(box As Control, ByVal text As String)
     Dim db As DAO.Database, qd As DAO.QueryDef, rs As DAO.Recordset, frm As Form, n As Long, i As Long, s As String
+    Dim subs(0 To PICK_ROWS - 1) As String
     If Not m_pickBox Is Nothing Then
         If Not SameBox(m_pickBox, box) Then PickClose True, True    ' another box's list
     End If
@@ -769,28 +783,24 @@ Private Sub PickList(box As Control, ByVal text As String)
         For i = 2 To rs.Fields.Count - 1
             If Len(Nz(rs.Fields(i).Value, "")) > 0 Then s = s & IIf(Len(s) > 0, "  " & ChrW(&HB7) & "  ", "") & rs.Fields(i).Value
         Next
-        frm.Controls("lblMain" & n).Caption = Replace(m_pickText(n + 1), "&", "&&")
-        frm.Controls("lblSub" & n).Caption = Replace(s, "&", "&&")
+        subs(n) = s
         n = n + 1
         rs.MoveNext
     Loop
     rs.Close
-    PickLayout frm, box, n
+    PickLayout frm, box, n, subs
 End Sub
 
 ' Size dlgPick to n rows (one "No matches" row for none) as wide as box,
 ' within PICK_MIN_W and PICK_MAX_W, light the first row, and show it under
 ' box (above it when there's no room below) without taking the focus.
-Private Sub PickLayout(frm As Form, box As Control, ByVal n As Long)
-    Dim r As Long, w As Long, y As Long, subW As Long, shown As Long
+Private Sub PickLayout(frm As Form, box As Control, ByVal n As Long, subs() As String)
+    Dim r As Long, w As Long, y As Long, subW As Long, shown As Long, mainW As Long
     w = box.Width
     If w < px(PICK_MIN_W) Then w = px(PICK_MIN_W)
     If w > px(PICK_MAX_W) Then w = px(PICK_MAX_W)
     shown = IIf(n = 0, 1, n)
-    If n = 0 Then
-        frm.Controls("lblMain0").Caption = "No matches"
-        frm.Controls("lblSub0").Caption = ""
-    End If
+    If n = 0 Then subs(0) = ""
     frm.Controls("lblMain0").ForeColor = IIf(n = 0, Th(CLR_MUTED_FG), Th(CLR_FG))
     For r = 0 To PICK_ROWS - 1
         frm.Controls("boxRow" & r).Visible = False
@@ -799,8 +809,17 @@ Private Sub PickLayout(frm As Form, box As Control, ByVal n As Long)
         If r < shown Then
             ' The muted text takes what it needs, up to 40% of the row.
             subW = 0
-            If Len(frm.Controls("lblSub" & r).Caption) > 0 Then subW = MeasureText(frm.Controls("lblSub" & r).Caption, 9, 400) + px(24)
+            If Len(subs(r)) > 0 Then subW = MeasureText(subs(r), 9, 400) + px(24)
             If subW > (w - 2 * px(MENU_PAD)) * 2 \ 5 Then subW = (w - 2 * px(MENU_PAD)) * 2 \ 5
+            ' One line each: text too long for its part ends in an ellipsis
+            ' (a label would wrap it onto a second line the row cuts off).
+            mainW = w - 2 * px(MENU_PAD) - px(24) - subW
+            If n = 0 Then
+                frm.Controls("lblMain0").Caption = "No matches"
+            Else
+                frm.Controls("lblMain" & r).Caption = Replace(FitSingleLineText(m_pickText(r + 1), mainW), "&", "&&")
+            End If
+            frm.Controls("lblSub" & r).Caption = Replace(FitSingleLineText(subs(r), subW - px(24)), "&", "&&")
             frm.Controls("boxRow" & r).Width = w - 2 * px(MENU_PAD)
             frm.Controls("lblMain" & r).Width = w - 2 * px(MENU_PAD)
             frm.Controls("lblMain" & r).RightMargin = px(12) + subW
@@ -841,7 +860,7 @@ Private Sub PickChoose(ByVal r As Long)
     PickClose False
     On Error Resume Next                ' a box that can't take the focus keeps the pick all the same
     box.SetFocus
-    box.SelStart = Len(Nz(box.Text, ""))
+    box.SelStart = Len(PickTyped(box))
 End Sub
 
 ' Close the list. restore: put the box back to its pick (Esc, or leaving
@@ -859,7 +878,7 @@ Private Sub PickClose(ByVal restore As Boolean, Optional ByVal clearEmpty As Boo
     If Not restore Or box Is Nothing Then Exit Sub
     On Error GoTo Gone                  ' the box's form closed while the list was open
     Set keyBox = PickForm(box).Controls(box.Name & "Key")
-    If PickBoxHasFocus(box) Then typed = Nz(box.Text, "") Else typed = Nz(box.Value, "")
+    If PickBoxHasFocus(box) Then typed = PickTyped(box) Else typed = Nz(box.Value, "")
     If clearEmpty And Len(Trim$(typed)) = 0 And Not IsNull(keyBox.Value) Then keyBox.Value = Null
     KitPickShow box
 Gone:
