@@ -35,7 +35,7 @@ Private Declare PtrSafe Function EnableWindow Lib "user32" (ByVal hwnd As LongPt
 Private Declare PtrSafe Function IsWindowEnabled Lib "user32" (ByVal hwnd As LongPtr) As Long
 Private Declare PtrSafe Function IsWindow Lib "user32" (ByVal hwnd As LongPtr) As Long
 Private Declare PtrSafe Function GetFocus Lib "user32" () As LongPtr
-Private Declare PtrSafe Function SetFocus Lib "user32" (ByVal hwnd As LongPtr) As LongPtr
+Private Declare PtrSafe Function SetFocusWnd Lib "user32" Alias "SetFocus" (ByVal hwnd As LongPtr) As LongPtr
 
 Private Const GWL_EXSTYLE As Long = -20
 Private Const WS_EX_NOACTIVATE As Long = &H8000000
@@ -153,7 +153,7 @@ Private Sub Form_Unload(Cancel As Integer)
     Next
     h = CLngPtr(p(0))
     If h <> 0 And GetFocus() = 0 Then
-        If IsWindow(h) <> 0 Then SetFocus h
+        If IsWindow(h) <> 0 Then SetFocusWnd h
     End If
     Exit Sub
 Err_Handler:
