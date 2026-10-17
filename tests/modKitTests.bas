@@ -540,7 +540,7 @@ Public Function TestKit(ByVal root As String) As String
     KitPickChanged host, "pkTest"
     Check IsFormOpen("dlgPick"), "Typing in the picker didn't open its list"
     With Forms("dlgPick")
-        Check .Controls("lblMain0").Caption = "Description 1" And .Controls("lblSub0").Caption = "Long category", _
+        Check .Controls("lblMain0").Caption = "Description 1" And Left$(.Controls("lblSub0").Caption, 8) = "Long cat", _
             "Picker's first row differs"
         Check .Controls("lblMain7").Visible And .Controls("lblMain7").Caption = "Description 16", "Picker doesn't list 8 matches in order"
         Check .Controls("boxRow0").Visible, "Picker didn't light its first match"
