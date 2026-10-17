@@ -1420,6 +1420,7 @@ Public Function TestKit(ByVal root As String) As String
     CurrentDb.TableDefs.Delete PERSON_TABLE: CurrentDb.TableDefs.Delete PERSON_APP_TABLE
     g_Silent = False
     checks = checks + TestKitAI()
+    checks = checks + TestKitBanner()
     TestKit = checks & " kit checks passed"
 End Function
 

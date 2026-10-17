@@ -658,6 +658,13 @@ Write app-specific helpers next to the builds that use them. Examples:
   frmMain's optional hooks: `RoutePage` (send a page the user can't open elsewhere),
   `PageForm` (a page with no sidebar item) and `PageShown` (a count to refresh).
   `ShellShowItem` hides an item (an admin page) and closes the gap.
+- **Classification banner** (modKitBanner): an app that handles marked data passes
+  `BannerHeight()` as `ShellBuild`'s top and bottom, calls `BannerBuild` before saving
+  `frmMain`, and calls `SetClassification "SECRET//NOFORN"` at startup. The bars show the
+  selected marking in the standard color (green, purple, blue, red, orange, yellow for
+  SCI) in every palette, because the colors are `FIXED`. The selected level is a ceiling:
+  wherever a label comes from the user or from data, check it with `ClassPermits` and
+  offer `ClassMarkings` in pickers, so nothing above the app's classification is chosen.
 - `frmMain` is a single form containing:
   - A **sidebar** on the left: 200px, collapsible to 60px icons-only, with the collapsed
     state saved in the registry. It contains:

@@ -112,6 +112,13 @@ FIXED = {
     "CLR_BAND_BELOW":          (245, 158, 11),   # amber-500
     "CLR_BAND_SIG_BELOW":      (185, 28, 28),    # red-700
     "CLR_BAND_NE":             (107, 114, 128),  # gray-500, Not Evaluated
+    "CLR_CLASS_UNCLASS":       (0, 122, 51),     # classification banner (modKitBanner): UNCLASSIFIED green
+    "CLR_CLASS_CUI":           (80, 43, 133),    # CUI purple
+    "CLR_CLASS_CONF":          (0, 51, 160),     # CONFIDENTIAL blue
+    "CLR_CLASS_SECRET":        (200, 16, 46),    # SECRET red
+    "CLR_CLASS_TS":            (255, 103, 31),   # TOP SECRET orange
+    "CLR_CLASS_SCI":           (252, 229, 0),    # TOP SECRET//SCI yellow
+    "CLR_CLASS_DARK":          (0, 0, 0),        # text on the orange and yellow banners
     "CLR_DESTRUCTIVE_HOVER":   (185, 28, 28),
     "CLR_DESTRUCTIVE_PRESSED": (153, 27, 27),
 }
