@@ -49,6 +49,7 @@ Private Declare PtrSafe Function ClientToScreen Lib "user32" (ByVal hWnd As Long
 Private Declare PtrSafe Function GetCursorPos Lib "user32" (lpPoint As POINTAPI) As Long
 Private Declare PtrSafe Function GetWindowRect Lib "user32" (ByVal hWnd As LongPtr, lpRect As RECT) As Long
 Private Declare PtrSafe Function MonitorFromWindow Lib "user32" (ByVal hWnd As LongPtr, ByVal dwFlags As Long) As LongPtr
+Private Declare PtrSafe Function MonitorFromRect Lib "user32" (lprc As RECT, ByVal dwFlags As Long) As LongPtr
 Private Declare PtrSafe Function GetMonitorInfo Lib "user32" Alias "GetMonitorInfoW" ( _
     ByVal hMonitor As LongPtr, lpmi As MONITORINFO) As Long
 Private Declare PtrSafe Function SetWindowPos Lib "user32" (ByVal hWnd As LongPtr, ByVal hWndInsertAfter As LongPtr, _
@@ -82,7 +83,7 @@ Private m_items As Variant      ' the open menu's items
 Private m_pick As String        ' the key picked, "" for none
 Private m_hot As Long           ' the lit row, -1 for none
 Private m_anchor As RECT        ' the button, screen pixels
-Private m_hAnchor As LongPtr    ' the button's form window (for its monitor)
+Private m_hAnchor As LongPtr    ' the button's form window (for its monitor), 0 at the pointer
 Private m_closing As Boolean
 ' The popover's (KitPopover).
 Public Const POPOVER_W As Long = 280       ' px
@@ -149,10 +150,7 @@ Public Function MenuOpenAt(items As Variant) As Boolean
     GetCursorPos pt
     m_anchor.Left = pt.x: m_anchor.Right = pt.x
     m_anchor.Top = pt.y: m_anchor.Bottom = pt.y
-    m_hAnchor = Application.hWndAccessApp
-    On Error Resume Next                ' no active form: the Access window's monitor
-    m_hAnchor = Screen.ActiveForm.hWnd
-    On Error GoTo 0
+    m_hAnchor = 0                       ' Place uses the pointer's monitor
     MenuOpenAt = MenuShowItems(items)
 End Function
 
@@ -447,10 +445,15 @@ End Function
 ' Put frm under the anchor (AnchorRect). show: also show it, on top, without
 ' taking the focus (a list opened hidden, so typing carries on).
 Private Sub Place(frm As Form, Optional ByVal show As Boolean = False)
-    Dim rc As RECT, mi As MONITORINFO, x As Long, y As Long, gap As Long
+    Dim rc As RECT, pr As RECT, mi As MONITORINFO, x As Long, y As Long, gap As Long
     GetWindowRect frm.hWnd, rc
     mi.cbSize = LenB(mi)
-    If GetMonitorInfo(MonitorFromWindow(m_hAnchor, MONITOR_DEFAULTTONEAREST), mi) = 0 Then Exit Sub
+    If m_hAnchor = 0 Then
+        pr = m_anchor: pr.Right = pr.Left + 1: pr.Bottom = pr.Top + 1   ' the pointer's pixel
+        If GetMonitorInfo(MonitorFromRect(pr, MONITOR_DEFAULTTONEAREST), mi) = 0 Then Exit Sub
+    ElseIf GetMonitorInfo(MonitorFromWindow(m_hAnchor, MONITOR_DEFAULTTONEAREST), mi) = 0 Then
+        Exit Sub
+    End If
     gap = CLng(MENU_GAP * (rc.Right - rc.Left) / (frm.InsideWidth / 15))
     MenuSpot m_anchor.Left, m_anchor.Top, m_anchor.Right, m_anchor.Bottom, rc.Right - rc.Left, rc.Bottom - rc.Top, _
         mi.rcWork.Left, mi.rcWork.Top, mi.rcWork.Right, mi.rcWork.Bottom, gap, x, y
