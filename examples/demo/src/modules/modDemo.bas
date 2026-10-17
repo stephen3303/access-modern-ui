@@ -132,6 +132,23 @@ Public Function NavTo(ByVal key As String)
     NavTo = ShellGo(key)
 End Function
 
+' Open item id in List and detail (a recent record in the Ctrl+K palette,
+' KitRecent): on the list page already, show it there; otherwise go there,
+' and the page opens it when it loads.
+Public Function DemoOpenItem(ByVal id As Long)
+    On Error GoTo Err_Handler
+    If Not IsFormOpen("frmMain") Then Exit Function
+    If ShellPageKey() = "list" Then
+        Forms("frmMain").sfPage.Form.OpenItem id
+    Else
+        TempVars("OpenItem") = id
+        NavTo "list"
+    End If
+    Exit Function
+Err_Handler:
+    HandleError "modDemo.DemoOpenItem", CStr(id)
+End Function
+
 ' Items filter for the demo pages: a status chip ("" for all), search text
 ' and a category ("" for all). The search is literal text, as GridHighlight
 ' marks it: LIKE's wildcard characters in it are bracketed.

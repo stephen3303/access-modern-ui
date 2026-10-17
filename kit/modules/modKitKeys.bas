@@ -3,6 +3,7 @@ Option Explicit
 
 ' Access UI kit - keyboard shortcuts that work the same in every app:
 '   Ctrl+S  save        Ctrl+N  new         Ctrl+F  find        F1  help
+'   Ctrl+K  the command palette (KitPalette; nothing without dlgPalette)
 ' BuildShortcutKeys writes them as the AutoKeys macro (it replaces any the
 ' database has, BuildHelpKey's included, and keeps F1 for KitHelp). Each key
 ' runs KitShortcut with its action ("save", "new", "find"), which asks the
@@ -35,6 +36,7 @@ Public Sub BuildShortcutKeys(Optional ByVal withHelp As Boolean = True)
     text = text & KeyMacro("^S", "KitShortcut('" & SHORTCUT_SAVE & "')")
     text = text & KeyMacro("^N", "KitShortcut('" & SHORTCUT_NEW & "')")
     text = text & KeyMacro("^F", "KitShortcut('" & SHORTCUT_FIND & "')")
+    text = text & KeyMacro("^K", "KitPalette()")
     If withHelp Then text = text & KeyMacro("{F1}", "KitHelp()")
     WriteAutoKeys text
 End Sub

@@ -32,6 +32,7 @@ Public Function TestKit(ByVal root As String) As String
     BuildMenuDialog
     BuildPopoverDialog
     BuildPickDialog
+    BuildPaletteDialog
     NewForm "test_rows", 0, px(300), px(40)
     Ev F, "BeforeUpdate"
     Txt "txtDesc", "description", 0, 0, px(280), px(30)
@@ -1219,6 +1220,49 @@ Public Function TestKit(ByVal root As String) As String
     ShellCollapse shellFrm, False, False
     Check shellFrm.boxSide.Width = SHELL_W And shellFrm.sfPage.Left = SHELL_W And shellFrm.sfPage.Width = shellW And shellFrm.nt_a.Visible _
         And shellFrm.lblBrand.Visible And shellFrm.nb_a.Width = px(176) And shellFrm.ni_a.Left = px(20), "Opened sidebar didn't come back"
+    ' Command palette (Ctrl+K): the shell's pages, the recent records, then its
+    ' commands; typing narrows the list; the keys move; Enter goes.
+    On Error Resume Next: DeleteSetting APP_NAME, "Recent": On Error GoTo 0
+    KitRecent "Pump overhaul", "ShellGo(""c"")", "E8A5"
+    KitRecent "Valve check", "ShellGo(""b"")"
+    KitRecent "Pump overhaul", "ShellGo(""c"")", "E8A5"
+    KitPalette
+    Check IsFormOpen("dlgPalette"), "Ctrl+K didn't open the palette"
+    Check Screen.ActiveForm.Name = "dlgPalette" And Screen.ActiveControl.Name = "txtSearch", "Palette didn't take the focus"
+    Check PaletteRows() = 6 And PaletteRowText(0) = "Alpha" And PaletteRowText(2) = "Gamma" And PaletteRowText(3) = "Pump overhaul" _
+        And PaletteRowText(4) = "Valve check" And PaletteRowText(5) = "Help", "Palette doesn't list pages, recent records (newest first, once), then commands"
+    With Forms("dlgPalette")
+        Check .lblSub0.Caption = "Page" And .lblSub3.Caption = "Recent" And .lblSub5.Caption = "Command" And .lblIcon3.Caption = ChrW(&HE8A5), _
+            "Palette rows don't say what they are"
+        Check PaletteHot() = 0 And .boxRow0.Visible, "Palette didn't light its first row"
+        PaletteShow Forms("dlgPalette"), "A"
+        Check PaletteRows() = 5 And PaletteRowText(0) = "Alpha" And PaletteRowText(1) = "Beta", "Palette doesn't put names starting with the text first"
+        PaletteShow Forms("dlgPalette"), "check  VALVE"
+        Check PaletteRows() = 1 And PaletteRowText(0) = "Valve check", "Palette doesn't match every word"
+        PaletteShow Forms("dlgPalette"), "zzz"
+        Check PaletteRows() = 0 And PaletteHot() = -1 And .lblEmpty.Visible And Not .lblCap0.Visible, "Palette shows no empty state"
+        Check .InsideHeight = px(64 + 36 + 8 + 32), "Palette didn't shrink to its rows"
+        PaletteShow Forms("dlgPalette"), ""
+        key = vbKeyDown: PaletteKey Forms("dlgPalette"), key
+        key = vbKeyDown: PaletteKey Forms("dlgPalette"), key
+        Check PaletteHot() = 2 And .boxRow2.Visible And Not .boxRow0.Visible, "Down didn't move the light"
+        For i = 1 To 3
+            key = vbKeyUp: PaletteKey Forms("dlgPalette"), key
+        Next
+        Check PaletteHot() = 5, "Up didn't go round to the last row"
+        PaletteShow Forms("dlgPalette"), "ga"
+    End With
+    key = vbKeyReturn: PaletteKey Forms("dlgPalette"), key
+    Check Not IsFormOpen("dlgPalette") And shellFrm.TimerInterval = 10, "Enter in the palette didn't go to the page"
+    ShellTimer shellFrm
+    Check ShellPageKey() = "c", "Palette went to the wrong page"
+    KitPalette
+    key = vbKeyEscape: PaletteKey Forms("dlgPalette"), key
+    Check Not IsFormOpen("dlgPalette"), "Esc didn't close the palette"
+    KitPalette
+    KitPalette
+    Check Not IsFormOpen("dlgPalette"), "Ctrl+K didn't close the open palette"
+    DeleteSetting APP_NAME, "Recent"
     DoCmd.Close acForm, "frmMain", acSaveNo
     Check Not IsFormOpen("frmMain"), "Shell didn't close"
     ' A frmMain with none of the optional hooks still opens and swaps pages.

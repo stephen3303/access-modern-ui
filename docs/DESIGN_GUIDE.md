@@ -924,11 +924,19 @@ Write app-specific helpers next to the builds that use them. Examples:
   wait until it closes, so nothing starts twice. Don't use it for work
   under about a second; there the change on screen is the feedback.
 - **Search box placeholder**: `Format = "@;""Search by ..."""`.
-- **Keyboard shortcuts**: every app has the kit's Ctrl+S (save), Ctrl+N (new), Ctrl+F (find)
-  and F1 (help) through `BuildShortcutKeys`. A page that has a New button answers
+- **Keyboard shortcuts**: every app has the kit's Ctrl+S (save), Ctrl+N (new), Ctrl+F (find),
+  Ctrl+K (command palette) and F1 (help) through `BuildShortcutKeys`. A page that has a New button answers
   Ctrl+N in its `Shortcut` function; name the search box `txtSearch` so Ctrl+F finds it;
   put the key in the button's tooltip ("Save (Ctrl+S)"). These keys replace Access's own
   Ctrl+S (save the object's design), Ctrl+N (new database) and Ctrl+F (Find dialog).
+- **Command palette** (`KitPalette`, `dlgPalette`): Ctrl+K opens a 560px pop-up a fifth of
+  the way down the app, like a web app's: a 36px search box, then up to 8 rows of 36px
+  (an 11pt MDL2 glyph, the 10pt name, and its kind in 9pt muted text at the right: Page,
+  Recent or Command), `CLR_OUT_HOVER` behind the lit row, and a 32px footer with the keys
+  in 8pt muted text. It lists the sidebar's pages, then the records the user opened last
+  (newest first), then the sidebar's commands. Every page that opens a record calls
+  `KitRecent` with a name the user would type (number and title) and a public function
+  that opens it again.
 - **Files**: never ask users to type a path. Use `KitSaveAs`, `KitPickFile` or `KitPickFolder`
   (Windows' own windows, starting in the folder last used for the same purpose), and
   `ExportGridAs` for a table's Export button.
