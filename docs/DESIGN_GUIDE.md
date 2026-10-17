@@ -470,6 +470,7 @@ End Sub
   - `PageHeader title, tip`: 15pt bold title at y = 22px, 9pt muted subtitle at
     y = 52px, a "?" tip and a dark-only accent bar the height of the title's text
     (it does not reach the subtitle).
+  - `Banner nm, y, w, [vAnchor]`: the classification banner (section 6.5).
   - `TitleTip`, `AccentBar`/`DarkOnly`, `TitleBar` (an accent bar sized to a title's
     font: cap tops to baseline)
   - `ContextBanner`: inset box with an icon, name, subline and optional pill.
@@ -658,6 +659,11 @@ Write app-specific helpers next to the builds that use them. Examples:
   `PageForm` (a page with no sidebar item) and `PageShown` (a count to refresh).
   `ShellShowItem` hides an item (an admin page) and closes the gap.
 - `frmMain` is a single form containing:
+  - A classification **banner** at the top and bottom (`Banner`, 20px, full width,
+    anchored). It shows the app's selected classification (`AppClassification`), which
+    also limits the labels the app permits (`ClassificationPermitted`,
+    `modKitClassification`). Build the banners last so they sit above the other controls,
+    and shift the sidebar and page host down by one banner's height.
   - A **sidebar** on the left: 200px, collapsible to 60px icons-only, with the collapsed
     state saved in the registry. It contains:
     - The brand name and subtitle (13pt bold and 8pt `CLR_NAV_MUTED`), with the collapse
@@ -1070,7 +1076,8 @@ A page that lists records and shows the selected one beside the list:
 ### 7.2 Rules
 
 - Never write `RGB()` or a numeric color in VBA. Use a `CLR_` role, or a `FIXED` constant
-  for semantic colors that must not change, such as status colors.
+  for semantic colors that must not change, such as status colors and classification
+  banners.
 - Build forms in palette 1 only (`UseBuildPalette`).
 - To change a color: edit `make_themes.py`, run it, then rebuild with `-FrontEndOnly`.
 - Palette 1 must be the build palette with no overrides. Keep the keys `light` and
@@ -1149,6 +1156,10 @@ Fixed colors (never repainted), used for semantic scales:
 - amber 245,158,11
 - red 185,28,28
 - gray 107,114,128 (not evaluated or none)
+- classification banners: green 0,122,51 (UNCLASSIFIED), purple 80,43,133 (CUI), blue 0,51,160
+  (CONFIDENTIAL), red 200,16,46 (SECRET), orange 255,103,31 (TOP SECRET), yellow 247,234,72
+  (TOP SECRET//SCI), with black text on the orange and yellow (`CLR_CLASS_TEXT_DARK`) and
+  white on the rest
 - destructive hover 185,28,28 and pressed 153,27,27
 
 ### 7.4 Palettes shipped

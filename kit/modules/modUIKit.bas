@@ -1871,6 +1871,26 @@ Private Function PillImage(c As Control) As Control
     Set PillImage = im
 End Function
 
+' Classification banner: a full-width bar, 20px high, showing the app's
+' selected classification (AppClassification) in its marking color. Build one
+' at the top of the form (vAnchor 0) and one at the bottom (vAnchor 1); the
+' form's width is w. It carries the Tag "classbanner", so ThemeForm and
+' SetAppClassification keep it current (modKitClassification). Not repainted
+' by palettes: its colors are fixed.
+Public Function Banner(ByVal nm As String, ByVal y As Long, ByVal w As Long, Optional ByVal vAnchor As Integer = 0, _
+                       Optional ByVal sec As Integer = acDetail) As Control
+    Dim c As Control, label As String
+    label = AppClassification()
+    Set c = Lbl(nm, label, 0, y, w, px(20), 8, True, ClassificationTextColor(label), sec)
+    c.BackStyle = 1
+    c.BackColor = ClassificationColor(label)
+    c.TextAlign = 2
+    c.FontWeight = 700
+    c.Tag = CLASS_BANNER_TAG
+    If Not m_isReport Then Anchor c, 2, vAnchor
+    Set Banner = c
+End Function
+
 ' Blue left accent bar used beside section titles in the dark theme.
 Public Function AccentBar(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal h As Long, _
         Optional ByVal parentCtl As String = "") As Control

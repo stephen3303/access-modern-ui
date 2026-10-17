@@ -127,6 +127,7 @@ Public Function ThemeForm(frm As Object)
     Dim c As Control, i As Long
     On Error GoTo Fail
     ThemeTitleBar frm                   ' every palette, light included
+    UpdateClassificationBanners frm     ' the selected classification, before the palette check
     If CurrentPalette() = 1 Then Exit Function
     For i = 0 To 4
         If HasSection(frm, i) Then

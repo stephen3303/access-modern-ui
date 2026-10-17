@@ -408,9 +408,12 @@ Private Sub Build_frmMain()
     ShellBuild APP_NAME, "access-modern-ui", _
         Array("cards|Cards and progress|pgCards|E8A9", "tables|Tables|pgTables|F0E2", "list|List and detail|pgList|E8FD", _
             "steps|Steps and sections|pgSteps|E9D5", "dash|Dashboard|pgDash|E9D2"), _
-        Array("help|Help|E897|=KitHelp()", "trust|Folder trust|E72E|=ShowTrustHelp()", _
+        Array("class|Classification|E7BA|=DemoClassification()", "help|Help|E897|=KitHelp()", "trust|Folder trust|E72E|=ShowTrustHelp()", _
             "appearance|Appearance|E790|=DemoAppearance()"), _
-        PAGE_W, PAGE_H
+        PAGE_W, PAGE_H, px(20), px(20)     ' room for the classification banners above and below
+    ' Last, so the banners sit above everything else: top and bottom, the full width.
+    Banner "lblClassTop", 0, SHELL_W + PAGE_W
+    Banner "lblClassBottom", px(20) + PAGE_H, SHELL_W + PAGE_W, 1
     SaveForm "frmMain"
 End Sub
 
