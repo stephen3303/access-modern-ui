@@ -633,6 +633,9 @@ Public Function TestKit(ByVal root As String) As String
     Check host.reqA.BorderColor = Th(CLR_DESTRUCTIVE), "Missing required field not outlined"
     host.reqA = "x"
     Check RequiredMissing(host, "reqA=First", fitted) = "" And fitted = "", "Filled required field reported"
+    KitTakeRefused
+    KitRefuseSave
+    Check KitTakeRefused() And Not KitTakeRefused(), "A refused save isn't noted once"
     Check host.reqA.BorderColor = Th(CLR_INPUT_BORDER), "Filled required field kept its outline"
     DoCmd.OpenForm "dlgToast", WindowMode:=acHidden     ' as KitToast does, but errors raise here
     Forms("dlgToast").ShowToast "Saved R&D", "success", 3000
