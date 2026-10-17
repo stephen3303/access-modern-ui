@@ -56,10 +56,25 @@ Private Declare PtrSafe Function GetDC Lib "user32" (ByVal hWnd As LongPtr) As L
 Private Declare PtrSafe Function ReleaseDC Lib "user32" (ByVal hWnd As LongPtr, ByVal hdc As LongPtr) As Long
 Private Declare PtrSafe Function GetDeviceCaps Lib "gdi32" (ByVal hdc As LongPtr, ByVal nIndex As Long) As Long
 Private Declare PtrSafe Sub Sleep Lib "kernel32" (ByVal ms As Long)
+#If Win64 Then
+Private Declare PtrSafe Function GetWindowLongPtr Lib "user32" Alias "GetWindowLongPtrW" (ByVal hWnd As LongPtr, _
+    ByVal nIndex As Long) As LongPtr
+Private Declare PtrSafe Function SetWindowLongPtr Lib "user32" Alias "SetWindowLongPtrW" (ByVal hWnd As LongPtr, _
+    ByVal nIndex As Long, ByVal dwNewLong As LongPtr) As LongPtr
+#Else
+Private Declare PtrSafe Function GetWindowLongPtr Lib "user32" Alias "GetWindowLongW" (ByVal hWnd As LongPtr, _
+    ByVal nIndex As Long) As LongPtr
+Private Declare PtrSafe Function SetWindowLongPtr Lib "user32" Alias "SetWindowLongW" (ByVal hWnd As LongPtr, _
+    ByVal nIndex As Long, ByVal dwNewLong As LongPtr) As LongPtr
+#End If
 
 Private Const LOGPIXELSY As Long = 90
 Private Const MONITOR_DEFAULTTONEAREST As Long = 2
 Private Const SWP_NOSIZE As Long = &H1
+Private Const SWP_NOACTIVATE As Long = &H10
+Private Const SWP_SHOWWINDOW As Long = &H40
+Private Const GWL_EXSTYLE As Long = -20
+Private Const WS_EX_NOACTIVATE As Long = &H8000000
 Private Const SWP_NOZORDER As Long = &H4
 
 Private m_items As Variant      ' the open menu's items
@@ -376,7 +391,9 @@ Private Function HeaderHeight(frm As Object) As Long
     If frm.Section(acHeader).Visible Then HeaderHeight = frm.Section(acHeader).Height
 End Function
 
-Private Sub Place(frm As Form)
+' Put frm under the anchor (AnchorRect). show: also show it, on top, without
+' taking the focus (a list opened hidden, so typing carries on).
+Private Sub Place(frm As Form, Optional ByVal show As Boolean = False)
     Dim rc As RECT, mi As MONITORINFO, x As Long, y As Long, gap As Long
     GetWindowRect frm.hWnd, rc
     mi.cbSize = LenB(mi)
@@ -384,7 +401,12 @@ Private Sub Place(frm As Form)
     gap = CLng(MENU_GAP * (rc.Right - rc.Left) / (frm.InsideWidth / 15))
     MenuSpot m_anchor.Left, m_anchor.Top, m_anchor.Right, m_anchor.Bottom, rc.Right - rc.Left, rc.Bottom - rc.Top, _
         mi.rcWork.Left, mi.rcWork.Top, mi.rcWork.Right, mi.rcWork.Bottom, gap, x, y
-    SetWindowPos frm.hWnd, 0, x, y, 0, 0, SWP_NOSIZE Or SWP_NOZORDER
+    If show Then
+        SetWindowLongPtr frm.hWnd, GWL_EXSTYLE, GetWindowLongPtr(frm.hWnd, GWL_EXSTYLE) Or WS_EX_NOACTIVATE
+        SetWindowPos frm.hWnd, 0, x, y, 0, 0, SWP_NOSIZE Or SWP_NOACTIVATE Or SWP_SHOWWINDOW
+    Else
+        SetWindowPos frm.hWnd, 0, x, y, 0, 0, SWP_NOSIZE Or SWP_NOZORDER
+    End If
 End Sub
 
 ' ---------------------------------------------------------------------------
@@ -493,3 +515,413 @@ Public Sub BuildPopoverDialog()
     Rule "ruleRight", w, 0, 0, h, CLR_INPUT_BORDER
     SaveForm "dlgPopover"
 End Sub
+
+' ---------------------------------------------------------------------------
+' Searchable picker: a text box the user types a few letters into, with the
+' matching rows dropping down under it (a web combobox or autocomplete), for
+' a list too long to scroll: people, hull numbers, templates. PickBox builds
+' it. The list is dlgPick (BuildPickDialog), a borderless pop-up under the
+' box with the first PICK_ROWS matches; it never takes the focus, so the
+' user keeps typing. The top match is lit: Up and Down move the light, Enter
+' picks the lit row, a click picks a row, Esc closes the list, and Down on
+' a closed list opens it. Leaving the box closes the list too: the box goes
+' back to the picked row's text, and a box left empty clears the pick.
+'
+' rowSql gives the rows: its first column is the key, its second is what the
+' box shows once a row is picked, and every column after the key is
+' searched with LIKE *text*. The list shows the second column, with any
+' further columns in muted text on the right. Rows come ordered by the
+' second column, so leave ORDER BY out of rowSql. The key goes in a hidden
+' box beside it, <name>Key, bound to keyField ("" for an unbound dialog):
+' read the pick there. The form's code adds:
+'   Private Sub txtPerson_KeyDown(KeyCode As Integer, Shift As Integer)
+'       KitPickKey Me.txtPerson, KeyCode
+'   End Sub
+' and KitPickShow Me.txtPerson in Form_Current on a bound form (an unbound
+' dialog calls it after setting txtPersonKey), so the box shows the pick.
+' ---------------------------------------------------------------------------
+
+Public Const PICK_ROWS As Long = 8         ' most matches the list shows
+Public Const PICK_ROW_H As Long = 32       ' a row's height (px)
+Public Const PICK_MIN_W As Long = 240      ' narrowest list (px)
+Public Const PICK_MAX_W As Long = 480      ' widest list (px), its build width
+Private Const PICK_TICK_MS As Long = 150   ' how often the list checks the box still has the focus
+Private Const PICK_TAG As String = "pick|" ' a PickBox's Tag: this, then rowSql
+
+Private m_pickBox As Control    ' the box the open list belongs to
+Private m_pickKeys As Collection ' the listed rows' keys, first row first
+Private m_pickText As Collection ' and their second columns, what the box shows
+Private m_pickHot As Long       ' the lit row, -1 for none
+
+' Build a searchable picker at x, y, w wide (h tall, 30px by default): the
+' box nm the user types in, with placeholder showing while it is empty,
+' and the hidden nm & "Key" bound to keyField ("" for none), which holds
+' the pick. See the top of this section for rowSql and the form's code.
+' Raises error 5 when rowSql has an ORDER BY.
+Public Function PickBox(ByVal nm As String, ByVal keyField As String, ByVal rowSql As String, ByVal x As Long, _
+        ByVal y As Long, ByVal w As Long, Optional ByVal h As Long = 450, _
+        Optional ByVal placeholder As String = "Type to search") As Control
+    Dim c As Control
+    If InStr(1, rowSql, "ORDER BY", vbTextCompare) > 0 Then _
+        Err.Raise 5, , "PickBox " & nm & ": leave ORDER BY out of rowSql (the list is ordered by its second column)"
+    Set c = Txt(nm & "Key", keyField, x, y, w, h)
+    c.Visible = False: c.TabStop = False
+    Set c = Txt(nm, "", x, y, w, h)
+    c.Format = "@;""" & Replace(placeholder, """", "") & """"
+    c.Tag = PICK_TAG & rowSql
+    c.AllowAutoCorrect = False
+    c.OnChange = "=KitPickChanged([Form],""" & nm & """)"
+    Set PickBox = c
+End Function
+
+' A PickBox's Change (PickBox sets it): list the rows matching what is typed.
+Public Function KitPickChanged(frm As Form, ByVal nm As String)
+    On Error GoTo Fail
+    PickList frm.Controls(nm), Nz(frm.Controls(nm).Text, "")
+    Exit Function
+Fail:
+    HandleError "modMenu.KitPickChanged", nm
+End Function
+
+' A PickBox's KeyDown (see the top of this section): Up and Down move the
+' lit row (Down opens a closed list), Enter picks the lit row, Esc closes
+' the list. Other keys are left to the box.
+Public Sub KitPickKey(box As Control, KeyCode As Integer)
+    On Error GoTo Fail
+    Select Case KeyCode
+        Case vbKeyDown, vbKeyUp
+            If Not PickOpenFor(box) Then
+                If KeyCode = vbKeyDown Then PickList box, Nz(box.Text, ""): KeyCode = 0
+                Exit Sub
+            End If
+            If m_pickKeys.Count > 0 Then
+                If KeyCode = vbKeyDown Then
+                    If m_pickHot < m_pickKeys.Count - 1 Then PickLight Forms("dlgPick"), m_pickHot + 1
+                ElseIf m_pickHot > 0 Then
+                    PickLight Forms("dlgPick"), m_pickHot - 1
+                End If
+            End If
+            KeyCode = 0
+        Case vbKeyReturn
+            If PickOpenFor(box) Then
+                If m_pickHot >= 0 Then PickChoose m_pickHot
+                KeyCode = 0
+            End If
+        Case vbKeyEscape
+            If PickOpenFor(box) Then PickClose True: KeyCode = 0
+    End Select
+    Exit Sub
+Fail:
+    HandleError "modMenu.KitPickKey", box.Name
+End Sub
+
+' Show the picked row's text in box: the second column of rowSql's row for
+' the key in its <name>Key, or nothing when there is no pick (or the key's
+' row is gone).
+Public Sub KitPickShow(box As Control)
+    Dim k As Variant, db As DAO.Database, qd As DAO.QueryDef, rs As DAO.Recordset, cols As Variant
+    On Error GoTo Fail
+    k = PickForm(box).Controls(box.Name & "Key").Value
+    If IsNull(k) Then box.Value = Null: Exit Sub
+    cols = PickColumns(box)
+    Set db = CurrentDb                  ' held: a query def needs its database open
+    Set qd = db.CreateQueryDef("", "SELECT q.* FROM (" & PickSource(box) & ") AS q WHERE q.[" & cols(0) & "]=[pickKey]")
+    qd.Parameters("pickKey") = k
+    Set rs = qd.OpenRecordset(dbOpenSnapshot)
+    If rs.EOF Then box.Value = Null Else box.Value = rs.Fields(1).Value
+    rs.Close
+    Exit Sub
+Fail:
+    RaiseAgain "modMenu.KitPickShow", box.Name
+End Sub
+
+' text for a LIKE "*...*" pattern: Access's wildcards ([ * ? #) taken
+' literally. Public so the kit tests can check it.
+Public Function PickLikeText(ByVal text As String) As String
+    text = Replace(text, "[", "[[]")
+    text = Replace(text, "*", "[*]")
+    text = Replace(text, "?", "[?]")
+    PickLikeText = Replace(text, "#", "[#]")
+End Function
+
+' The list's query for box: the first PICK_ROWS rows of its rowSql where
+' any column after the key is LIKE the parameter [pickText] (all rows when
+' nothing is typed), by the second column, then the key. Public so the kit
+' tests can check it.
+Public Function PickSql(box As Control, ByVal typed As Boolean) As String
+    Dim cols As Variant, i As Long, where As String
+    cols = PickColumns(box)
+    If typed Then
+        For i = 1 To UBound(cols)
+            where = where & IIf(Len(where) > 0, " OR ", " WHERE ") & "q.[" & cols(i) & "] LIKE [pickText]"
+        Next
+    End If
+    PickSql = "SELECT TOP " & PICK_ROWS & " q.* FROM (" & PickSource(box) & ") AS q" & _
+        where & " ORDER BY q.[" & cols(1) & "], q.[" & cols(0) & "]"
+End Function
+
+' dlgPick's row click (set by BuildPickDialog): pick row r.
+Public Function PickClick(frm As Form, ByVal r As Long)
+    On Error GoTo Fail
+    If m_pickKeys Is Nothing Then Exit Function
+    If r >= 0 And r < m_pickKeys.Count Then PickChoose r
+    Exit Function
+Fail:
+    HandleError "modMenu.PickClick", "row " & r
+End Function
+
+' dlgPick's mouse move (set by BuildPickDialog): light row r (-1 for none
+' keeps the light where it is, so Enter still picks it).
+Public Function PickHover(frm As Form, ByVal r As Long)
+    On Error GoTo Fail
+    If m_pickKeys Is Nothing Then Exit Function
+    If r >= 0 And r < m_pickKeys.Count Then PickLight frm, r
+    Exit Function
+Fail:
+    LogError "modMenu.PickHover", "row " & r
+End Function
+
+' dlgPick's timer (set by BuildPickDialog): once the box has lost the focus
+' (the user clicked or tabbed elsewhere, or VBA was reset), close the list
+' and put the box back to its pick.
+Public Function PickTick(frm As Form)
+    On Error GoTo Fail
+    If PickBoxFocused() Then Exit Function
+    PickClose True, True
+    Exit Function
+Fail:
+    LogError "modMenu.PickTick"
+    On Error Resume Next
+    DoCmd.Close acForm, frm.Name
+End Function
+
+' Build dlgPick, the list a PickBox drops down. Call it once with the app's dialogs.
+Public Sub BuildPickDialog()
+    Dim c As Control, r As Long, w As Long, h As Long, y As Long, nm As Variant
+    w = px(PICK_MAX_W)
+    h = PICK_ROWS * px(PICK_ROW_H) + 2 * px(MENU_PAD)
+    NewForm "", 0, w, h
+    With F
+        .Caption = "Pick"
+        .PopUp = True
+        .Modal = False
+        .BorderStyle = 0
+        .AutoCenter = False
+        .AutoResize = False
+        .ControlBox = False
+        .MinMaxButtons = 0
+        .CloseButton = False
+        .ShortcutMenu = False
+        .ScrollBars = 0
+        .RecordSelectors = False
+        .NavigationButtons = False
+        .OnTimer = "=PickTick([Form])"
+        .Section(acDetail).BackColor = CLR_DIALOG
+        .Section(acDetail).AlternateBackColor = CLR_DIALOG
+    End With
+    For r = 0 To PICK_ROWS - 1
+        y = px(MENU_PAD) + r * px(PICK_ROW_H)
+        Set c = Box("boxRow" & r, px(MENU_PAD), y, w - 2 * px(MENU_PAD), px(PICK_ROW_H), CLR_OUT_HOVER)
+        c.Visible = False
+        ' The main text spans the row, so the mouse is over one of the
+        ' row's parts anywhere in it; the muted text sits over its right end.
+        Set c = Lbl("lblMain" & r, "", px(MENU_PAD), y, w - 2 * px(MENU_PAD), px(PICK_ROW_H), 9, False, CLR_FG)
+        c.LeftMargin = px(12): c.RightMargin = px(12)
+        VCenter c, px(PICK_ROW_H), 9, True
+        Set c = Lbl("lblSub" & r, "", w - px(MENU_PAD) - px(160), y, px(160), px(PICK_ROW_H), 9, False, CLR_MUTED_FG)
+        c.TextAlign = 3: c.RightMargin = px(12)
+        VCenter c, px(PICK_ROW_H), 9, True
+        For Each nm In Array("boxRow", "lblMain", "lblSub")
+            F.Controls(nm & r).OnClick = "=PickClick([Form]," & r & ")"
+            F.Controls(nm & r).OnMouseMove = "=PickHover([Form]," & r & ")"
+        Next
+    Next
+    Rule "ruleTop", 0, 15, w, 0, CLR_INPUT_BORDER
+    Rule "ruleBottom", 0, h, w, 0, CLR_INPUT_BORDER
+    Rule "ruleLeft", 15, 0, 0, h, CLR_INPUT_BORDER
+    Rule "ruleRight", w, 0, 0, h, CLR_INPUT_BORDER
+    SaveForm "dlgPick"
+End Sub
+
+' List the rows of box's rowSql matching text under box, opening dlgPick
+' (hidden, then shown without taking the focus) when it isn't open.
+Private Sub PickList(box As Control, ByVal text As String)
+    Dim db As DAO.Database, qd As DAO.QueryDef, rs As DAO.Recordset, frm As Form, n As Long, i As Long, s As String
+    If Not m_pickBox Is Nothing Then
+        If Not SameBox(m_pickBox, box) Then PickClose True, True    ' another box's list
+    End If
+    text = Trim$(text)
+    Set db = CurrentDb                  ' held: a query def needs its database open
+    Set qd = db.CreateQueryDef("", PickSql(box, Len(text) > 0))
+    If Len(text) > 0 Then qd.Parameters("pickText") = "*" & PickLikeText(text) & "*"
+    Set rs = qd.OpenRecordset(dbOpenSnapshot)
+    If Not IsFormOpen("dlgPick") Then DoCmd.OpenForm "dlgPick", WindowMode:=acHidden
+    Set frm = Forms("dlgPick")
+    Set m_pickBox = box
+    Set m_pickKeys = New Collection
+    Set m_pickText = New Collection
+    Do While Not rs.EOF And n < PICK_ROWS
+        m_pickKeys.Add rs.Fields(0).Value
+        m_pickText.Add Nz(rs.Fields(1).Value, "")
+        s = ""
+        For i = 2 To rs.Fields.Count - 1
+            If Len(Nz(rs.Fields(i).Value, "")) > 0 Then s = s & IIf(Len(s) > 0, "  " & ChrW(&HB7) & "  ", "") & rs.Fields(i).Value
+        Next
+        frm.Controls("lblMain" & n).Caption = Replace(m_pickText(n + 1), "&", "&&")
+        frm.Controls("lblSub" & n).Caption = Replace(s, "&", "&&")
+        n = n + 1
+        rs.MoveNext
+    Loop
+    rs.Close
+    PickLayout frm, box, n
+End Sub
+
+' Size dlgPick to n rows (one "No matches" row for none) as wide as box,
+' within PICK_MIN_W and PICK_MAX_W, light the first row, and show it under
+' box (above it when there's no room below) without taking the focus.
+Private Sub PickLayout(frm As Form, box As Control, ByVal n As Long)
+    Dim r As Long, w As Long, y As Long, subW As Long, shown As Long
+    w = box.Width
+    If w < px(PICK_MIN_W) Then w = px(PICK_MIN_W)
+    If w > px(PICK_MAX_W) Then w = px(PICK_MAX_W)
+    shown = IIf(n = 0, 1, n)
+    If n = 0 Then
+        frm.Controls("lblMain0").Caption = "No matches"
+        frm.Controls("lblSub0").Caption = ""
+    End If
+    frm.Controls("lblMain0").ForeColor = IIf(n = 0, Th(CLR_MUTED_FG), Th(CLR_FG))
+    For r = 0 To PICK_ROWS - 1
+        frm.Controls("boxRow" & r).Visible = False
+        frm.Controls("lblMain" & r).Visible = (r < shown)
+        frm.Controls("lblSub" & r).Visible = (r < shown)
+        If r < shown Then
+            ' The muted text takes what it needs, up to 40% of the row.
+            subW = 0
+            If Len(frm.Controls("lblSub" & r).Caption) > 0 Then subW = MeasureText(frm.Controls("lblSub" & r).Caption, 9, 400) + px(24)
+            If subW > (w - 2 * px(MENU_PAD)) * 2 \ 5 Then subW = (w - 2 * px(MENU_PAD)) * 2 \ 5
+            frm.Controls("boxRow" & r).Width = w - 2 * px(MENU_PAD)
+            frm.Controls("lblMain" & r).Width = w - 2 * px(MENU_PAD)
+            frm.Controls("lblMain" & r).RightMargin = px(12) + subW
+            frm.Controls("lblSub" & r).Width = IIf(subW > 0, subW, px(24))
+            frm.Controls("lblSub" & r).Left = w - px(MENU_PAD) - frm.Controls("lblSub" & r).Width
+        End If
+    Next
+    y = px(MENU_PAD) + shown * px(PICK_ROW_H) + px(MENU_PAD)
+    frm.Controls("ruleTop").Width = w
+    frm.Controls("ruleBottom").Top = y: frm.Controls("ruleBottom").Width = w
+    frm.Controls("ruleLeft").Height = y
+    frm.Controls("ruleRight").Left = w: frm.Controls("ruleRight").Height = y
+    frm.InsideWidth = w
+    frm.InsideHeight = y
+    m_pickHot = -1
+    If n > 0 Then PickLight frm, 0
+    AnchorRect box
+    Place frm, True
+    frm.TimerInterval = PICK_TICK_MS
+End Sub
+
+' Light row r of the list.
+Private Sub PickLight(frm As Form, ByVal r As Long)
+    If r = m_pickHot Then Exit Sub
+    If m_pickHot >= 0 Then frm.Controls("boxRow" & m_pickHot).Visible = False
+    m_pickHot = r
+    If r >= 0 Then frm.Controls("boxRow" & r).Visible = True
+End Sub
+
+' Pick row r: its key into the box's <name>Key, its text into the box, and
+' close the list. The focus goes back to the box (a click on the list may
+' have taken it), with the cursor at the end.
+Private Sub PickChoose(ByVal r As Long)
+    Dim box As Control
+    Set box = m_pickBox
+    PickForm(box).Controls(box.Name & "Key").Value = m_pickKeys(r + 1)
+    box.Value = m_pickText(r + 1)
+    PickClose False
+    On Error Resume Next                ' a box that can't take the focus keeps the pick all the same
+    box.SetFocus
+    box.SelStart = Len(Nz(box.Text, ""))
+End Sub
+
+' Close the list. restore: put the box back to its pick (Esc, or leaving
+' the box without picking). clearEmpty: a box left empty clears the pick
+' (leaving it; Esc keeps the pick).
+Private Sub PickClose(ByVal restore As Boolean, Optional ByVal clearEmpty As Boolean = False)
+    Dim box As Control, keyBox As Control, typed As String
+    Set box = m_pickBox
+    Set m_pickBox = Nothing
+    m_pickHot = -1
+    If IsFormOpen("dlgPick") Then
+        Forms("dlgPick").TimerInterval = 0
+        DoCmd.Close acForm, "dlgPick"
+    End If
+    If Not restore Or box Is Nothing Then Exit Sub
+    On Error GoTo Gone                  ' the box's form closed while the list was open
+    Set keyBox = PickForm(box).Controls(box.Name & "Key")
+    If PickBoxHasFocus(box) Then typed = Nz(box.Text, "") Else typed = Nz(box.Value, "")
+    If clearEmpty And Len(Trim$(typed)) = 0 And Not IsNull(keyBox.Value) Then keyBox.Value = Null
+    KitPickShow box
+Gone:
+End Sub
+
+' True when the open list belongs to box.
+Private Function PickOpenFor(box As Control) As Boolean
+    If m_pickBox Is Nothing Then Exit Function
+    If Not IsFormOpen("dlgPick") Then Exit Function
+    On Error GoTo Gone
+    PickOpenFor = SameBox(m_pickBox, box)
+Gone:
+End Function
+
+' True when a and b are the same control on the same open form.
+Private Function SameBox(a As Control, b As Control) As Boolean
+    On Error GoTo Gone                  ' a's form has closed
+    SameBox = (a.Name = b.Name And PickForm(a).hWnd = PickForm(b).hWnd)
+Gone:
+End Function
+
+' True while the open list's box has the focus, or the list itself does
+' (a click on a row is on its way).
+Private Function PickBoxFocused() As Boolean
+    If m_pickBox Is Nothing Then Exit Function
+    On Error GoTo Nope
+    If Screen.ActiveForm.Name = "dlgPick" Then PickBoxFocused = True: Exit Function
+    PickBoxFocused = PickBoxHasFocus(m_pickBox)
+Nope:
+End Function
+
+Private Function PickBoxHasFocus(box As Control) As Boolean
+    Dim a As Control
+    On Error GoTo Nope
+    Set a = Screen.ActiveControl
+    PickBoxHasFocus = SameBox(a, box)
+Nope:
+End Function
+
+' The form a control is on (its Parent is a page when it sits on a tab).
+Private Function PickForm(c As Control) As Form
+    Dim p As Object
+    Set p = c.Parent
+    Do While Not TypeOf p Is Form
+        Set p = p.Parent
+    Loop
+    Set PickForm = p
+End Function
+
+' The rowSql a PickBox keeps in its Tag. Error 5 for a box PickBox didn't build.
+Private Function PickSource(box As Control) As String
+    If Left$(box.Tag, Len(PICK_TAG)) <> PICK_TAG Then Err.Raise 5, , box.Name & " is not a PickBox"
+    PickSource = Mid$(box.Tag, Len(PICK_TAG) + 1)
+End Function
+
+' rowSql's column names, the key first. Error 5 for fewer than 2 columns.
+Private Function PickColumns(box As Control) As Variant
+    Dim rs As DAO.Recordset, i As Long, out() As String
+    Set rs = CurrentDb.OpenRecordset("SELECT q.* FROM (" & PickSource(box) & ") AS q WHERE False", dbOpenSnapshot)
+    If rs.Fields.Count < 2 Then rs.Close: Err.Raise 5, , box.Name & ": rowSql needs a key and a column to show"
+    ReDim out(0 To rs.Fields.Count - 1)
+    For i = 0 To rs.Fields.Count - 1
+        out(i) = rs.Fields(i).Name
+    Next
+    rs.Close
+    PickColumns = out
+End Function

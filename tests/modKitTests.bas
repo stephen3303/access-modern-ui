@@ -31,6 +31,7 @@ Public Function TestKit(ByVal root As String) As String
     BuildBusy
     BuildMenuDialog
     BuildPopoverDialog
+    BuildPickDialog
     NewForm "test_rows", 0, px(300), px(40)
     Ev F, "BeforeUpdate"
     Txt "txtDesc", "description", 0, 0, px(280), px(30)
@@ -78,6 +79,7 @@ Public Function TestKit(ByVal root As String) As String
     Rating "rt", "", px(1450), px(610), onChange:="RatingChanged"
     Slider "sl", "", px(1450), px(660), px(300), 0, 100, 10, "SliderChanged", True
     SecretBox "secret", "", px(400), px(700), px(160), px(30)     ' clear of the ring, required and toggle fields
+    PickBox "pkTest", "", "SELECT id, description, category FROM test_rows", px(1450), px(720), px(240)
     SaveForm "frmTest", "testHost"
     DoCmd.OpenForm "frmTest"
     Set host = Forms("frmTest"): Set grid = host.sfRows.Form
@@ -526,6 +528,53 @@ Public Function TestKit(ByVal root As String) As String
     On Error GoTo 0
     Check badName = 5 And badScale = 5 And Not IsFormOpen("dlgMenu"), "Menu took too many items or a bad one"
     DoCmd.SelectObject acForm, "frmTest"        ' the menu was the active window
+    ' Searchable picker: the list filters as the user types (wildcards taken
+    ' literally) without taking the focus; Down and Enter pick; Esc puts the
+    ' box back; leaving it empty clears the pick.
+    Check PickLikeText("50%_[a]*?#") = "50%_[[]a][*][?][#]", "Picker took a wildcard as a wildcard"
+    Check InStr(PickSql(host.pkTest, True), "q.[description] LIKE [pickText] OR q.[category] LIKE [pickText]") > 0, _
+        "Picker doesn't search every column after the key"
+    Check InStr(PickSql(host.pkTest, False), " WHERE ") = 0, "Picker filters with nothing typed"
+    host.pkTest.SetFocus
+    host.pkTest.Text = "ription 1"
+    KitPickChanged host, "pkTest"
+    Check IsFormOpen("dlgPick"), "Typing in the picker didn't open its list"
+    With Forms("dlgPick")
+        Check .Controls("lblMain0").Caption = "Description 1" And .Controls("lblSub0").Caption = "Long category", _
+            "Picker's first row differs"
+        Check .Controls("lblMain7").Visible And .Controls("lblMain7").Caption = "Description 16", "Picker doesn't list 8 matches in order"
+        Check .Controls("boxRow0").Visible, "Picker didn't light its first match"
+    End With
+    Check Screen.ActiveForm.Name = "frmTest" And Screen.ActiveControl.Name = "pkTest", "Picker list took the focus"
+    key = vbKeyDown: KitPickKey host.pkTest, key
+    Check key = 0 And Forms("dlgPick").Controls("boxRow1").Visible And Not Forms("dlgPick").Controls("boxRow0").Visible, _
+        "Down didn't move the picker's light"
+    key = vbKeyReturn: KitPickKey host.pkTest, key
+    Check Not IsFormOpen("dlgPick") And host.pkTestKey = 10 And host.pkTest.Text = "Description 10", "Enter didn't pick the lit row"
+    host.pkTest.Text = "zzz"
+    KitPickChanged host, "pkTest"
+    Check Forms("dlgPick").Controls("lblMain0").Caption = "No matches" And Not Forms("dlgPick").Controls("lblMain1").Visible, _
+        "Picker with no matches doesn't say so"
+    key = vbKeyReturn: KitPickKey host.pkTest, key
+    Check IsFormOpen("dlgPick") And host.pkTestKey = 10, "Enter picked from an empty list"
+    key = vbKeyEscape: KitPickKey host.pkTest, key
+    Check Not IsFormOpen("dlgPick") And host.pkTest.Text = "Description 10" And host.pkTestKey = 10, "Esc didn't put the picker back"
+    host.pkTest.Text = "[x"
+    KitPickChanged host, "pkTest"                       ' a bracket is text, not a pattern error
+    Check Forms("dlgPick").Controls("lblMain0").Caption = "No matches", "Picker took [ as a pattern"
+    host.pkTest.Text = ""
+    KitPickChanged host, "pkTest"
+    Check Forms("dlgPick").Controls("lblMain0").Caption = "Description 1", "Empty picker doesn't list from the top"
+    host.ringA.SetFocus
+    PickTick Forms("dlgPick")
+    Check Not IsFormOpen("dlgPick") And IsNull(host.pkTestKey), "Leaving the picker empty didn't clear the pick"
+    host.pkTestKey = 3
+    KitPickShow host.pkTest
+    Check host.pkTest = "Description 3", "Picker doesn't show the picked row's text"
+    On Error Resume Next
+    PickBox "pkBad", "", "SELECT id, description FROM test_rows ORDER BY id", 0, 0, px(100): badName = Err.Number: Err.Clear
+    On Error GoTo 0
+    Check badName = 5, "PickBox took a rowSql with ORDER BY"
     host.ringA.SetFocus
     Check host.ringA.BorderColor = CLR_PRIMARY, "Focused input lacks its focus ring"
     host.ringB.SetFocus

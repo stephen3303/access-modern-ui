@@ -869,6 +869,13 @@ Write app-specific helpers next to the builds that use them. Examples:
   it, from a muted MDL2 help mark (E9CE) beside the caption. 280px wide, a 10pt bold title,
   9pt text, up to 8 lines. It closes on a click anywhere or Esc. Keep page-level help in the
   page title's "?" (`TitleTip`).
+- **Searchable picker**: `PickBox` (`PersonPickBox` for people) instead of a combo box
+  when the list is too long to scroll (people, hulls, templates): the user types a few
+  letters and the first 8 matches drop down under the box, the top one lit, so typing
+  and Enter is the whole pick. The list is a borderless `CLR_DIALOG` pop-up with a 1px
+  `CLR_INPUT_BORDER` edge, as wide as the box (240 to 480px), 32px rows in 9pt `CLR_FG`
+  with any extra columns in `CLR_MUTED_FG` on the right, the lit row on `CLR_OUT_HOVER`.
+  "No matches" shows in muted text. Keep a combo box for short fixed lists.
 - **Keyboard and screen readers**: everything a mouse can click, a keyboard can reach.
   Access labels can't take the focus, so every clickable label (a link, a close mark, a
   crumb, a help mark) gets a `KeyButton` over it, and every transparent button (switches,

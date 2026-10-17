@@ -118,6 +118,7 @@ Private Sub BuildUserInterface()
     BuildMenuDialog                ' the kit's dlgMenu, for KitMenu (the detail card's More button)
     BuildHelpDialog                ' the kit's dlgHelp, for KitHelp (Help in the sidebar and F1)
     BuildPopoverDialog             ' the kit's dlgPopover, for KitPopover (the Preferences section's help)
+    BuildPickDialog                ' the kit's dlgPick, for PickBox (searchable pickers)
     BuildSplash "frmMain", "access-modern-ui demo"   ' the kit's frmSplash, the startup form
     Build_frmMain
 End Sub
