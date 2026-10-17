@@ -33,6 +33,9 @@ Option Explicit
 '       the form for a key that isn't in the sidebar (a detail page).
 '   Public Sub PageShown(ByVal key As String)
 '       after each page is shown (a count in the sidebar, a tab to restore).
+' Give each hook the form's usual error handler: CallByName can't tell an
+' error 438 escaping a hook from a missing hook, so it would read as none
+' (and RoutePage's redirect would be skipped).
 ' A page with unsaved work it can't save yet has a Public Function
 ' CanLeave() As Boolean that saves it or says why not (ShellCanLeave).
 
