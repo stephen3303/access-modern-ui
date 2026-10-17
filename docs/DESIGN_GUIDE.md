@@ -647,32 +647,48 @@ Write app-specific helpers next to the builds that use them. Examples:
 
 ### 6.5 Application shell
 
+- **Build it with the kit** (modKitShell): `ShellBuild title, subtitle, pages, links,
+  pageW, pageH, [top], [bottom], [collapsible]` lays out the sidebar and `sfPage` below,
+  and frmMain's events call `ShellLoad`, `ShellTimer`, `ShellQueue`, `ShellReopen` and
+  `ShellCanLeave`, so every app navigates, guards unsaved work and collapses the same
+  way. Pages are a table, `"key|Caption|form|glyph"`; the bottom links are
+  `"key|Caption|glyph|=Expression()"`. The app keeps its own brand extras, banners and
+  user block as controls it adds after `ShellBuild`, and its business rules in
+  frmMain's optional hooks: `RoutePage` (send a page the user can't open elsewhere),
+  `PageForm` (a page with no sidebar item) and `PageShown` (a count to refresh).
+  `ShellShowItem` hides an item (an admin page) and closes the gap.
 - `frmMain` is a single form containing:
   - A **sidebar** on the left: 200px, collapsible to 60px icons-only, with the collapsed
     state saved in the registry. It contains:
-    - The brand icon, name and subtitle.
+    - The brand name and subtitle (13pt bold and 8pt `CLR_NAV_MUTED`), with the collapse
+      button (MDL2 E700, 32 x 28px) at the top right.
     - A 1px divider in `CLR_SIDEBAR_LINE`.
     - Nav items. Each is three clickable labels: a highlight background `nb_<key>`, a
       glyph `ni_<key>` and text `nt_<key>`, 34px tall on a 38px step, with a
       `ControlTipText` so collapsed icons still have names.
-    - At the bottom, anchored: admin, an avatar circle with the user's name, Appearance,
-      and Help + Sign out side by side.
+    - At the bottom, anchored 12px from the foot: the links (Help, Appearance, Sign out),
+      laid out like nav items but never highlighted. An app may add a user block above them.
+    - The current page's item has its highlight on (`CLR_NAV_ACTIVE_BG`), its glyph and
+      text in `CLR_NAV_ACTIVE_FG` and its text semibold (600).
+    - Collapsed, the captions and brand hide, highlights narrow to 44px around the
+      centred glyphs, and the page takes the 140px the sidebar gives up.
   - A **page host** subform `sfPage` that fills the rest and is anchored both ways. Pages
     are designed at 1056×560px and grow by anchoring.
 - **Navigation is deferred.**
   - Pages call `NavTo "key"`, which calls `frmMain.QueueNav`. That sets a pending key and
     `TimerInterval = 10`, and `Form_Timer` swaps `sfPage.SourceObject`. Swapping a
     subform while its own event is still running is unsafe.
-  - `ShowPage` redirects keys that aren't allowed in the current state.
+  - `RoutePage` redirects keys that aren't allowed in the current state.
   - Before it swaps or closes the page (`QueueNav`, Appearance, `Form_Unload`), the shell
     asks `frmMain.CanLeavePage`. A page with unsaved work defines a public `CanLeave`
     (pgList: `CanLeave = SaveDetail(Me, "sfDetail")`), and the page stays when it returns
     False. Sidebar items are labels, so clicking one never takes the focus out of the
     page: without this, Access would drop the page's unsaved record.
-  - `RefreshNav` restacks the visible items without gaps and highlights the current one.
+  - `ShellShowItem` restacks the visible items without gaps; `ShellRefreshNav`
+    highlights the current one.
 - **Reopen**: `frmMain.Reopen pageKey` closes and reopens the shell on the same page,
-  which is how a palette switch repaints everything. An `m_reopen` flag keeps `Form_Close`
-  from signing the user out.
+  which is how a palette switch repaints everything. `ShellReopening()` is True while it
+  does, so the app's `Form_Close` doesn't sign the user out.
 - **Dialogs**:
   - `RunDialog(name, openArgs)` opens the form with `acDialog` and returns True when the
     dialog set `TempVars("DialogResult") = "ok"`.
