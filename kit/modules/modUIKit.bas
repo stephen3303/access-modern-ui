@@ -492,6 +492,7 @@ Public Sub BuildBusy()
         .OnClose = "=BackdropOnClose()"             ' clears a dim a VBA reset left (modBackdrop)
     End With
     Ev F, "OnTimer"
+    Ev F, "OnUnload"                               ' enables the windows it disabled (dlgBusy)
     Lbl "lblMsg", "Working", pad, pad, w - 2 * pad, msgH, 10, False, CLR_FG
     Box "boxTrack", pad, y, w - 2 * pad, px(4), CLR_SECONDARY_BG
     Box "boxBar", pad, y, px(72), px(4), CLR_PRIMARY

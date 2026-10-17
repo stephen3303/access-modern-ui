@@ -12,6 +12,11 @@ Option Explicit
 ' form. A VBA reset in the middle of busy work leaves nothing to call it, so
 ' the first tick after a reset finds no KitBusy waiting (KitBusyDepth) and
 ' closes the form; its OnClose (=BackdropOnClose()) then clears the dim.
+' While it shows, the Access window and the other pop-up forms are disabled,
+' so clicks and keys can't start more work while the busy work lets Access
+' run (the dim lets clicks through). The windows it disabled are listed in
+' the form's Tag, which a VBA reset keeps, and Form_Unload enables them
+' again however the form closes.
 
 #If Win64 Then
 Private Declare PtrSafe Function GetWindowLongPtr Lib "user32" Alias "GetWindowLongPtrW" (ByVal hwnd As LongPtr, _
@@ -26,6 +31,11 @@ Private Declare PtrSafe Function SetWindowLongPtr Lib "user32" Alias "SetWindowL
 #End If
 Private Declare PtrSafe Function SetWindowPos Lib "user32" (ByVal hwnd As LongPtr, ByVal hWndInsertAfter As LongPtr, _
     ByVal x As Long, ByVal y As Long, ByVal cx As Long, ByVal cy As Long, ByVal wFlags As Long) As Long
+Private Declare PtrSafe Function EnableWindow Lib "user32" (ByVal hwnd As LongPtr, ByVal bEnable As Long) As Long
+Private Declare PtrSafe Function IsWindowEnabled Lib "user32" (ByVal hwnd As LongPtr) As Long
+Private Declare PtrSafe Function IsWindow Lib "user32" (ByVal hwnd As LongPtr) As Long
+Private Declare PtrSafe Function GetFocus Lib "user32" () As LongPtr
+Private Declare PtrSafe Function SetFocus Lib "user32" (ByVal hwnd As LongPtr) As LongPtr
 
 Private Const GWL_EXSTYLE As Long = -20
 Private Const WS_EX_NOACTIVATE As Long = &H8000000
@@ -56,6 +66,7 @@ Public Sub ShowBusy(ByVal msg As String)
         m_shown = True
         m_dir = 1
         Me.boxBar.Left = Me.boxTrack.Left
+        BlockInput
         Me.TimerInterval = STEP_MS
     End If
     Me.Repaint                          ' paint now: the busy work may not let Access paint
@@ -105,6 +116,48 @@ Err_Handler:
     ' The bar is decoration: log it and stop moving it.
     LogError "dlgBusy.Form_Timer"
     Me.TimerInterval = 0
+End Sub
+
+' Disable the Access window (and with it every form inside it) and each
+' pop-up form open now, noting in the Tag the window with the keyboard
+' focus and the windows disabled: "focus;hwnd;hwnd...".
+Private Sub BlockInput()
+    Dim f As Form, list As String
+    list = CStr(GetFocus())
+    For Each f In Forms
+        If f.PopUp And f.Name <> Me.Name Then
+            If IsWindowEnabled(f.hwnd) <> 0 Then
+                EnableWindow f.hwnd, 0
+                list = list & ";" & CStr(f.hwnd)
+            End If
+        End If
+    Next
+    If IsWindowEnabled(Application.hWndAccessApp) <> 0 Then
+        EnableWindow Application.hWndAccessApp, 0
+        list = list & ";" & CStr(Application.hWndAccessApp)
+    End If
+    Me.Tag = list
+End Sub
+
+' Enable the windows BlockInput disabled, and give the keyboard focus back
+' when nothing has it.
+Private Sub Form_Unload(Cancel As Integer)
+    Dim p() As String, i As Long, h As LongPtr
+    On Error GoTo Err_Handler
+    If Len(Me.Tag) = 0 Then Exit Sub
+    p = Split(Me.Tag, ";")
+    Me.Tag = ""
+    For i = 1 To UBound(p)
+        h = CLngPtr(p(i))
+        If IsWindow(h) <> 0 Then EnableWindow h, 1
+    Next
+    h = CLngPtr(p(0))
+    If h <> 0 And GetFocus() = 0 Then
+        If IsWindow(h) <> 0 Then SetFocus h
+    End If
+    Exit Sub
+Err_Handler:
+    LogError "dlgBusy.Form_Unload"
 End Sub
 
 ' Close the pop-up. Errors are logged only: the pop-up has no message box.

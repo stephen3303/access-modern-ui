@@ -891,7 +891,8 @@ Write app-specific helpers next to the builds that use them. Examples:
   360px borderless pop-up on `CLR_SURFACE` with a 1px `CLR_INPUT_BORDER` edge sits in the
   middle of Access: a short status line in 10pt `CLR_FG` ("Exporting...", up to 2 lines),
   and 12px under it a 4px `CLR_SECONDARY_BG` track with a 72px `CLR_PRIMARY` bar sliding
-  back and forth. It never takes the focus and has no Cancel. Don't use it for work
+  back and forth. It never takes the focus and has no Cancel. Clicks and keys on the app
+  wait until it closes, so nothing starts twice. Don't use it for work
   under about a second; there the change on screen is the feedback.
 - **Search box placeholder**: `Format = "@;""Search by ..."""`.
 - **Keyboard shortcuts**: every app has the kit's Ctrl+S (save), Ctrl+N (new), Ctrl+F (find)
