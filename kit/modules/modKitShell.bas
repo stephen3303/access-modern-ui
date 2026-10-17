@@ -353,6 +353,26 @@ Fail:
     Err.Raise Err.Number, Err.Source, Err.Description
 End Sub
 
+' The sidebar's items the user can see, pages then links, each
+' Array(key, caption, glyph character or "", action expression without its
+' "=", "page" or "link"), for the command palette (KitPalette). Empty for a
+' form ShellBuild didn't build.
+Public Function ShellItems(frm As Form) As Collection
+    Dim c As Control, k As String, g As String
+    Set ShellItems = New Collection
+    If Not HasControl(frm, "boxSide") Then Exit Function
+    If Left$(Nz(frm.Controls("boxSide").Tag, ""), 6) <> "shell:" Then Exit Function
+    For Each c In frm.Controls
+        If Left$(c.Name, 3) = "nb_" And Left$(c.Tag, 5) = "shell" And c.Visible Then
+            k = Mid$(c.Name, 4)
+            g = ""
+            If HasControl(frm, "ni_" & k) Then g = frm.Controls("ni_" & k).Caption
+            ShellItems.Add Array(k, frm.Controls("nt_" & k).Caption, g, Mid$(c.OnClick, 2), _
+                IIf(c.Tag = "shell:link", "link", "page"))
+        End If
+    Next
+End Function
+
 ' The sidebar's page keys in order, "a,b,c".
 Private Function ShellKeys(frm As Form) As String
     ShellKeys = Split(frm.Controls("boxSide").Tag, ":")(2)

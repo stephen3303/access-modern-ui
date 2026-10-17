@@ -8,13 +8,21 @@ Option Explicit
 
 Private m_chip As Long
 Private m_search As String
+Private m_auto As Boolean       ' RefreshPage is opening the first row (not a recent record)
 
 Private Sub Form_Load()
+    Dim id As Long
     On Error GoTo Err_Handler
     Me.sfList.Form.RecordSource = "SELECT id, name, owner, status, Format(due_date,'dd mmm yyyy') AS due, due_date " & _
         "FROM demo_item ORDER BY due_date"
     RefreshPage
     ShowOverdue
+    ' A recent record picked in the Ctrl+K palette (DemoOpenItem).
+    If Not IsNull(TempVars("OpenItem")) Then
+        id = TempVars("OpenItem")
+        TempVars("OpenItem") = Null
+        OpenItem id
+    End If
     Exit Sub
 Err_Handler:
     HandleError "pgList.Form_Load"
@@ -28,6 +36,8 @@ Public Sub GridClick(ByVal grid As String, ByVal dbl As Boolean)
     If Not ShowDetail(Me, "sfDetail", "subItem", "id=" & Me.sfList.Form.txtSel) Then
         Me.sfList.Form.txtSel = Me.sfDetail.Form!id
         Me.sfList.Form.Recalc
+    ElseIf Me.sfDetail.Visible And Not m_auto Then
+        KitRecent Nz(Me.sfDetail.Form!name, ""), "DemoOpenItem(" & Me.sfDetail.Form!id & ")", "E8A5"
     End If
     ShowCrumbs
     Exit Sub
@@ -92,8 +102,6 @@ End Sub
 Public Sub GridRightClick(ByVal grid As String)
     On Error GoTo Err_Handler
     If Not Me.sfDetail.Visible Then Exit Sub
-    ' GridClick kept the open item (it can't be saved yet), and said why.
-    If Nz(Me.sfList.Form.txtSel, 0) <> Nz(Me.sfDetail.Form!id, 0) Then Exit Sub
     ItemActions True
     Exit Sub
 Err_Handler:
@@ -145,6 +153,23 @@ Private Sub emptyList_b_Click()
     Exit Sub
 Err_Handler:
     HandleError "pgList.emptyList_b_Click"
+End Sub
+
+' Show item id (a recent record from the Ctrl+K palette): every item is
+' listed again, so a chip or search can't hide it. Nothing happens when the
+' open item can't be saved yet, or the item is gone.
+Public Sub OpenItem(ByVal id As Long)
+    If Not SaveDetail(Me, "sfDetail") Then Exit Sub
+    If Len(m_search) > 0 Then SetSearch Me, "txtSearch", ""     ' its handler refreshes the list
+    If m_chip <> 0 Or Len(m_search) > 0 Then m_chip = 0: m_search = "": RefreshPage
+    With Me.sfList.Form
+        .RecordsetClone.FindFirst "id=" & id
+        If .RecordsetClone.NoMatch Then Exit Sub
+        .Bookmark = .RecordsetClone.Bookmark
+        .txtSel = id
+        .Recalc
+    End With
+    GridClick "sfList", False
 End Sub
 
 ' The detail panel saved an item: show the change in the list.
@@ -229,7 +254,9 @@ Private Sub RefreshPage()
     ' ClearDetail's result isn't needed: every caller (Chip, Form_Load, and
     ' SearchFor, which only runs once the focus has left the panel)
     ' has already saved the open item.
+    m_auto = True
     If IsNull(SelectFirstRow(Me.sfList)) Then ClearDetail Me, "sfDetail"
+    m_auto = False
     ShowCrumbs
 End Sub
 
