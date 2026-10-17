@@ -697,6 +697,51 @@ Public Function TestKit(ByVal root As String) As String
     Check Not host.txtPrompt.Visible And host.txtValue.Top = px(22), "Input dialog without a prompt keeps the prompt's space"
     Check Len(host.txtValue.InputMask) = 0, "Unmasked input dialog masks its text"
     DoCmd.Close acForm, "dlgInput", acSaveNo
+    ' AI service: requests, replies and JSON (no network), interface parts, the two dialogs.
+    Dim aiTurns As Collection, aiRoot As Variant, aiMsg As String, aiRaised As Long
+    Set aiTurns = New Collection
+    aiTurns.Add Array("user", "Hi ""there""" & vbLf & ChrW(233))
+    aiTurns.Add Array("assistant", "Hello")
+    Check JsonQuote("a""b\" & vbLf & ChrW(233)) = """a\""b\\\n\u00E9""", "JsonQuote does not escape quotes, backslashes, newlines and non-ASCII"
+    Check InStr(AIRequestBody("openai", "m", "sys", aiTurns), """role"":""system"",""content"":""sys""") > 0, "OpenAI request lacks the system message"
+    Check InStr(AIRequestBody("anthropic", "m", "sys", aiTurns), """system"":""sys""") > 0 And InStr(AIRequestBody("anthropic", "m", "sys", aiTurns), """max_tokens"":") > 0, "Anthropic request lacks system or max_tokens"
+    Check InStr(AIRequestBody("gemini", "m", "sys", aiTurns), """role"":""model""") > 0, "Gemini request does not name the assistant 'model'"
+    Check InStr(AIHeaders("anthropic", "k"), "x-api-key: k") > 0 And InStr(AIHeaders("openai", "k"), "Authorization: Bearer k") > 0, "AI headers carry the key wrongly"
+    Check InStr(AIHeaders("local", ""), "Authorization") = 0, "A keyless service sends an Authorization header"
+    Check AIReplyText("openai", "{""choices"":[{""message"":{""role"":""assistant"",""content"":""Hi \u00E9\nthere""}}]}") = "Hi " & ChrW(233) & vbLf & "there", "OpenAI reply text not read"
+    Check AIReplyText("anthropic", "{""content"":[{""type"":""text"",""text"":""A""},{""type"":""text"",""text"":""B""}]}") = "AB", "Anthropic reply parts not joined"
+    Check AIReplyText("gemini", "{""candidates"":[{""content"":{""parts"":[{""text"":""G""}]}}]}") = "G", "Gemini reply text not read"
+    On Error Resume Next
+    aiMsg = AIReplyText("openai", "{""error"":{""message"":""Incorrect API key""}}")
+    aiRaised = Err.Number: aiMsg = Err.Description
+    On Error GoTo 0
+    Check aiRaised = AI_ERR And aiMsg = "Incorrect API key", "A service error is not raised with its own message"
+    On Error Resume Next
+    aiMsg = AIReplyText("openai", "not json")
+    aiRaised = Err.Number
+    On Error GoTo 0
+    Check aiRaised = AI_ERR, "A reply that is not JSON does not raise AI_ERR"
+    JsonParseInto "{""a"":[1,2.5,true,null,{""b"":""x""}],""c"":{}}", aiRoot
+    Check JsonGet(aiRoot, "a.1") = 2.5 And JsonGet(aiRoot, "a.2") = True And IsNull(JsonGet(aiRoot, "a.3")) And JsonGet(aiRoot, "a.4.b") = "x", "JSON values not read"
+    Check IsEmpty(JsonGet(aiRoot, "a.9")) And IsEmpty(JsonGet(aiRoot, "z.y")), "A missing JSON path is not Empty"
+    KitAIPart "notes", "Notes assistant"
+    KitAIPart "summary", "Summary"
+    KitAIPart "notes", "Notes helper"
+    Check KitAIPartList() = "notes;""Notes helper"";summary;""Summary"";", "AI parts not listed once each with the latest caption"
+    KitAISetParts "notes,missing"
+    Check KitAIPartOn("notes") And Not KitAIPartOn("summary") And Not KitAIPartOn("missing"), "Only a registered, ticked AI part is on"
+    KitAISetParts ""
+    Check Not KitAIPartOn("notes"), "Clearing the AI parts leaves one on"
+    BuildAIDialog
+    BuildAISettingsDialog
+    DoCmd.OpenForm "dlgAI"
+    Set host = Forms("dlgAI")
+    Check Not host.btnAIUse.Visible And host.btnAIClose.Cancel, "AI chat shows Use reply without a target"
+    DoCmd.Close acForm, "dlgAI", acSaveNo
+    DoCmd.OpenForm "dlgAISettings"
+    Set host = Forms("dlgAISettings")
+    Check host.lstAIParts.ListCount = 2 And host.btnAISave.Default, "AI settings do not list the parts"
+    DoCmd.Close acForm, "dlgAISettings", acSaveNo
     ' SecretBox refuses a continuous form: one eye would show every row.
     NewForm "", 1, px(300), px(100)
     On Error Resume Next

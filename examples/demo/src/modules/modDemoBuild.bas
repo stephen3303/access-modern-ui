@@ -110,6 +110,8 @@ Private Sub BuildUserInterface()
     Build_dlgAppearance
     BuildMessageDialog             ' the kit's dlgMessage, for KitMsgBox
     BuildInputDialog               ' the kit's dlgInput, for KitInputBox
+    BuildAIDialog                  ' the kit's dlgAI, for KitAIChat
+    BuildAISettingsDialog          ' the kit's dlgAISettings, for KitAISettings
     BuildDatePicker                ' the kit's dlgDatePick, for DateBox
     BuildToast                     ' the kit's dlgToast, for KitToast
     BuildBusy                      ' the kit's dlgBusy, for KitBusy (relinks, lock waits, exports)

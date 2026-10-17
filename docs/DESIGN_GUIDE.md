@@ -1197,7 +1197,8 @@ The Appearance dialog grows by itself, because it is built from `PALETTE_COUNT`.
    and a `src/forms/pg<Name>.vba` where every handler uses the standard error handler.
 7. Copy the dialogs: `dlgAppearance`, `BuildMessageDialog` (for `Notify` and `HandleError`),
    `BuildToast` (for `KitToast`), `BuildBusy` (for `KitBusy`),
-   `BuildInputDialog` (for `KitInputBox`),
+   `BuildInputDialog` (for `KitInputBox`), `BuildAIDialog` and `BuildAISettingsDialog`
+   (for `KitAIChat`; only when the app uses an AI service),
    `BuildDatePicker` (for date fields), and the help window: `LoadHelpTopics` with
    `help.txt`, `BuildHelpDialog`, and `BuildShortcutKeys` in the startup step for Ctrl+S, Ctrl+N,
    Ctrl+F and F1 (`BuildHelpKey` instead for F1 alone). Optionally add the splash screen with `BuildSplash` and
