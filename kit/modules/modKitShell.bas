@@ -3,7 +3,8 @@ Option Explicit
 
 ' Access UI kit - the app shell: frmMain with a sidebar of pages on the left
 ' and the page host sfPage on the right. ShellBuild builds the form (an app
-' adds its own controls, such as a classification banner, then saves it);
+' adds its own controls, such as a classification banner (BuildClassBanner),
+' then saves it);
 ' frmMain's code-behind hands its events to the Shell* routines here, so
 ' every app swaps pages, guards unsaved work and collapses the sidebar the
 ' same way:
@@ -159,6 +160,7 @@ Public Sub ShellLoad(frm As Form, Optional ByVal start As String = "")
     End If
     If Len(Nz(TempVars("StartPage"), "")) > 0 Then start = TempVars("StartPage")
     TempVars("StartPage") = Null
+    KitClassApplyBanners frm                ' the classification banners, if the app built any (modKitClass)
     ShellShow frm, start
 End Sub
 

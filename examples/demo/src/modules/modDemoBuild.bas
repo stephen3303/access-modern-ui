@@ -412,7 +412,9 @@ Private Sub Build_frmMain()
             "steps|Steps and sections|pgSteps|E9D5", "dash|Dashboard|pgDash|E9D2"), _
         Array("help|Help|E897|=KitHelp()", "trust|Folder trust|E72E|=ShowTrustHelp()", _
             "appearance|Appearance|E790|=DemoAppearance()"), _
-        PAGE_W, PAGE_H
+        PAGE_W, PAGE_H, CLASS_BANNER_H, CLASS_BANNER_H
+    BuildClassBanner "lblClassTop", 0, SHELL_W + PAGE_W
+    BuildClassBanner "lblClassBottom", CLASS_BANNER_H + PAGE_H, SHELL_W + PAGE_W, 1
     SaveForm "frmMain"
 End Sub
 

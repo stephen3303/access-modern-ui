@@ -742,6 +742,45 @@ Public Function TestKit(ByVal root As String) As String
     Set host = Forms("dlgAISettings")
     Check host.lstAIParts.ListCount = 2 And host.btnAISave.Default, "AI settings do not list the parts"
     DoCmd.Close acForm, "dlgAISettings", acSaveNo
+    ' Classification: levels, labels, what the selected level permits, the banner.
+    Dim clsWas As String, clsLabels As Variant, clsBanner As Control
+    clsWas = KitClassSelected()
+    Check KitClassLevel("CUI//SP-PRVCY") = 1 And KitClassLevel("secret // noforn") = 3 And KitClassLevel("TOP SECRET//NOFORN") = 4, "Classification label levels are wrong"
+    Check KitClassLevel("TOP SECRET//SI/TK") = 5 And KitClassLevel("TOP SECRET//SCI") = 5 And KitClassLevel("SECRET//REL TO USA, FVEY") = 3, "SCI controls do not raise a label to TOP SECRET//SCI"
+    Check KitClassLevel("UNCLASSIFIED//FOUO") = 0 And KitClassLevel("PUBLIC") = -1 And KitClassLevel("") = -1, "An unknown classification has a level"
+    KitClassSelect "SECRET"
+    Check KitClassSelected() = "SECRET", "The selected classification is not kept"
+    Check KitClassPermitted("CUI//NOFORN") And KitClassPermitted("SECRET//ORCON") And KitClassPermitted("UNCLASSIFIED"), "SECRET refuses a label at or below it"
+    Check Not KitClassPermitted("TOP SECRET") And Not KitClassPermitted("TOP SECRET//SI") And Not KitClassPermitted("Madeup"), "SECRET permits a higher or unknown label"
+    clsLabels = KitClassPermittedLabels()
+    Check clsLabels(0) = "UNCLASSIFIED" And UBound(clsLabels) = 16, "SECRET permits the wrong number of labels"
+    Check InStr(KitClassRowSource(), """SECRET//NOFORN""") > 0 And InStr(KitClassRowSource(), "TOP SECRET") = 0, "The label list holds a label above SECRET"
+    Check InStr(KitClassInSql("marking"), "[marking] IN ('UNCLASSIFIED',") = 1 And InStr(KitClassInSql("marking"), "TOP SECRET") = 0, "The label SQL condition is wrong"
+    Check Len(KitClassProblem("CUI")) = 0 And InStr(KitClassProblem("TOP SECRET"), "above") > 0 And InStr(KitClassProblem("Madeup"), "not a classification") > 0, "Label problems are not described"
+    KitClassSelect "TOP SECRET"
+    Check KitClassPermitted("TOP SECRET//NOFORN") And Not KitClassPermitted("TOP SECRET//SI/TK"), "TOP SECRET permits SCI labels"
+    KitClassSelect "TOP SECRET//SCI"
+    Check KitClassPermitted("TOP SECRET//SI/TK//NOFORN"), "TOP SECRET//SCI refuses an SCI label"
+    KitClassSelect "UNCLASSIFIED"
+    Check UBound(KitClassPermittedLabels()) = 1, "UNCLASSIFIED permits more than its two labels"
+    On Error Resume Next
+    KitClassSelect "SECRET//NOFORN"
+    aiRaised = Err.Number
+    On Error GoTo 0
+    Check aiRaised = 5 And KitClassSelected() = "UNCLASSIFIED", "A label was accepted as the selected classification"
+    NewForm "", 0, px(300), px(100)
+    Set clsBanner = BuildClassBanner("lblClassTest", 0, px(300))
+    SaveForm "subClassTest"
+    DoCmd.OpenForm "subClassTest"
+    Set host = Forms("subClassTest")
+    KitClassSelect "SECRET"
+    KitClassApplyBanners host
+    Check host.lblClassTest.Caption = "SECRET" And host.lblClassTest.BackColor = CLR_CLASS_SECRET And host.lblClassTest.ForeColor = Th(CLR_WHITE), "The banner does not show SECRET in its color"
+    KitClassSelect "TOP SECRET//SCI"
+    Check host.lblClassTest.Caption = "TOP SECRET//SCI" And host.lblClassTest.BackColor = CLR_CLASS_SCI And host.lblClassTest.ForeColor = CLR_CLASS_SCI_FG, "An open banner is not repainted for TOP SECRET//SCI"
+    Check host.lblClassTest.Height = CLASS_BANNER_H, "The banner is not 20px tall"
+    DoCmd.Close acForm, "subClassTest", acSaveNo
+    KitClassSelect clsWas
     ' SecretBox refuses a continuous form: one eye would show every row.
     NewForm "", 1, px(300), px(100)
     On Error Resume Next

@@ -658,6 +658,10 @@ Write app-specific helpers next to the builds that use them. Examples:
   `PageForm` (a page with no sidebar item) and `PageShown` (a count to refresh).
   `ShellShowItem` hides an item (an admin page) and closes the gap.
 - `frmMain` is a single form containing:
+  - A **classification banner** at the top and bottom (20px, full width, anchored), when the app
+    handles marked data: `BuildClassBanner` (modKitClass) with `ShellBuild`'s `top` and `bottom`
+    set to `CLASS_BANNER_H`. The selected classification also limits the labels records may
+    carry (`KitClassPermitted`).
   - A **sidebar** on the left: 200px, collapsible to 60px icons-only, with the collapsed
     state saved in the registry. It contains:
     - The brand name and subtitle (13pt bold and 8pt `CLR_NAV_MUTED`), with the collapse
@@ -1149,6 +1153,9 @@ Fixed colors (never repainted), used for semantic scales:
 - amber 245,158,11
 - red 185,28,28
 - gray 107,114,128 (not evaluated or none)
+- classification banners (a marking convention): green 21,128,61 (UNCLASSIFIED), purple 126,34,206 (CUI),
+  blue 29,78,216 (CONFIDENTIAL), red 153,27,27 (SECRET), orange 194,65,12 (TOP SECRET),
+  yellow 253,224,71 with 17,24,39 text (TOP SECRET//SCI)
 - destructive hover 185,28,28 and pressed 153,27,27
 
 ### 7.4 Palettes shipped
