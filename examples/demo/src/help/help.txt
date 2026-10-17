@@ -15,9 +15,13 @@ The Kit Demo shows the parts of the access-modern-ui kit working on fictional it
 # Getting help
 Click **Help** in the sidebar, or press **F1**, to open help for the page you are on. Choose any other topic from the list on the left, or type in the search box to find the topics that mention a word. Press **Enter** in the search box to open the first match.
 
+# Go anywhere with Ctrl+K
+Press **Ctrl+K** and start typing the name of a page or of an item you opened lately. Press **Enter** to go to the first match, or use the **Up** and **Down** arrows to choose another. **Esc** closes it.
+
 # Other things in the sidebar
 - **Appearance** opens the list of color palettes. Click one to switch the whole app to it.
 - **Folder trust** explains how to trust this folder, so Access stops asking to enable content.
+- The **three lines** at the top fold the sidebar to icons, to give the page more room. Click them again to open it. Point at an icon to see its name.
 
 === cards | Cards and progress
 This page shows cards, progress bars and the kit's message, toast and input dialogs.
@@ -42,7 +46,7 @@ Click **Columns** at the top right of the first table to choose which columns it
 Click an item in the list to open it in the detail panel on the right. Change any field and click **Save**.
 
 # Other actions
-- The **More** button (three dots) on the detail card marks the item complete, flags it or deletes it.
+- The **More** button (three dots) on the detail card marks the item complete, flags it or deletes it. **Right-click** a row in the list for the same actions.
 - **Print** and **Export** at the top of the list print the list or save it as a CSV file, in the order shown.
 
 === steps | Steps and sections

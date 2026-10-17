@@ -119,6 +119,7 @@ Private Sub BuildUserInterface()
     BuildHelpDialog                ' the kit's dlgHelp, for KitHelp (Help in the sidebar and F1)
     BuildPopoverDialog             ' the kit's dlgPopover, for KitPopover (the Preferences section's help)
     BuildPickDialog                ' the kit's dlgPick, for PickBox (searchable pickers)
+    BuildPaletteDialog             ' the kit's dlgPalette, for Ctrl+K (KitPalette)
     BuildSplash "frmMain", "access-modern-ui demo"   ' the kit's frmSplash, the startup form
     Build_frmMain
 End Sub
@@ -441,7 +442,7 @@ Private Sub SetStartupOptions()
     SetProp "Perform Name AutoCorrect", dbLong, 0
     SetProp "Track Name AutoCorrect Info", dbLong, 0
     SetProp "AppBuild", dbText, Format$(Now(), "yyyy-mm-dd hh:nn")
-    BuildShortcutKeys               ' Ctrl+S, Ctrl+N, Ctrl+F and F1 (the kit's help), the AutoKeys macro
+    BuildShortcutKeys               ' Ctrl+S, Ctrl+N, Ctrl+F, Ctrl+K and F1 (the kit's help), the AutoKeys macro
     HideAccessSplash                ' it writes a file, so a failure leaves the settings above in place
     BuildTrustCheck "frmSplash"     ' after any StartUpForm setting: it removes StartUpForm
 End Sub

@@ -263,6 +263,7 @@ TryAgain:
     On Error GoTo Fail
     m_formLock = 0
     m_conflictForm = ""
+    KitTakeRefused                      ' clear a note left by an earlier save
     m_saving = True
     If frm.Dirty Then frm.Dirty = False
     m_saving = False
@@ -287,6 +288,7 @@ Fail:
         KitMsgBox LOCK_MSG, vbExclamation
         Exit Function
     End If
+    If KitTakeRefused() Then Exit Function   ' BeforeUpdate refused and said why, whatever the number
     Select Case num
         Case 2101, 2115, 2169, 3020     ' refused by BeforeUpdate or Form_Error: it has said why
             Exit Function

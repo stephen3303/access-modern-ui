@@ -58,6 +58,10 @@ Private m_inAnswer As Variant
 Private m_busy As Collection
 Private m_busyPopup As Boolean
 Private m_busyStatus As Boolean
+' A BeforeUpdate refused the save and told the user why (KitRefuseSave).
+' Access then raises an error that depends on where the focus is (2465 when
+' it is still in the subform), so the save routines go by this, not the number.
+Private m_refused As Boolean
 
 ' ---------------------------------------------------------------------------
 ' Tables
@@ -541,12 +545,13 @@ Private Function SaveDetailCtl(sf As Control) As Boolean
     SaveDetailCtl = True
     If Len(sf.SourceObject) = 0 Then Exit Function
     If Not sf.Form.Dirty Then Exit Function
+    KitTakeRefused
     On Error Resume Next
     sf.Form.Dirty = False
     errNo = Err.Number: errDesc = Err.Description: errSrc = Err.Source
     On Error GoTo 0
     If errNo = 0 Then Exit Function
-    If errNo = 2101 Or errNo = 2115 Or errNo = 2455 Then
+    If KitTakeRefused() Or errNo = 2101 Or errNo = 2115 Or errNo = 2455 Then
         SaveDetailCtl = False
     Else
         Err.Raise errNo, errSrc, errDesc
@@ -1684,6 +1689,7 @@ Public Function CheckRequired(frm As Form, ByVal fields As String) As Boolean
         CheckRequired = True
         Exit Function
     End If
+    KitRefuseSave
     KitMsgBox "Please fill in:" & vbCrLf & missing, vbExclamation, "Required fields"
     ' Moving the focus is a courtesy: a control that can't take it (error
     ' 2110) or a form that isn't active any more is left as it is.
@@ -1692,6 +1698,20 @@ Public Function CheckRequired(frm As Form, ByVal fields As String) As Boolean
     Exit Function
 Fail:
     HandleError "modKitUI.CheckRequired", frm.Name & ": " & fields
+End Function
+
+' A form's BeforeUpdate that cancels a save and shows its own message calls
+' this first, so SaveDetail and KitSaveRecord take the error Access raises
+' next as a refusal it has explained (CheckRequired does it for you).
+Public Sub KitRefuseSave()
+    m_refused = True
+End Sub
+
+' True once after KitRefuseSave (it clears the note); the save routines call
+' it before a save, to clear a stale note, and after a failed one.
+Public Function KitTakeRefused() As Boolean
+    KitTakeRefused = m_refused
+    m_refused = False
 End Function
 
 ' CheckRequired without the message: outline the empty required inputs and

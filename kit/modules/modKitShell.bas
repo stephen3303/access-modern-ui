@@ -49,6 +49,7 @@ Private Const ITEM_STEP As Long = 38        ' from one item to the next (px)
 Private m_page As String        ' the page shown
 Private m_pending As String     ' the page QueueNav asked for ("*reopen": reopen the form)
 Private m_reopening As Boolean  ' frmMain is closing to reopen (ShellReopening)
+Private m_run As String         ' the expression ShellRunLater asked for
 
 ' ---------------------------------------------------------------------------
 ' Build
@@ -187,10 +188,26 @@ Public Sub ShellReopen(frm As Form, ByVal pg As String)
     ShellQueue frm, "*reopen"
 End Sub
 
-' frmMain's Timer: the page ShellQueue asked for.
+' Run expression ("OpenItem(12)", no "=") from frmMain's Timer, once the
+' calling event has finished: a pop-up that has just closed (the command
+' palette) hands its pick to the page this way, so the page's own save and
+' its required-field message run as they would from a click.
+Public Sub ShellRunLater(frm As Form, ByVal expression As String)
+    m_run = expression
+    frm.TimerInterval = 10
+End Sub
+
+' frmMain's Timer: the expression ShellRunLater asked for, then the page
+' ShellQueue asked for (the expression may have asked for one).
 Public Sub ShellTimer(frm As Form)
-    Dim key As String
+    Dim key As String, expr As String
     frm.TimerInterval = 0
+    expr = m_run
+    m_run = ""
+    If Len(expr) > 0 Then
+        Eval expr
+        frm.TimerInterval = 0
+    End If
     key = m_pending
     m_pending = ""
     If key = "*reopen" Then
@@ -352,6 +369,26 @@ Fail:
     frm.Painting = True
     Err.Raise Err.Number, Err.Source, Err.Description
 End Sub
+
+' The sidebar's items the user can see, pages then links, each
+' Array(key, caption, glyph character or "", action expression without its
+' "=", "page" or "link"), for the command palette (KitPalette). Empty for a
+' form ShellBuild didn't build.
+Public Function ShellItems(frm As Form) As Collection
+    Dim c As Control, k As String, g As String
+    Set ShellItems = New Collection
+    If Not HasControl(frm, "boxSide") Then Exit Function
+    If Left$(Nz(frm.Controls("boxSide").Tag, ""), 6) <> "shell:" Then Exit Function
+    For Each c In frm.Controls
+        If Left$(c.Name, 3) = "nb_" And Left$(c.Tag, 5) = "shell" And c.Visible Then
+            k = Mid$(c.Name, 4)
+            g = ""
+            If HasControl(frm, "ni_" & k) Then g = frm.Controls("ni_" & k).Caption
+            ShellItems.Add Array(k, frm.Controls("nt_" & k).Caption, g, Mid$(c.OnClick, 2), _
+                IIf(c.Tag = "shell:link", "link", "page"))
+        End If
+    Next
+End Function
 
 ' The sidebar's page keys in order, "a,b,c".
 Private Function ShellKeys(frm As Form) As String
