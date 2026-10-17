@@ -80,14 +80,42 @@ End Sub
 
 ' More (the detail card's menu button): the open item's actions.
 Private Sub btnMore_Click()
-    Dim id As Long, flagged As Boolean, k As String
     On Error GoTo Err_Handler
+    ItemActions False
+    Exit Sub
+Err_Handler:
+    HandleError "pgList.btnMore_Click"
+End Sub
+
+' Right-click on a row (subGrid): the row is selected and shown, then the same
+' actions open at the pointer.
+Public Sub GridRightClick(ByVal grid As String)
+    On Error GoTo Err_Handler
+    If Not Me.sfDetail.Visible Then Exit Sub
+    ' GridClick kept the open item (it can't be saved yet), and said why.
+    If Nz(Me.sfList.Form.txtSel, 0) <> Nz(Me.sfDetail.Form!id, 0) Then Exit Sub
+    ItemActions True
+    Exit Sub
+Err_Handler:
+    HandleError "pgList.GridRightClick"
+End Sub
+
+' The open item's actions, under More or at the pointer.
+Private Sub ItemActions(ByVal atPointer As Boolean)
+    Dim id As Long, flagged As Boolean, k As String, a(3) As String
     If Not Me.sfDetail.Visible Then Exit Sub
     If Not SaveDetail(Me, "sfDetail") Then Exit Sub
     id = Me.sfDetail.Form!id
     flagged = Nz(Me.sfDetail.Form!flagged, False)
-    k = KitMenu(Me.btnMore, "done|Mark complete|E73E", "flag|" & IIf(flagged, "Remove flag", "Flag for review") & "|E7C1", _
-        "-", "del|!Delete item|E74D")
+    a(0) = "done|Mark complete|E73E"
+    a(1) = "flag|" & IIf(flagged, "Remove flag", "Flag for review") & "|E7C1"
+    a(2) = "-"
+    a(3) = "del|!Delete item|E74D"
+    If atPointer Then
+        k = KitMenuAt(a(0), a(1), a(2), a(3))
+    Else
+        k = KitMenu(Me.btnMore, a(0), a(1), a(2), a(3))
+    End If
     Select Case k
         Case "done"
             CurrentDb.Execute "UPDATE demo_item SET status='Complete', percent_done=100 WHERE id=" & id, dbFailOnError
@@ -107,9 +135,6 @@ Private Sub btnMore_Click()
                 KitToast "Item deleted.", "destructive"
             End If
     End Select
-    Exit Sub
-Err_Handler:
-    HandleError "pgList.btnMore_Click"
 End Sub
 
 ' The empty state's button: back to every item.
