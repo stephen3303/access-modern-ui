@@ -46,6 +46,7 @@ Private Type MONITORINFO
 End Type
 
 Private Declare PtrSafe Function ClientToScreen Lib "user32" (ByVal hWnd As LongPtr, lpPoint As POINTAPI) As Long
+Private Declare PtrSafe Function GetCursorPos Lib "user32" (lpPoint As POINTAPI) As Long
 Private Declare PtrSafe Function GetWindowRect Lib "user32" (ByVal hWnd As LongPtr, lpRect As RECT) As Long
 Private Declare PtrSafe Function MonitorFromWindow Lib "user32" (ByVal hWnd As LongPtr, ByVal dwFlags As Long) As LongPtr
 Private Declare PtrSafe Function GetMonitorInfo Lib "user32" Alias "GetMonitorInfoW" ( _
@@ -103,6 +104,20 @@ Private m_pickKeys As Collection ' the listed rows' keys, first row first
 Private m_pickText As Collection ' and their second columns, what the box shows
 Private m_pickHot As Long       ' the lit row, -1 for none
 
+' The same menu at the mouse pointer, for a right-click (a table row's
+' actions: subGrid calls the host's GridRightClick, which calls this).
+'   Select Case KitMenuAt("edit|Edit|E70F", "-", "del|!Delete|E74D")
+Public Function KitMenuAt(ParamArray items() As Variant) As String
+    Dim list As Variant
+    list = items
+    If Not MenuOpenAt(list) Then Exit Function
+    Do While IsFormOpen("dlgMenu")
+        DoEvents
+        Sleep 15
+    Loop
+    KitMenuAt = m_pick
+End Function
+
 ' Show a menu of items under button anchor and wait for the user: returns the
 ' picked item's key, or "" when the menu was closed with nothing picked.
 ' Raises error 5 for no items, more than MENU_ROWS, or a bad item. Without
@@ -122,6 +137,27 @@ End Function
 ' Open the menu without waiting (KitMenu waits; tests drive it this way).
 ' Returns False, logging why, when dlgMenu isn't built.
 Public Function MenuOpen(anchor As Control, items As Variant) As Boolean
+    MenuCheck items
+    AnchorRect anchor
+    MenuOpen = MenuShowItems(items)
+End Function
+
+' Open the menu at the mouse pointer without waiting (KitMenuAt waits).
+Public Function MenuOpenAt(items As Variant) As Boolean
+    Dim pt As POINTAPI
+    MenuCheck items
+    GetCursorPos pt
+    m_anchor.Left = pt.x: m_anchor.Right = pt.x
+    m_anchor.Top = pt.y: m_anchor.Bottom = pt.y
+    m_hAnchor = Application.hWndAccessApp
+    On Error Resume Next                ' no active form: the Access window's monitor
+    m_hAnchor = Screen.ActiveForm.hWnd
+    On Error GoTo 0
+    MenuOpenAt = MenuShowItems(items)
+End Function
+
+' Raise error 5 for no items, more than MENU_ROWS, or a bad item.
+Private Sub MenuCheck(items As Variant)
     Dim i As Long, p() As String
     If Not IsArray(items) Then Err.Raise 5, , "KitMenu has no items"
     If UBound(items) < LBound(items) Then Err.Raise 5, , "KitMenu has no items"
@@ -133,15 +169,19 @@ Public Function MenuOpen(anchor As Control, items As Variant) As Boolean
             If Len(p(0)) = 0 Then Err.Raise 5, , "KitMenu item has no key: " & items(i)
         End If
     Next
+End Sub
+
+' Open dlgMenu on items at the anchor already noted. False, logging why,
+' when dlgMenu isn't built.
+Private Function MenuShowItems(items As Variant) As Boolean
     m_items = items
     m_pick = ""
     m_hot = -1
     m_closing = False
-    AnchorRect anchor
     If IsFormOpen("dlgMenu") Then DoCmd.Close acForm, "dlgMenu"
     On Error GoTo NotBuilt
     DoCmd.OpenForm "dlgMenu"
-    MenuOpen = True
+    MenuShowItems = True
     Exit Function
 NotBuilt:
     LogError "modMenu.MenuOpen", "dlgMenu could not open: " & Err.Description

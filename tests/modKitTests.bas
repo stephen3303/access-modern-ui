@@ -88,6 +88,9 @@ Public Function TestKit(ByVal root As String) As String
     ' Designed width (the Tag; an anchored control's Width follows the window): 600 - 8 - 160 - 8 - 8.
     Check Val(Split(host.fillHead1.Tag, "|")(2)) = px(416) And host.fillHead1.HorizontalAnchor = 2, "Last caption does not reach the table's edge"
     Check host.fitHead1.Width = px(292) And host.fitHead1.HorizontalAnchor = 0, "Fit table's last caption is not its column's width"
+    ' A right-click on a row goes to the host's GridRightClick, not Access's own menu.
+    Check grid.txtCol0.OnMouseUp = "=RowMouseUp()" And grid.txtCol0.OnMouseDown = "=RowMouseDown()" And Not grid.ShortcutMenu, _
+        "Table rows don't open the row menu on a right-click"
     Check FitSingleLineText(Null, px(100)) = "", "Null presentation text differs"
     Check FitSingleLineText("A" & vbCrLf & "B" & vbLf & "C", px(100)) = "A B C", "Presentation text retains line breaks"
     measured = MeasureText("Exact fit", 9, 400)
@@ -527,6 +530,16 @@ Public Function TestKit(ByVal root As String) As String
     MenuOpen host.tglTest, Array("nokey"): badScale = Err.Number: Err.Clear
     On Error GoTo 0
     Check badName = 5 And badScale = 5 And Not IsFormOpen("dlgMenu"), "Menu took too many items or a bad one"
+    ' The same menu at the pointer (a row's right-click).
+    Check MenuOpenAt(Array("a|Alpha", "-", "b|Beta")), "Menu at the pointer did not open"
+    Check IsFormOpen("dlgMenu"), "Menu at the pointer is not open"
+    Check Forms("dlgMenu").InsideHeight = px(4 + 32 + 9 + 32 + 4), "Menu at the pointer is not sized to its items"
+    MenuPick Forms("dlgMenu"), 2
+    Check Not IsFormOpen("dlgMenu") And MenuResult() = "b", "Menu at the pointer did not return its pick"
+    On Error Resume Next
+    MenuOpenAt Array("nokey"): badName = Err.Number: Err.Clear
+    On Error GoTo 0
+    Check badName = 5 And Not IsFormOpen("dlgMenu"), "Menu at the pointer took a bad item"
     DoCmd.SelectObject acForm, "frmTest"        ' the menu was the active window
     ' Searchable picker: the list filters as the user types (wildcards taken
     ' literally) without taking the focus; Down and Enter pick; Esc puts the

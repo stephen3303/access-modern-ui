@@ -515,6 +515,10 @@ End Sub
       section 6.8, or a dialog).
     - All grids share one code-behind, `subGrid.vba`, which calls the parent's
       `GridClick(grid, dbl)`.
+    - **Right-clicking a row opens its actions.** The row is selected and shown as a
+      click would, then the parent's `GridRightClick(grid)`, when it has one, opens the
+      same items as the detail card's More menu with `KitMenuAt` at the pointer. Access's
+      own shortcut menu is off on table rows.
     - Each column's `Tag` holds its caption and design position, which `GridFit` and
       modGridOut read.
   - `GridHeaders prefix, cols, x, y, [parentCtl], [band], [w], [sortSf], [filterSf], [onFilter], [fit]`
@@ -860,6 +864,8 @@ Write app-specific helpers next to the builds that use them. Examples:
   destructive actions last, after a separator, as `!Caption` (`CLR_DESTRUCTIVE`), and
   confirm them with `KitMsgBox`; show an action that doesn't apply as disabled (`~key`)
   rather than leaving it out, so the menu keeps its shape. Keep it to about seven items.
+  `KitMenuAt` opens the same menu at the mouse pointer, for a table row's right-click;
+  build both from one list so the two menus match.
 - **Stat tiles**: a dashboard opens with a row of `StatTile`s, 112px tall, sharing the
   width with `Sp(SP_CARD_GAP)` between them: a 9pt muted label, the 22pt bold value, an
   MDL2 icon at the top right in `CLR_MUTED_FG`, and below the value a 64 x 20px change

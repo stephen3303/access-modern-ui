@@ -1538,6 +1538,7 @@ Public Sub BuildGrid(ByVal finalName As String, ByVal cols As Variant, ByVal w A
     F.ScrollBars = 0                        ' GridScroll shows it when the rows overflow
     F.OnCurrent = "=GridScroll([Form])"
     F.OrderByOnLoad = False                 ' a sort saved with the form would show no arrow (GridSort)
+    F.ShortcutMenu = False                  ' a right-click opens the host's GridRightClick menu instead
     ' A fit table's host sizes these (GridFit); anchored, they would stretch
     ' the form past the columns and stop GridFit narrowing it.
     Set c = RowBack("txtBg", 0, 0, w, h): If Not fit Then Anchor c, 2, 0
@@ -1578,6 +1579,8 @@ Public Sub BuildGrid(ByVal finalName As String, ByVal cols As Variant, ByVal w A
         c.Tag = p(1) & "|" & x & "|" & cw
         c.OnClick = "=RowClick()"
         c.OnDblClick = "=RowDblClick()"
+        c.OnMouseDown = "=RowMouseDown()"           ' a right-click opens the parent's GridRightClick menu
+        c.OnMouseUp = "=RowMouseUp()"
         If last And Not fit Then Anchor c, 2, 0
         ' After the click and anchor: the pill image copies the anchoring.
         If InStr(opts, "p") > 0 Then PillCol c, p(0)
