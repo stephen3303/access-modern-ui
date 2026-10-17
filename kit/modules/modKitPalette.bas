@@ -157,13 +157,13 @@ Public Sub KitRecent(ByVal caption As String, ByVal expression As String, Option
     On Error GoTo Fail
     If Len(expression) = 0 Then Exit Sub
     Set list = RecentList()
-    SaveSetting APP_NAME, "Recent", "1", Replace(caption, vbTab, " ") & vbTab & expression & vbTab & glyph
+    SaveSetting APP_NAME, PaletteRecentKey(), "1", Replace(caption, vbTab, " ") & vbTab & expression & vbTab & glyph
     n = 1
     For i = 1 To list.Count
         If n = PALETTE_RECENT Then Exit For
         If list(i)(3) <> expression Then
             n = n + 1
-            SaveSetting APP_NAME, "Recent", CStr(n), list(i)(0) & vbTab & list(i)(3) & vbTab & list(i)(4)
+            SaveSetting APP_NAME, PaletteRecentKey(), CStr(n), list(i)(0) & vbTab & list(i)(3) & vbTab & list(i)(4)
         End If
     Next
     Exit Sub
@@ -171,13 +171,19 @@ Fail:
     LogError "modKitPalette.KitRecent", Left$(caption, 60)
 End Sub
 
+' The registry section for the signed-in person's recent records (KitUser),
+' so people sharing a Windows account each see their own.
+Public Function PaletteRecentKey() As String
+    PaletteRecentKey = "Recent " & Replace(KitUser(), "\", "_")
+End Function
+
 ' The recent records, newest first: Array(caption, "Recent", glyph character,
 ' expression, glyph code).
 Private Function RecentList() As Collection
     Dim i As Long, p() As String
     Set RecentList = New Collection
     For i = 1 To PALETTE_RECENT
-        p = Split(GetSetting(APP_NAME, "Recent", CStr(i), ""), vbTab)
+        p = Split(GetSetting(APP_NAME, PaletteRecentKey(), CStr(i), ""), vbTab)
         If UBound(p) = 2 Then
             If Len(p(1)) > 0 Then RecentList.Add Array(p(0), "Recent", GlyphChar(p(2)), p(1), p(2))
         End If
@@ -308,7 +314,7 @@ End Function
 
 ' The search box's keys: Up and Down move the light (round the ends), Enter
 ' opens the lit row, Esc closes.
-Public Sub PaletteKey(frm As Form, KeyCode As Integer)
+Public Sub PaletteKeyDown(frm As Form, KeyCode As Integer)
     Select Case KeyCode
         Case vbKeyDown
             If m_count > 0 Then PaletteHover frm, (m_hot + 1) Mod m_count

@@ -34,7 +34,7 @@ End Sub
 
 Private Sub txtSearch_KeyDown(KeyCode As Integer, Shift As Integer)
     On Error GoTo Err_Handler
-    PaletteKey Me, KeyCode
+    PaletteKeyDown Me, KeyCode
     Exit Sub
 Err_Handler:
     HandleError "dlgPalette.txtSearch_KeyDown"

@@ -86,7 +86,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 |---|---|---|
 | `CLR_*` roles, `FONT_UI`, `THEME_DARK` | modUIKit | modTheme (generated) |
 | `PALETTE_COUNT`, `PaletteKey`, `PaletteName`, `PaletteIsDark`, `PaletteSwatch`, `PaletteOf` | modDarkMode, dlgAppearance | modPalette (generated) |
-| `APP_NAME` | modPng, modKitUI, modKitUpdate, `BuildSplash`, modDarkMode, modGridCols, modKitShell (registry key for saved settings) | modGlobals |
+| `APP_NAME` | modPng, modKitUI, modKitUpdate, `BuildSplash`, modDarkMode, modGridCols, modKitShell, modKitPalette (registry key for saved settings) | modGlobals |
 | `HandleError`, `LogError`, `RaiseAgain` | modDarkMode, modCsv, modKitUI, modKitUpdate, modGridCols, modGridFilter, modMenu, modKitLocks, modKitShell | modErrors (`examples/modules`) |
 | `MeasureText(s, size, weight)` (Segoe UI text width in twips; size in points, weight 400 normal / 700 bold) | modTextUI, modPng, modMenu, `Breadcrumb`, `TitleTip`/`PageHeader` | modWrap |
 | `ShowTip(frm, nm)` | the "?" marks from `TitleTip` | modUI |

@@ -1222,7 +1222,7 @@ Public Function TestKit(ByVal root As String) As String
         And shellFrm.lblBrand.Visible And shellFrm.nb_a.Width = px(176) And shellFrm.ni_a.Left = px(20), "Opened sidebar didn't come back"
     ' Command palette (Ctrl+K): the shell's pages, the recent records, then its
     ' commands; typing narrows the list; the keys move; Enter goes.
-    On Error Resume Next: DeleteSetting APP_NAME, "Recent": On Error GoTo 0
+    On Error Resume Next: DeleteSetting APP_NAME, PaletteRecentKey(): On Error GoTo 0
     KitRecent "Pump overhaul", "ShellGo(""c"")", "E8A5"
     KitRecent "Valve check", "ShellGo(""b"")"
     KitRecent "Pump overhaul", "ShellGo(""c"")", "E8A5"
@@ -1243,26 +1243,26 @@ Public Function TestKit(ByVal root As String) As String
         Check PaletteRows() = 0 And PaletteHot() = -1 And .lblEmpty.Visible And Not .lblCap0.Visible, "Palette shows no empty state"
         Check .InsideHeight = px(64 + 36 + 8 + 32), "Palette didn't shrink to its rows"
         PaletteShow Forms("dlgPalette"), ""
-        key = vbKeyDown: PaletteKey Forms("dlgPalette"), key
-        key = vbKeyDown: PaletteKey Forms("dlgPalette"), key
+        key = vbKeyDown: PaletteKeyDown Forms("dlgPalette"), key
+        key = vbKeyDown: PaletteKeyDown Forms("dlgPalette"), key
         Check PaletteHot() = 2 And .boxRow2.Visible And Not .boxRow0.Visible, "Down didn't move the light"
         For i = 1 To 3
-            key = vbKeyUp: PaletteKey Forms("dlgPalette"), key
+            key = vbKeyUp: PaletteKeyDown Forms("dlgPalette"), key
         Next
         Check PaletteHot() = 5, "Up didn't go round to the last row"
         PaletteShow Forms("dlgPalette"), "ga"
     End With
-    key = vbKeyReturn: PaletteKey Forms("dlgPalette"), key
+    key = vbKeyReturn: PaletteKeyDown Forms("dlgPalette"), key
     Check Not IsFormOpen("dlgPalette") And shellFrm.TimerInterval = 10, "Enter in the palette didn't go to the page"
     ShellTimer shellFrm
     Check ShellPageKey() = "c", "Palette went to the wrong page"
     KitPalette
-    key = vbKeyEscape: PaletteKey Forms("dlgPalette"), key
+    key = vbKeyEscape: PaletteKeyDown Forms("dlgPalette"), key
     Check Not IsFormOpen("dlgPalette"), "Esc didn't close the palette"
     KitPalette
     KitPalette
     Check Not IsFormOpen("dlgPalette"), "Ctrl+K didn't close the open palette"
-    DeleteSetting APP_NAME, "Recent"
+    DeleteSetting APP_NAME, PaletteRecentKey()
     DoCmd.Close acForm, "frmMain", acSaveNo
     Check Not IsFormOpen("frmMain"), "Shell didn't close"
     ' A frmMain with none of the optional hooks still opens and swaps pages.
