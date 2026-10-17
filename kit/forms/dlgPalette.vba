@@ -2,8 +2,8 @@ Option Compare Database
 Option Explicit
 
 ' Command palette for KitPalette (BuildPaletteDialog builds it; modKitPalette
-' does the work). It closes when it loses the focus, so a click outside it
-' closes it.
+' does the work). It closes when it loses the focus (Deactivate, and a check
+' on its Timer), so a click outside it closes it.
 
 Private Sub Form_Load()
     On Error GoTo Err_Handler
@@ -19,8 +19,7 @@ Private Sub Form_Deactivate()
 End Sub
 
 Private Sub Form_Timer()
-    Me.TimerInterval = 0
-    PaletteClose Me
+    PaletteTick Me
 End Sub
 
 ' The search box's handler (SearchBox): narrow the list as the user types.

@@ -1234,7 +1234,8 @@ Public Function TestKit(ByVal root As String) As String
     With Forms("dlgPalette")
         Check .lblSub0.Caption = "Page" And .lblSub3.Caption = "Recent" And .lblSub5.Caption = "Command" And .lblIcon3.Caption = ChrW(&HE8A5), _
             "Palette rows don't say what they are"
-        Check PaletteHot() = 0 And .boxRow0.Visible, "Palette didn't light its first row"
+        Check PaletteHot() = 0 And .boxRow0.Visible And .barHot.Visible And .barHot.Top = .boxRow0.Top, "Palette didn't light its first row"
+        Check .InsideWidth = px(PALETTE_W), "Palette isn't its design width"
         PaletteShow Forms("dlgPalette"), "A"
         Check PaletteRows() = 5 And PaletteRowText(0) = "Alpha" And PaletteRowText(1) = "Beta", "Palette doesn't put names starting with the text first"
         PaletteShow Forms("dlgPalette"), "check  VALVE"
@@ -1245,7 +1246,7 @@ Public Function TestKit(ByVal root As String) As String
         PaletteShow Forms("dlgPalette"), ""
         key = vbKeyDown: PaletteKeyDown Forms("dlgPalette"), key
         key = vbKeyDown: PaletteKeyDown Forms("dlgPalette"), key
-        Check PaletteHot() = 2 And .boxRow2.Visible And Not .boxRow0.Visible, "Down didn't move the light"
+        Check PaletteHot() = 2 And .boxRow2.Visible And Not .boxRow0.Visible And .barHot.Top = .boxRow2.Top, "Down didn't move the light"
         For i = 1 To 3
             key = vbKeyUp: PaletteKeyDown Forms("dlgPalette"), key
         Next
@@ -1259,6 +1260,10 @@ Public Function TestKit(ByVal root As String) As String
     KitPalette
     key = vbKeyEscape: PaletteKeyDown Forms("dlgPalette"), key
     Check Not IsFormOpen("dlgPalette"), "Esc didn't close the palette"
+    KitPalette
+    shellFrm.SetFocus
+    If IsFormOpen("dlgPalette") Then PaletteTick Forms("dlgPalette")
+    Check Not IsFormOpen("dlgPalette"), "A click on the app window didn't close the palette"
     KitPalette
     KitPalette
     Check Not IsFormOpen("dlgPalette"), "Ctrl+K didn't close the open palette"

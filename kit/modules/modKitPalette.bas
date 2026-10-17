@@ -25,6 +25,7 @@ Private Const PAD As Long = 8              ' px, around the list
 Private Const LIST_TOP As Long = 64        ' px: under the search box and its rule
 Private Const FOOT_H As Long = 32          ' px: the keys hint
 Private Const RECENT_GLYPH As String = "E81C"  ' History
+Private Const TICK_MS As Long = 150        ' how often it checks it still has the focus
 
 Private Type RECT
     Left As Long
@@ -109,6 +110,10 @@ Public Sub BuildPaletteDialog()
             F.Controls(nm & r).OnMouseMove = "=PaletteHover([Form]," & r & ")"
         Next
     Next
+    ' The lit row's accent bar (PaletteHover moves it), so the keyboard's row
+    ' stands out from the mouse's hover tint.
+    Set c = Box("barHot", px(PAD), px(LIST_TOP), px(3), px(PALETTE_ROW_H), CLR_PRIMARY)
+    c.Visible = False
     Set c = Lbl("lblEmpty", "No matches", px(PAD), px(LIST_TOP), w - 2 * px(PAD), px(PALETTE_ROW_H), 10, False, CLR_MUTED_FG)
     c.LeftMargin = px(12): c.Visible = False
     VCenter c, px(PALETTE_ROW_H), 10, True
@@ -200,9 +205,11 @@ End Function
 Public Sub PaletteOpen(frm As Form)
     m_closing = False
     LoadItems
+    frm.InsideWidth = px(PALETTE_W)
     frm.InsideHeight = PaletteHeight(PALETTE_ROWS)
     PlaceTop frm
     PaletteShow frm, ""
+    frm.TimerInterval = TICK_MS
 End Sub
 
 ' The items: the shell's pages, the recent records, then its commands.
@@ -229,7 +236,7 @@ End Sub
 ' names hold every word of text, those starting with it first, and light
 ' the first.
 Public Sub PaletteShow(frm As Form, ByVal text As String)
-    Dim i As Long, pass As Long, cap As String, r As Long, n As Long
+    Dim i As Long, pass As Long, cap As String, r As Long, n As Long, capW As Long
     text = Trim$(text)
     ReDim m_hits(0 To PALETTE_ROWS - 1)
     m_count = 0
@@ -242,9 +249,11 @@ Public Sub PaletteShow(frm As Form, ByVal text As String)
             End If
         Next
     Next
+    ' A caption stays on one line, with an ellipsis, clear of the icon and kind.
+    capW = px(PALETTE_W) - 2 * px(PAD) - px(40) - px(96)
     For r = 0 To PALETTE_ROWS - 1
         If r < m_count Then
-            frm.Controls("lblCap" & r).Caption = Replace(m_items(m_hits(r))(0), "&", "&&")
+            frm.Controls("lblCap" & r).Caption = Replace(FitSingleLineText(m_items(m_hits(r))(0), capW, 10), "&", "&&")
             frm.Controls("lblIcon" & r).Caption = m_items(m_hits(r))(2)
             frm.Controls("lblSub" & r).Caption = m_items(m_hits(r))(1)
         End If
@@ -254,6 +263,7 @@ Public Sub PaletteShow(frm As Form, ByVal text As String)
         frm.Controls("boxRow" & r).Visible = False
     Next
     frm.Controls("lblEmpty").Visible = (m_count = 0)
+    frm.Controls("barHot").Visible = False
     n = IIf(m_count = 0, 1, m_count)
     ' The window shrinks from the bottom: the controls move up before it does.
     frm.Controls("ruleFoot").Top = PaletteHeight(n) - px(FOOT_H)
@@ -298,6 +308,8 @@ Public Function PaletteHover(frm As Form, ByVal r As Long)
     If m_hot >= 0 Then frm.Controls("boxRow" & m_hot).Visible = False
     m_hot = r
     frm.Controls("boxRow" & r).Visible = True
+    frm.Controls("barHot").Top = frm.Controls("boxRow" & r).Top
+    frm.Controls("barHot").Visible = True
     Exit Function
 Fail:
     HandleError "modKitPalette.PaletteHover", "row " & r
@@ -337,6 +349,12 @@ Public Sub PaletteRun(frm As Form, ByVal r As Long)
     If r < 0 Or r >= m_count Then Exit Sub
     expr = m_items(m_hits(r))(3)
     PaletteClose frm
+    ' Give the focus back to the app window first: a page that saves its open
+    ' record (a required field still empty) must do it from its own form.
+    If IsFormOpen(SHELL_FORM) Then
+        Forms(SHELL_FORM).SetFocus
+        DoEvents
+    End If
     Eval expr
 End Sub
 
@@ -344,6 +362,20 @@ End Sub
 ' form in its own Deactivate).
 Public Sub PaletteLostFocus(frm As Form)
     If Not m_closing Then frm.TimerInterval = 1
+End Sub
+
+' dlgPalette's Timer: close it once another form has the focus. A click on
+' the app's window doesn't always raise the pop-up's Deactivate, so it checks.
+Public Sub PaletteTick(frm As Form)
+    Dim nm As String
+    If m_closing Then Exit Sub
+    On Error Resume Next                ' no active form: it lost the focus
+    nm = Screen.ActiveForm.Name
+    On Error GoTo 0
+    If nm <> frm.Name Or frm.TimerInterval = 1 Then
+        frm.TimerInterval = 0
+        PaletteClose frm
+    End If
 End Sub
 
 Public Sub PaletteClose(frm As Form)
