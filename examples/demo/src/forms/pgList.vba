@@ -111,6 +111,7 @@ End Sub
 ' The open item's actions, under More or at the pointer.
 Private Sub ItemActions(ByVal atPointer As Boolean)
     Dim id As Long, flagged As Boolean, k As String, a(3) As String
+    Dim errNo As Long, errDesc As String, errSrc As String
     If Not Me.sfDetail.Visible Then Exit Sub
     If Not SaveDetail(Me, "sfDetail") Then Exit Sub
     id = Me.sfDetail.Form!id
@@ -138,12 +139,25 @@ Private Sub ItemActions(ByVal atPointer As Boolean)
             If KitMsgBox("Delete """ & Me.sfDetail.Form!name & """? This can't be undone.", vbYesNo + vbExclamation + vbDefaultButton2, _
                 "Delete item") = vbYes Then
                 ClearDetail Me, "sfDetail"      ' the panel lets go of the record first
+                On Error GoTo DeleteFailed
                 CurrentDb.Execute "DELETE FROM demo_item WHERE id=" & id, dbFailOnError
+                On Error GoTo 0
                 RefreshPage
                 ShowOverdue
                 KitToast "Item deleted.", "destructive"
             End If
     End Select
+    Exit Sub
+DeleteFailed:
+    ' The item is still there (another user has it locked, for one): show it
+    ' again, then let the caller report the error.
+    errNo = Err.Number: errDesc = Err.Description: errSrc = Err.Source
+    Resume ShowAgain
+ShowAgain:
+    On Error GoTo 0
+    ShowDetail Me, "sfDetail", "subItem", "id=" & id
+    ShowCrumbs
+    Err.Raise errNo, errSrc, errDesc
 End Sub
 
 ' The empty state's button: back to every item.
