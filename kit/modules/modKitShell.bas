@@ -34,7 +34,7 @@ Option Explicit
 '   Public Sub PageShown(ByVal key As String)
 '       after each page is shown (a count in the sidebar, a tab to restore).
 ' Give each hook the form's usual error handler: CallByName can't tell an
-' error 438 escaping a hook from a missing hook, so it would read as none
+' error 438 or 2465 escaping a hook from a missing hook, so it would read as none
 ' (and RoutePage's redirect would be skipped).
 ' A page with unsaved work it can't save yet has a Public Function
 ' CanLeave() As Boolean that saves it or says why not (ShellCanLeave).
@@ -378,7 +378,7 @@ Private Function Hook(frm As Form, ByVal nm As String, ByVal key As String, resu
         Case 0
             Hook = True
             result = Nz(v, "")
-        Case 438                ' the form has no such hook
+        Case 438, 2465          ' the form has no such hook (a form raises 2465)
         Case Else: Err.Raise errNo, errSrc, errDesc
     End Select
 End Function

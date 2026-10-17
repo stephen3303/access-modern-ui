@@ -1208,6 +1208,15 @@ Public Function TestKit(ByVal root As String) As String
         And shellFrm.lblBrand.Visible And shellFrm.nb_a.Width = px(176) And shellFrm.ni_a.Left = px(20), "Opened sidebar didn't come back"
     DoCmd.Close acForm, "frmMain", acSaveNo
     Check Not IsFormOpen("frmMain"), "Shell didn't close"
+    ' A frmMain with none of the optional hooks still opens and swaps pages.
+    ShellBuild "Shell", "Test", Array("a|Alpha|subRing|E80F", "b|Beta|subLeave|E8A5"), Empty, px(500), px(400)
+    SaveForm "frmMain", "testShellBare"
+    DoCmd.OpenForm "frmMain"
+    Set shellFrm = Forms("frmMain")
+    ShellGo "b"
+    ShellTimer shellFrm
+    Check ShellPageKey() = "b" And shellFrm.sfPage.SourceObject = "subLeave", "Shell without hooks didn't swap pages"
+    DoCmd.Close acForm, "frmMain", acSaveNo
     ' File pickers (modKitFiles): the parts that need no window.
     Dim fileErr As Long
     Check FileFilterText("CSV file|*.csv|Text|*.txt;*.log") = "CSV file (*.csv)" & vbNullChar & "*.csv" & vbNullChar & _
