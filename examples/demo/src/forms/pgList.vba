@@ -142,7 +142,8 @@ Private Sub ItemActions(ByVal atPointer As Boolean)
                 On Error GoTo DeleteFailed
                 CurrentDb.Execute "DELETE FROM demo_item WHERE id=" & id, dbFailOnError
                 On Error GoTo 0
-                RefreshPage
+                Me.sfList.Form.Requery          ' FilterGrid doesn't requery an unfiltered list
+                RefreshPage                     ' and the first row opens
                 ShowOverdue
                 KitToast "Item deleted.", "destructive"
             End If
