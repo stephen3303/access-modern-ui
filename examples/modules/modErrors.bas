@@ -36,9 +36,6 @@ Option Explicit
 ' If the back end can't be written (often the cause of the error), the entry
 ' goes to %LOCALAPPDATA%\<APP_NAME>\logs\errors.log instead.
 '
-' When the site's admin has turned on error reporting (modKitTelemetry), the
-' error number and procedure of each entry also go to the site's Sentry project.
-'
 ' The build numbers the lines of its copy of every module (tools\VbaLineNumbers.ps1;
 ' the source in git stays un-numbered), so Erl says which line failed. LogError
 ' and RaiseAgain add it to the procedure name, e.g. "pgAdmin.btnSave_Click line 42",
@@ -70,7 +67,6 @@ Public Function LogError(ByVal source As String, Optional ByVal context As Strin
     m_busy = True
     LogError = WriteLogRow(num, desc, errSrc, source, trail, context)
     If LogError = 0 Then WriteLogFile num, desc, errSrc, source, trail, context
-    ReportError num, source
     m_busy = False
 End Function
 
@@ -169,15 +165,6 @@ Private Sub WriteLogFile(ByVal num As Long, ByVal desc As String, ByVal errSrc A
 Fail:
     On Error Resume Next
     Close #f
-End Sub
-
-' Pass the error number and procedure (only those) to the kit's optional
-' Sentry reporting (modKitTelemetry), which does nothing unless an admin turned
-' it on for the site. Through Application.Run, so an app built without that
-' module (a SIPRNet build) compiles and runs the same.
-Private Sub ReportError(ByVal num As Long, ByVal source As String)
-    On Error Resume Next
-    Application.Run "KitTelemetryReport", num, source
 End Sub
 
 ' %LOCALAPPDATA%\<APP_NAME>\logs\errors.log (the folder is created on first use).
