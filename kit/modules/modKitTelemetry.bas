@@ -25,8 +25,10 @@ Option Explicit
 ' session sends at most TELEMETRY_SESSION_MAX reports and repeats none (the same
 ' error number in the same procedure is sent once a session).
 '
-' Settings live in kit_setting, a table in the app's shared back end (add it
-' with KitAddSettingTable), so one admin turns reporting on for every user:
+' Settings live in kit_setting, a table in the app's shared back end, so one
+' admin turns reporting on for every user. At startup, after KitEnsureBackend,
+' the app calls KitEnsureSettingTable with one of its linked tables; it adds
+' the table to that data file when it lacks it and links it into the front end:
 '   telemetry_dsn       the Sentry project's DSN (a send-only client key)
 '   telemetry_marking   the marking the admin confirmed (UNCLASSIFIED)
 '
@@ -73,6 +75,36 @@ Public Function KitAddSettingTable(Optional db As DAO.Database) As Boolean
     Exit Function
 Fail:
     RaiseAgain "modKitTelemetry.KitAddSettingTable"
+End Function
+
+' Startup step for a split app: make sure kit_setting is in the data file
+' probeTable is linked to, and linked into this front end the same way
+' (password included). A front end whose probeTable is a local table keeps
+' kit_setting locally. True when the table was added or linked.
+Public Function KitEnsureSettingTable(ByVal probeTable As String) As Boolean
+    Dim db As DAO.Database, cn As String, td As DAO.TableDef, be As DAO.Database
+    On Error GoTo Fail
+    Set db = CurrentDb
+    For Each td In db.TableDefs
+        If StrComp(td.Name, KIT_SETTING_TABLE, vbTextCompare) = 0 Then Exit Function
+    Next
+    cn = db.TableDefs(probeTable).Connect
+    If Len(cn) = 0 Then
+        KitEnsureSettingTable = KitAddSettingTable(db)
+        Exit Function
+    End If
+    Set be = DBEngine.OpenDatabase(KitBackendPath(probeTable), False, False, ConnectPassword(cn))
+    KitAddSettingTable be
+    be.Close
+    Set td = db.CreateTableDef(KIT_SETTING_TABLE)
+    td.Connect = cn
+    td.SourceTableName = KIT_SETTING_TABLE
+    db.TableDefs.Append td
+    db.TableDefs.Refresh
+    KitEnsureSettingTable = True
+    Exit Function
+Fail:
+    RaiseAgain "modKitTelemetry.KitEnsureSettingTable", probeTable
 End Function
 
 ' A kit_setting value, or "" when it is unset or the table can't be read.
@@ -155,9 +187,8 @@ Public Function KitTelemetryReport(ByVal errNumber As Long, ByVal source As Stri
     proc = TelemetryName(source, True)
     fp = errNumber & "|" & StripLine(proc)
     If m_sent.Exists(fp) Or m_sent.Count >= TELEMETRY_SESSION_MAX Then Exit Function
-    m_sent(fp) = True
     PruneFinished
-    If m_pending.Count >= MAX_PENDING Then Exit Function
+    If m_pending.Count >= MAX_PENDING Then Exit Function    ' Sentry is slow: drop this one, a later one may go
     Set req = CreateObject("MSXML2.ServerXMLHTTP.6.0")
     req.setTimeouts TIMEOUT_MS, TIMEOUT_MS, TIMEOUT_MS, TIMEOUT_MS
     req.Open "POST", url, True
@@ -165,6 +196,7 @@ Public Function KitTelemetryReport(ByVal errNumber As Long, ByVal source As Stri
     req.setRequestHeader "X-Sentry-Auth", "Sentry sentry_version=7, sentry_key=" & DsnKey(dsn) & ", sentry_client=access-kit/1.0"
     req.send KitTelemetryEnvelope(errNumber, source, dsn)
     m_pending.Add req
+    m_sent(fp) = True               ' only once it was started, so a dropped one can go later
     KitTelemetryReport = True
     Exit Function
 Fail:
@@ -258,6 +290,16 @@ Private Function DsnKey(ByVal dsn As String) As String
     If InStr(userInfo, ":") > 0 Then userInfo = Left$(userInfo, InStr(userInfo, ":") - 1)
     If Len(userInfo) = 0 Or userInfo Like "*[!0-9A-Fa-f]*" Then Exit Function
     DsnKey = userInfo
+End Function
+
+' The ";PWD=..." part of a linked table's Connect, as OpenDatabase takes it
+' ("" when the file has no password).
+Private Function ConnectPassword(ByVal cn As String) As String
+    Dim p As Long, e As Long
+    p = InStr(1, cn, ";PWD=", vbTextCompare)
+    If p = 0 Then Exit Function
+    e = InStr(p + 1, cn, ";")
+    ConnectPassword = IIf(e > 0, Mid$(cn, p, e - p), Mid$(cn, p))
 End Function
 
 Private Function StripLine(ByVal proc As String) As String

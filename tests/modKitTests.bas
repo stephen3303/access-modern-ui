@@ -1489,7 +1489,16 @@ Public Function TestKit(ByVal root As String) As String
     ' sites only, names and numbers only.
     Dim tmDsn As String, tmEnv As String, tmErr As Long
     tmDsn = "https://0123abcd@telemetry.invalid/42"
-    Check KitAddSettingTable() And Not KitAddSettingTable(), "kit_setting not added exactly once"
+    Dim tmBe As DAO.Database
+    Set tmBe = DBEngine.CreateDatabase(root & "\tm_be.accdb", dbLangGeneral)
+    tmBe.Execute "CREATE TABLE tm_probe (id LONG)", dbFailOnError
+    tmBe.Close
+    KitLinkTables root & "\tm_be.accdb", Array("tm_probe")
+    Check KitEnsureSettingTable("tm_probe") And Not KitEnsureSettingTable("tm_probe") And _
+        InStr(CurrentDb.TableDefs(KIT_SETTING_TABLE).Connect, "tm_be.accdb") > 0, "kit_setting not linked from the data file"
+    Set tmBe = DBEngine.OpenDatabase(root & "\tm_be.accdb")
+    Check Not KitAddSettingTable(tmBe), "kit_setting not added to the data file"
+    tmBe.Close
     Check Not KitTelemetryIsOn() And Not KitTelemetryReport(2196, "pgX.Save"), "Error reporting on before an admin turned it on"
     Check TelemetryUrl(tmDsn) = "https://telemetry.invalid/api/42/envelope/" And _
         TelemetryUrl("https://ab12:cd34@sentry.example.com:9443/sentry/7") = "https://sentry.example.com:9443/sentry/api/7/envelope/" And _
@@ -1514,7 +1523,8 @@ Public Function TestKit(ByVal root As String) As String
     Check Not KitTelemetryIsOn() And Not KitTelemetryReport(92, "modB.Run"), "Report sent after the marking changed"
     KitTelemetryTurnOff
     Check Not KitTelemetryIsOn() And KitSetting(TELEMETRY_DSN_KEY) = "", "Error reporting didn't turn off"
-    CurrentDb.TableDefs.Delete KIT_SETTING_TABLE
+    CurrentDb.TableDefs.Delete KIT_SETTING_TABLE: CurrentDb.TableDefs.Delete "tm_probe"
+    On Error Resume Next: Kill root & "\tm_be.accdb": On Error GoTo 0
     On Error Resume Next: DeleteSetting APP_NAME, "Telemetry": On Error GoTo 0
     PersonnelSignOut
     CurrentDb.TableDefs.Delete PERSON_TABLE: CurrentDb.TableDefs.Delete PERSON_APP_TABLE
