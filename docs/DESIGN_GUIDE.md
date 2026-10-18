@@ -333,10 +333,9 @@ produces one log entry.
 - If the back end can't be written, it falls back to
   `%LOCALAPPDATA%\<APP>\logs\errors.log`.
 - An `m_busy` guard prevents recursion.
-- When the site's Personnel admin has turned on error reporting (`modKitTelemetry`,
-  unclassified sites only), it also sends the error number and procedure, with the app,
-  page, build and Access version, to the site's Sentry project. Never the description,
-  context, trail, names or computer. Leave the module out of a classified build.
+- It also writes the entry to the PC's Windows Event Log (Application log, source the
+  app's name, event 1001; `modKitEventLog`), without the context or call trail, so the
+  site's IT collects every app's errors on its log server with event forwarding.
 - Use `LogError` alone (no message) where a failure must not interrupt the user. For
   example, `ThemeForm` and `ThemeControl` log and carry on, so one bad control can't stop
   a form opening.
