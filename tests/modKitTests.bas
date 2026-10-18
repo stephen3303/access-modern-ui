@@ -1485,11 +1485,34 @@ Public Function TestKit(ByVal root As String) As String
     Set peFrm = Forms(PERSON_FORM)
     Check peFrm.txtUser = "alee" And peFrm.txtAccount = "TESTDOM\alee" And peFrm.txtMiddle = "B" And Not peFrm.lblUserHint.Visible, "Change person didn't show the person"
     DoCmd.Close acForm, PERSON_FORM, acSaveNo
+    TestEventLog
     PersonnelSignOut
     CurrentDb.TableDefs.Delete PERSON_TABLE: CurrentDb.TableDefs.Delete PERSON_APP_TABLE
     g_Silent = False
     TestKit = checks & " kit checks passed"
 End Function
+
+' The Windows Event Log (modKitEventLog): events are written, and LogError writes
+' one per entry. Its own procedure: TestKit is at VBA's procedure size limit.
+Private Sub TestEventLog()
+    Dim before As Long, evErr As Long
+    before = KitEventsWritten()
+    Check KitEventLog("Kit test event " & RandomHex(4)) And KitEventsWritten() = before + 1, "Event not written to the Application log"
+    Check KitEventLogError(0, 5, "Kit test error", "modKitTests.TestEventLog", "", "", "", "", ""), "Error event not written"
+    ' A scratch error_log, so the entry doesn't go to the user's errors.log.
+    CurrentDb.Execute "CREATE TABLE error_log (id COUNTER PRIMARY KEY, logged_at DATETIME, error_number LONG, " & _
+        "description LONGTEXT, err_source TEXT(255), source TEXT(255), call_trail LONGTEXT, context LONGTEXT, " & _
+        "page TEXT(32), active_form TEXT(64), active_control TEXT(64), username TEXT(150), windows_user TEXT(64), " & _
+        "computer TEXT(64), fe_build TEXT(32), access_version TEXT(32))", dbFailOnError
+    before = KitEventsWritten()
+    On Error Resume Next
+    Err.Raise 5, , "Kit event log test"
+    evErr = Err.Number
+    LogError "modKitTests.TestEventLog"
+    On Error GoTo 0
+    Check evErr = 5 And KitEventsWritten() = before + 1 And DCount("*", "error_log") = 1, "LogError did not write an event"
+    CurrentDb.TableDefs.Delete "error_log"
+End Sub
 
 ' Rows a form shows (its recordset clone read to the end).
 Private Function RowCount(g As Form) As Long

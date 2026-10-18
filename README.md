@@ -66,6 +66,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 | modTrust | Startup check for an untrusted folder: `BuildTrustCheck mainForm` (build step, in place of `StartUpForm`) adds an `AutoExec` macro and `dlgTrust`, a page explaining how to add the folder as a Trusted Location. `TrustNeeded` and `InTrustedLocation` read the Trust Center settings (never change them), `ShowTrustHelp` opens the page. It replaces any `AutoExec` the app has |
 | modKitUtil | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `CenterOnApp`, `SetVisible`, `SetEnabled`, `KitCopyText` (a Copy button) |
 | modKitUpdate | `CheckForUpdate current, folder, [advice]`: at startup, tells the user when the release folder's `version.txt` names a newer version (`ReleasedVersion`, `CompareVersions`) |
+| modKitEventLog | The Windows Event Log, for a site's log server: `LogError` writes each entry to the PC's Application log (`KitEventLogError`; source `APP_NAME`, event 1001; the error, procedure, page, form, control, app user and build, not the context or call trail). `KitEventLog text, [type], [id]` writes any other event (1000). Needs no admin rights; IT registers the source once per PC (`New-EventLog -LogName Application -Source "<APP_NAME>"`, or by Group Policy) and collects the events with Windows Event Forwarding |
 | modBackdrop | `DimApp`/`UndimApp`: dims the app behind a modal dialog, like a web modal (`RunDialog`, `KitMsgBox` and `KitInputBox` use it) |
 
 ## Starting a new app with the kit
@@ -86,7 +87,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 |---|---|---|
 | `CLR_*` roles, `FONT_UI`, `THEME_DARK` | modUIKit | modTheme (generated) |
 | `PALETTE_COUNT`, `PaletteKey`, `PaletteName`, `PaletteIsDark`, `PaletteSwatch`, `PaletteOf` | modDarkMode, dlgAppearance | modPalette (generated) |
-| `APP_NAME` | modPng, modKitUI, modKitUpdate, `BuildSplash`, modDarkMode, modGridCols, modKitShell, modKitPalette (registry key for saved settings) | modGlobals |
+| `APP_NAME` | modPng, modKitUI, modKitUpdate, modKitEventLog, `BuildSplash`, modDarkMode, modGridCols, modKitShell, modKitPalette (registry key for saved settings) | modGlobals |
 | `HandleError`, `LogError`, `RaiseAgain` | modDarkMode, modCsv, modKitUI, modKitUpdate, modGridCols, modGridFilter, modMenu, modKitLocks, modKitShell | modErrors (`examples/modules`) |
 | `MeasureText(s, size, weight)` (Segoe UI text width in twips; size in points, weight 400 normal / 700 bold) | modTextUI, modPng, modMenu, `Breadcrumb`, `TitleTip`/`PageHeader` | modWrap |
 | `ShowTip(frm, nm)` | the "?" marks from `TitleTip` | modUI |

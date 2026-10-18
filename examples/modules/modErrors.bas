@@ -36,6 +36,11 @@ Option Explicit
 ' If the back end can't be written (often the cause of the error), the entry
 ' goes to %LOCALAPPDATA%\<APP_NAME>\logs\errors.log instead.
 '
+' Each entry is also written to the PC's Windows Event Log (Application log,
+' source APP_NAME, event 1001; modKitEventLog), so the site's IT can collect
+' every app's errors on its log server. The event leaves out the context and
+' call trail.
+'
 ' The build numbers the lines of its copy of every module (tools\VbaLineNumbers.ps1;
 ' the source in git stays un-numbered), so Erl says which line failed. LogError
 ' and RaiseAgain add it to the procedure name, e.g. "pgAdmin.btnSave_Click line 42",
@@ -67,6 +72,8 @@ Public Function LogError(ByVal source As String, Optional ByVal context As Strin
     m_busy = True
     LogError = WriteLogRow(num, desc, errSrc, source, trail, context)
     If LogError = 0 Then WriteLogFile num, desc, errSrc, source, trail, context
+    KitEventLogError LogError, num, desc, source, CurrentPageKey(), ActiveFormName(), ActiveControlName(), _
+        Nz(TempVars("Username"), ""), FrontEndBuild()        ' the Windows Event Log, for the site's log server (modKitEventLog)
     m_busy = False
 End Function
 
