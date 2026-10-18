@@ -115,9 +115,9 @@ In off-screen mode a watcher keeps every Access window, including popups the app
 
 Off unless **Sentry DSN** / `ACCESS_REVIEW_SENTRY_DSN` is set. Then each new `error_log` row or `errors.log` entry (reported once, however often `error_log` is read) and each VBA or Office message box, hang or Access exit that the guard sees becomes a Sentry event, so findings from every review run collect in one place with a history across runs. Kit dialogs and popup forms are not reported.
 
-Only these fields are sent: the front end's file name, the error number, the procedure with its line, the form and control names, the kind of finding, the Access version and the tool version. The error description, call trail, context, the dialog's text, user names and the computer name are never sent, because an Access message can quote field values. Events group by front end, kind, error number and procedure (without the line), so the same error after an edit that moved it stays one issue.
+Only these fields are sent: the front end's file name, the error number, the procedure with its line, the form and control names, the kind of finding, the Access version and the tool version. The error description, call trail, context, the dialog's text, user names and the computer name are never sent, because an Access message can quote field values. Events group by front end, kind, error number and procedure (without the line), so the same error after an edit that moved it stays one issue; identical findings in one call go as one event with an `occurrences` tag. Self-hosted DSNs with a secret, port or path work too.
 
-Each send has a 5 s timeout and never fails a tool call; after the first failed send the session stops trying. `error_log` results include `ReportedToSentry`, the number of events accepted. Code: [`ReviewSentry.ps1`](ReviewSentry.ps1); checks without Access or a network: `powershell -NoProfile -File tools\review-mcp\ReviewSentry.Tests.ps1`.
+Each send has a 5 s timeout and never fails a tool call; after the first failed send the session stops trying. `error_log` results include `ReportedToSentry`, the number of findings the accepted events covered. Code: [`ReviewSentry.ps1`](ReviewSentry.ps1); checks without Access or a network: `powershell -NoProfile -File tools\review-mcp\ReviewSentry.Tests.ps1`.
 
 ## Typical review run
 

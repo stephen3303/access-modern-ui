@@ -24,6 +24,12 @@ try {
     Check 'DSN key read' ($cfg.Key -eq '0123abcd')
     Check 'envelope URL built' ($cfg.Url -eq 'https://o1.ingest.us.sentry.io/api/42/envelope/')
     Check 'environment defaults to review' ($cfg.Environment -eq 'review')
+    $env:ACCESS_REVIEW_SENTRY_DSN = 'https://abc123:def456@sentry.example.com:9443/sentry/7'
+    $self = Get-ReviewSentryConfig
+    Check 'self-hosted DSN with secret, port and path' ($self.Key -eq 'abc123' -and $self.Url -eq 'https://sentry.example.com:9443/sentry/api/7/envelope/')
+    $env:ACCESS_REVIEW_SENTRY_DSN = 'https://not-hex@example.com/1'
+    Check 'off for a DSN without a key' ($null -eq (Get-ReviewSentryConfig))
+    $env:ACCESS_REVIEW_SENTRY_DSN = ' https://0123abcd@o1.ingest.us.sentry.io/42 '
     $env:ACCESS_REVIEW_SENTRY_ENVIRONMENT = 'REVIEW-02'
     Check 'environment from the setting' ((Get-ReviewSentryConfig).Environment -eq 'REVIEW-02')
 
@@ -68,6 +74,13 @@ Procedure:   modKitUI.Paint
     Check 'log entry number and procedure' ($l[0].tags.error_number -eq '3022' -and $l[0].message.formatted -eq 'Logged error 3022 in pgPeople.btnSave_Click line 88')
     Check 'log context, user and computer never sent' ((($l | ConvertTo-Json -Depth 5 -Compress)) -notmatch 'JONES|jdoe|PC123|duplicate')
     Check 'last entry without a line' ($l[1].tags.procedure -eq 'modKitUI.Paint')
+
+    # Grouping: identical findings collapse with a count; distinct ones are all kept
+    $many = @(1..25 | ForEach-Object { New-ReviewSentryEvent -Kind error_log -App 'A.accdb' -ErrorNumber $_ -Procedure 'm.p' })
+    $many += New-ReviewSentryEvent -Kind error_log -App 'A.accdb' -ErrorNumber 1 -Procedure 'm.p line 9'
+    $g = @(Group-ReviewSentryEvents $many)
+    Check 'all 25 distinct findings kept' ($g.Count -eq 25)
+    Check 'repeat counted on its group' ($g[0].tags.occurrences -eq '2' -and $g[1].tags.occurrences -eq '1')
 
     # Envelope
     $envelope = ConvertTo-ReviewSentryEnvelope $cfg $e

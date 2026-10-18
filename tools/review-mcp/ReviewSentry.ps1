@@ -9,6 +9,8 @@
 #
 # Every send has a short timeout and never throws. After the first failure the rest of
 # the session sends nothing, so an unreachable Sentry costs one timeout per session.
+# Identical findings in one call go as one event with an occurrences count; distinct
+# ones are all sent (the project's own rate limit caps a flood).
 #
 # Settings (environment variables, optional):
 #   ACCESS_REVIEW_SENTRY_DSN          the project's DSN; unset means reporting is off
@@ -16,20 +18,24 @@
 
 $script:SentryVersion = '0.4.2'   # matches the server version
 $script:SentryDown = $false
-$script:SentryMaxPerCall = 20     # a flood of identical errors needs only a few events
 
 # The DSN split into what a send needs, or $null when reporting is off or the DSN is
-# malformed.
+# malformed. Takes Sentry's full form, https://KEY[:SECRET]@HOST[:PORT][/PATH]/PROJECT,
+# so a self-hosted server on its own port or path works too.
 function Get-ReviewSentryConfig {
     $dsn = [Environment]::GetEnvironmentVariable('ACCESS_REVIEW_SENTRY_DSN')
     if ([string]::IsNullOrWhiteSpace($dsn) -or $dsn -match '^\$\{.*\}$') { return $null }
     $dsn = $dsn.Trim()
-    if ($dsn -notmatch '^https://(?<key>[0-9a-fA-F]+)@(?<host>[A-Za-z0-9.\-]+)/(?<project>\d+)$') { return $null }
+    $uri = $null
+    if (-not [Uri]::TryCreate($dsn, [UriKind]::Absolute, [ref]$uri) -or $uri.Scheme -ne 'https') { return $null }
+    if ($uri.UserInfo -notmatch '^(?<key>[0-9a-fA-F]+)(:[0-9a-fA-F]+)?$') { return $null }
+    $key = $Matches.key
+    if ($uri.AbsolutePath -notmatch '^(?<prefix>(/[^/]+)*)/(?<project>\d+)/?$') { return $null }
+    $url = "https://$($uri.Authority)$($Matches.prefix)/api/$($Matches.project)/envelope/"
     $envName = [Environment]::GetEnvironmentVariable('ACCESS_REVIEW_SENTRY_ENVIRONMENT')
     if ([string]::IsNullOrWhiteSpace($envName) -or $envName -match '^\$\{.*\}$') { $envName = 'review' }
     [pscustomobject]@{
-        Dsn = $dsn; Key = $Matches.key
-        Url = "https://$($Matches.host)/api/$($Matches.project)/envelope/"
+        Dsn = $dsn; Key = $key; Url = $url
         Environment = $envName.Trim()
     }
 }
@@ -133,16 +139,28 @@ function ConvertTo-ReviewSentryEnvelope($Config, $Item) {
     "$head`n" + (@{ type = 'event'; length = $bytes } | ConvertTo-Json -Compress) + "`n$body`n"
 }
 
-# Sends events; returns how many were accepted. Never throws.
+# One event per fingerprint, with an occurrences tag counting its repeats.
+function Group-ReviewSentryEvents([object[]]$Items) {
+    $groups = [ordered]@{}
+    foreach ($i in @($Items | Where-Object { $_ })) {
+        $k = $i.fingerprint -join '|'
+        if ($groups.Contains($k)) { $groups[$k].tags.occurrences = [string]([int]$groups[$k].tags.occurrences + 1) }
+        else { $i.tags.occurrences = '1'; $groups[$k] = $i }
+    }
+    @($groups.Values)
+}
+
+# Sends events; returns how many findings the accepted events covered. Never throws.
 function Send-ReviewSentry {
     param([object[]]$Items)
-    $list = @($Items | Where-Object { $_ })
-    if (-not $list.Count -or $script:SentryDown) { return 0 }
+    if ($script:SentryDown) { return 0 }
+    $list = @(Group-ReviewSentryEvents $Items)
+    if (-not $list.Count) { return 0 }
     $cfg = Get-ReviewSentryConfig
     if (-not $cfg) { return 0 }
     $sent = 0
     try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch {}
-    foreach ($e in ($list | Select-Object -First $script:SentryMaxPerCall)) {
+    foreach ($e in $list) {
         $e.environment = $cfg.Environment
         try {
             $req = [Net.HttpWebRequest]::Create($cfg.Url)
@@ -152,7 +170,7 @@ function Send-ReviewSentry {
             $body = [Text.Encoding]::UTF8.GetBytes((ConvertTo-ReviewSentryEnvelope $cfg $e))
             $s = $req.GetRequestStream(); try { $s.Write($body, 0, $body.Length) } finally { $s.Close() }
             $resp = $req.GetResponse(); $resp.Close()
-            $sent++
+            $sent += [int]$e.tags.occurrences
         } catch {
             $script:SentryDown = $true
             break
