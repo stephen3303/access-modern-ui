@@ -108,7 +108,7 @@ Requires Microsoft Access 2016 or Microsoft 365 (32- or 64-bit) and Python 3 for
 | `frmSplash` form (optional) | the startup form, `SplashStatus` | call the kit's `BuildSplash` + copy `kit\forms\frmSplash.vba` to src\forms; pass `frmSplash` to `BuildTrustCheck` |
 | `BandLabels()`, `BandBack(label)` | `BandCF` | modUI |
 | `BadgeColors(variant)` (returns `Array(back, fore)`) | `BadgeCF`, `BuildGrid` | modUI |
-| `StatusVariant(value)` (a Variant, may be Null; returns a badge variant or "") | `BuildGrid` pill columns (`p`) | modUI |
+| `StatusVariant(value)` (a Variant, may be Null; returns a badge variant or ""; it runs on every repaint, also for a row deleted since the last requery, so trap errors and return "") | `BuildGrid` pill columns (`p`) | modUI |
 | `subGrid.vba` code-behind | `BuildGrid` tables | copy `kit\forms\subGrid.vba` to src\forms |
 | `Form_Current` and `Form_AfterUpdate` calling `KitNoteRecord Me`, `Form_BeforeUpdate` calling `KitNoteEdits Me` and `Form_Error` calling `KitFormError Me, DataErr, Response` (recommended) | write conflicts and locks on a bound form that edits shared data, saved with `KitSaveRecord` | that form's code-behind |
 | `TempVars("Username")` (optional) | `KitUser`, the stamps | the app's sign-in; without it the Windows account is recorded |

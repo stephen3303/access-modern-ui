@@ -66,8 +66,12 @@ Public Function BadgeColors(ByVal vrnt As String) As Variant
     End Select
 End Function
 
-' Badge variant for an item status (status pill columns in BuildGrid).
+' Badge variant for an item status (status pill columns in BuildGrid). The
+' pill's formatting calls it on every repaint, also for a row deleted since
+' the list was last requeried: reading that row's status raises "Record is
+' deleted", and the row gets no pill.
 Public Function StatusVariant(ByVal status As Variant) As String
+    On Error GoTo Gone
     Select Case Nz(status, "")
         Case "Complete": StatusVariant = "success"
         Case "In progress": StatusVariant = "info"
@@ -75,6 +79,9 @@ Public Function StatusVariant(ByVal status As Variant) As String
         Case "Not started": StatusVariant = "warning"
         Case "Cancelled": StatusVariant = "secondary"
     End Select
+    Exit Function
+Gone:
+    StatusVariant = ""
 End Function
 
 ' Band pill colors (BandCF). The demo shows no bands; these keep the kit's

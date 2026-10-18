@@ -234,15 +234,19 @@ End Function
 ' work it can't save yet has a public CanLeave that saves it or says why not
 ' and returns False. Pages without CanLeave can always be left. The sidebar
 ' items are labels, so clicking them never takes the focus out of the page,
-' which is what would otherwise make Access save it.
+' which is what would otherwise make Access save it. A save the page's form
+' refused with its own message (KitRefuseSave) keeps the page, even when the
+' error Access raises for it is 2465, which a page without CanLeave raises too.
 Public Function ShellCanLeave(frm As Form) As Boolean
     Dim ok As Boolean, errNo As Long, errDesc As String, errSrc As String
     ShellCanLeave = True
     If Len(frm.sfPage.SourceObject) = 0 Then Exit Function
+    KitTakeRefused
     On Error Resume Next
     ok = frm.sfPage.Form.CanLeave()
     errNo = Err.Number: errDesc = Err.Description: errSrc = Err.Source
     On Error GoTo 0
+    If KitTakeRefused() Then ShellCanLeave = False: Exit Function
     Select Case errNo
         Case 0: ShellCanLeave = ok
         Case 438, 2465          ' the page has no CanLeave
