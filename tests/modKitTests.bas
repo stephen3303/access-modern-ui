@@ -1485,11 +1485,57 @@ Public Function TestKit(ByVal root As String) As String
     Set peFrm = Forms(PERSON_FORM)
     Check peFrm.txtUser = "alee" And peFrm.txtAccount = "TESTDOM\alee" And peFrm.txtMiddle = "B" And Not peFrm.lblUserHint.Visible, "Change person didn't show the person"
     DoCmd.Close acForm, PERSON_FORM, acSaveNo
+    TestTelemetry root
     PersonnelSignOut
     CurrentDb.TableDefs.Delete PERSON_TABLE: CurrentDb.TableDefs.Delete PERSON_APP_TABLE
     g_Silent = False
     TestKit = checks & " kit checks passed"
 End Function
+
+' Error reporting (modKitTelemetry): off until an admin turns it on, unclassified
+' sites only, names and numbers only. Its own procedure: TestKit is at VBA's size limit.
+Private Sub TestTelemetry(ByVal root As String)
+    Dim tmDsn As String, tmEnv As String, tmErr As Long
+    tmDsn = "https://0123abcd@telemetry.invalid/42"
+    Dim tmBe As DAO.Database
+    Set tmBe = DBEngine.CreateDatabase(root & "\tm_be.accdb", dbLangGeneral)
+    tmBe.Execute "CREATE TABLE tm_probe (id LONG)", dbFailOnError
+    tmBe.Close
+    KitLinkTables root & "\tm_be.accdb", Array("tm_probe")
+    Check KitEnsureSettingTable("tm_probe") And Not KitEnsureSettingTable("tm_probe") And _
+        InStr(CurrentDb.TableDefs(KIT_SETTING_TABLE).Connect, "tm_be.accdb") > 0, "kit_setting not linked from the data file"
+    Set tmBe = DBEngine.OpenDatabase(root & "\tm_be.accdb")
+    Check Not KitAddSettingTable(tmBe), "kit_setting not added to the data file"
+    tmBe.Close
+    Check Not KitTelemetryIsOn() And Not KitTelemetryReport(2196, "pgX.Save"), "Error reporting on before an admin turned it on"
+    Check TelemetryUrl(tmDsn) = "https://telemetry.invalid/api/42/envelope/" And _
+        TelemetryUrl("https://ab12:cd34@sentry.example.com:9443/sentry/7") = "https://sentry.example.com:9443/sentry/api/7/envelope/" And _
+        TelemetryUrl("http://ab12@x.com/1") = "" And TelemetryUrl("https://not-hex@x.com/1") = "" And TelemetryUrl("https://ab12@x.com/p") = "", "DSN read wrong"
+    PersonnelSignOut
+    tmErr = 0: On Error Resume Next: KitTelemetryTurnOn tmDsn, TELEMETRY_MARKING: tmErr = Err.Number: On Error GoTo 0
+    Check tmErr = 5 And Not KitTelemetryIsOn(), "Error reporting turned on with no admin signed in"
+    Check PersonnelSignInWindows("TEST", True) And PersonnelIsAdminNow(), "Admin not signed in for error reporting"
+    Check KitTelemetryTurnOn(tmDsn, "SECRET") <> "" And Not KitTelemetryIsOn(), "Error reporting turned on for a classified site"
+    Check KitTelemetryTurnOn("not a dsn", TELEMETRY_MARKING) <> "" And Not KitTelemetryIsOn(), "Error reporting turned on with a bad DSN"
+    Check KitTelemetryTurnOn(tmDsn, " unclassified ") = "" And KitTelemetryIsOn(), "Error reporting didn't turn on"
+    Check TelemetryName("pgPeople.btnSave_Click line 88  (person JONES)", True) = "pgPeople.btnSave_Click line 88" And _
+        TelemetryName("modX.Run (SMITH)", True) = "modX.Run" And TelemetryName("2026-10-18 01:02 (x)") = "2026-10-18 01:02", "Names not cut back"
+    tmEnv = KitTelemetryEnvelope(3022, "pgPeople.btnSave_Click line 88 (person JONES)", tmDsn)
+    Check InStr(tmEnv, """formatted"":""Logged error 3022 in pgPeople.btnSave_Click line 88""") > 0 And _
+        InStr(tmEnv, """procedure"":""pgPeople.btnSave_Click""") > 0 And InStr(tmEnv, """app"":""" & APP_NAME & """") > 0, "Report title, procedure or app wrong"
+    Check InStr(tmEnv, "JONES") = 0 And InStr(1, tmEnv, WinUser(), vbTextCompare) = 0 And _
+        InStr(1, tmEnv, WinComputer(), vbTextCompare) = 0 And InStr(tmEnv, "poneil") = 0, "Report carries context, a user or the computer"
+    Check UBound(Split(tmEnv, vbLf)) = 3, "Report isn't a three-line envelope"
+    Check KitTelemetryReport(91, "modA.Run line 3") And Not KitTelemetryReport(91, "modA.Run line 9"), "Same error reported twice in a session"
+    Check KitTelemetryReport(94, "modA.NoLines") And InStr(KitTelemetryEnvelope(94, "modA.NoLines", tmDsn), """procedure"":""modA.NoLines""") > 0, "Error without a line number not reported"
+    SetKitSetting TELEMETRY_MARKING_KEY, "SECRET"
+    Check Not KitTelemetryIsOn() And Not KitTelemetryReport(92, "modB.Run"), "Report sent after the marking changed"
+    KitTelemetryTurnOff
+    Check Not KitTelemetryIsOn() And KitSetting(TELEMETRY_DSN_KEY) = "", "Error reporting didn't turn off"
+    CurrentDb.TableDefs.Delete KIT_SETTING_TABLE: CurrentDb.TableDefs.Delete "tm_probe"
+    On Error Resume Next: Kill root & "\tm_be.accdb": On Error GoTo 0
+    On Error Resume Next: DeleteSetting APP_NAME, "Telemetry": On Error GoTo 0
+End Sub
 
 ' Rows a form shows (its recordset clone read to the end).
 Private Function RowCount(g As Form) As Long
