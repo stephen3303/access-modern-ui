@@ -299,13 +299,13 @@ Private Function ConnectPassword(ByVal cn As String) As String
     p = InStr(1, cn, ";PWD=", vbTextCompare)
     If p = 0 Then Exit Function
     e = InStr(p + 1, cn, ";")
-    ConnectPassword = IIf(e > 0, Mid$(cn, p, e - p), Mid$(cn, p))
+    If e > 0 Then ConnectPassword = Mid$(cn, p, e - p) Else ConnectPassword = Mid$(cn, p)
 End Function
 
 Private Function StripLine(ByVal proc As String) As String
     Dim p As Long
     p = InStr(proc, " line ")
-    StripLine = IIf(p > 0, Left$(proc, p - 1), proc)
+    If p > 0 Then StripLine = Left$(proc, p - 1) Else StripLine = proc   ' not IIf: it would run Left$(proc, -1)
 End Function
 
 ' A random id for this install, made on first use and kept in the registry.

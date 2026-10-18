@@ -1485,8 +1485,16 @@ Public Function TestKit(ByVal root As String) As String
     Set peFrm = Forms(PERSON_FORM)
     Check peFrm.txtUser = "alee" And peFrm.txtAccount = "TESTDOM\alee" And peFrm.txtMiddle = "B" And Not peFrm.lblUserHint.Visible, "Change person didn't show the person"
     DoCmd.Close acForm, PERSON_FORM, acSaveNo
-    ' Error reporting (modKitTelemetry): off until an admin turns it on, unclassified
-    ' sites only, names and numbers only.
+    TestTelemetry root
+    PersonnelSignOut
+    CurrentDb.TableDefs.Delete PERSON_TABLE: CurrentDb.TableDefs.Delete PERSON_APP_TABLE
+    g_Silent = False
+    TestKit = checks & " kit checks passed"
+End Function
+
+' Error reporting (modKitTelemetry): off until an admin turns it on, unclassified
+' sites only, names and numbers only. Its own procedure: TestKit is at VBA's size limit.
+Private Sub TestTelemetry(ByVal root As String)
     Dim tmDsn As String, tmEnv As String, tmErr As Long
     tmDsn = "https://0123abcd@telemetry.invalid/42"
     Dim tmBe As DAO.Database
@@ -1519,6 +1527,7 @@ Public Function TestKit(ByVal root As String) As String
         InStr(1, tmEnv, WinComputer(), vbTextCompare) = 0 And InStr(tmEnv, "poneil") = 0, "Report carries context, a user or the computer"
     Check UBound(Split(tmEnv, vbLf)) = 3, "Report isn't a three-line envelope"
     Check KitTelemetryReport(91, "modA.Run line 3") And Not KitTelemetryReport(91, "modA.Run line 9"), "Same error reported twice in a session"
+    Check KitTelemetryReport(94, "modA.NoLines") And InStr(KitTelemetryEnvelope(94, "modA.NoLines", tmDsn), """procedure"":""modA.NoLines""") > 0, "Error without a line number not reported"
     SetKitSetting TELEMETRY_MARKING_KEY, "SECRET"
     Check Not KitTelemetryIsOn() And Not KitTelemetryReport(92, "modB.Run"), "Report sent after the marking changed"
     KitTelemetryTurnOff
@@ -1526,11 +1535,7 @@ Public Function TestKit(ByVal root As String) As String
     CurrentDb.TableDefs.Delete KIT_SETTING_TABLE: CurrentDb.TableDefs.Delete "tm_probe"
     On Error Resume Next: Kill root & "\tm_be.accdb": On Error GoTo 0
     On Error Resume Next: DeleteSetting APP_NAME, "Telemetry": On Error GoTo 0
-    PersonnelSignOut
-    CurrentDb.TableDefs.Delete PERSON_TABLE: CurrentDb.TableDefs.Delete PERSON_APP_TABLE
-    g_Silent = False
-    TestKit = checks & " kit checks passed"
-End Function
+End Sub
 
 ' Rows a form shows (its recordset clone read to the end).
 Private Function RowCount(g As Form) As Long
