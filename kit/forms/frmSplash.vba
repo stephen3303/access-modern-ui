@@ -3,10 +3,11 @@ Option Explicit
 
 ' Splash screen (BuildSplash builds it). It is the app's StartUpForm: it shows
 ' the app's name and version in the user's palette, then, from its timer so it
-' has painted first, opens the form named in its Tag (frmMain). That form's
-' Load does the app's start-up work under the splash, calling SplashStatus to
-' say what it is doing. Once the form is open the splash closes, after at
-' least MIN_SHOW_MS so a fast start doesn't just flash it.
+' has painted first, opens the form named in its Tag (frmMain), hidden when
+' the Tag ends in SPLASH_HIDDEN (BuildSplash openHidden). That form's Load
+' does the app's start-up work under the splash, calling SplashStatus to say
+' what it is doing. Once the form is open the splash closes, after at least
+' MIN_SHOW_MS so a fast start doesn't just flash it.
 
 Private Const MIN_SHOW_MS As Long = 1200
 Private Const SECONDS_PER_DAY As Long = 86400
@@ -28,12 +29,16 @@ Err_Handler:
 End Sub
 
 Private Sub Form_Timer()
-    Dim waitMs As Long
+    Dim waitMs As Long, nextForm As String, hidden As Boolean
     On Error GoTo Err_Handler
     Me.TimerInterval = 0
     If Not m_started Then
         m_started = True
-        DoCmd.OpenForm IIf(Len(Me.Tag) > 0, Me.Tag, "frmMain")
+        nextForm = Me.Tag
+        hidden = (Right$(nextForm, Len(SPLASH_HIDDEN)) = SPLASH_HIDDEN)
+        If hidden Then nextForm = Left$(nextForm, Len(nextForm) - Len(SPLASH_HIDDEN))
+        If Len(nextForm) = 0 Then nextForm = "frmMain"
+        DoCmd.OpenForm nextForm, WindowMode:=IIf(hidden, acHidden, acWindowNormal)
         ' A message during the next form's start-up closes the splash (KitMsgBox).
         If Not IsFormOpen(m_name) Then Exit Sub
     End If

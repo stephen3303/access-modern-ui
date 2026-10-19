@@ -542,8 +542,11 @@ End Sub
 ' closes. Call it once with the app's dialogs, and HideAccessSplash for
 ' Access's own splash.
 ' glyph: a Segoe MDL2 Assets character; default ChrW(&HE80F), home.
+' openHidden: open nextForm hidden (a login form that does its start-up work
+' under the splash and shows itself only when it needs the user). nextForm
+' must then show itself, or open the next window, when it is ready.
 Public Sub BuildSplash(Optional ByVal nextForm As String = "frmMain", Optional ByVal subtitle As String = "", _
-        Optional ByVal glyph As String = "")
+        Optional ByVal glyph As String = "", Optional ByVal openHidden As Boolean = False)
     Dim c As Control, w As Long, h As Long, pad As Long, y As Long
     ' 480 x 280px at the default spacing. Padding and gaps follow SetSpacing,
     ' so a roomier scale makes the splash taller rather than overlapping the
@@ -555,7 +558,7 @@ Public Sub BuildSplash(Optional ByVal nextForm As String = "frmMain", Optional B
     NewForm "", 0, w, h
     With F
         .Caption = APP_NAME
-        .Tag = nextForm                             ' read by frmSplash.vba
+        .Tag = nextForm & IIf(openHidden, SPLASH_HIDDEN, "")   ' read by frmSplash.vba
         .PopUp = True                               ' stays over the window nextForm opens in
         .Modal = False
         .BorderStyle = 0

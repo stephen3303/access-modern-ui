@@ -60,6 +60,7 @@ Public Function KitPersonnelStart(ByVal appTable As String, ByVal appCode As Str
         KitPersonnelStart = True
         Exit Function
     End If
+    SplashStatus "Checking your Windows sign-in" & ChrW(8230)
     If PersonnelSignInWindows(appCode) Then KitPersonnelStart = True: Exit Function
     m_signInWhy = "notset"
     CloseSplash
