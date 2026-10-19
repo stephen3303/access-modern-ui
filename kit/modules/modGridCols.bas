@@ -54,7 +54,7 @@ Public Sub SetGridColumns(sf As Control, ByVal prefix As String, ByVal layout As
     Dim g As Form, host As Form, order() As Long, shown() As Boolean, n As Long, k As Long
     Dim c As Control, t() As String, x As Long, w As Long, allW As Long, design As Long
     Set g = sf.Form
-    Set host = sf.Parent
+    Set host = OwnerForm(sf)
     CheckFitGrid g
     n = ColumnCount(g)
     If Not ParseLayout(layout, n, order, shown) Then

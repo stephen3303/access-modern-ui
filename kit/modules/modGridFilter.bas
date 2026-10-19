@@ -180,7 +180,7 @@ End Sub
 Public Sub SetColumnFilter(sf As Control, ByVal prefix As String, ByVal col As Long, ByVal keep As Variant)
     Dim st As Object, t() As String, fld As String, isText As Boolean, clause As String, kept As Object, v As Variant
     Dim lits As String, blank As Boolean, k As String, n As Long, cols As Object
-    t = FunnelTag(sf.Parent, prefix, col)
+    t = FunnelTag(OwnerForm(sf), prefix, col)
     If Not CanFilter(sf, prefix, col) Then
         Err.Raise 5, "modGridFilter.SetColumnFilter", "Column " & col & " of " & sf.Name & " can't be filtered."
     End If
@@ -256,7 +256,7 @@ Public Function GridColumnValues(sf As Control, ByVal prefix As String, ByVal co
     Dim blank As Boolean, st As Object, entry As Variant
     On Error GoTo Fail
     more = False
-    t = FunnelTag(sf.Parent, prefix, col)
+    t = FunnelTag(OwnerForm(sf), prefix, col)
     fld = "q." & Bracket(t(3))
     If Len(t(4)) > 0 Then srt = "q." & Bracket(t(4))
     Set st = TableState(sf, prefix)
@@ -326,7 +326,7 @@ End Function
 ' dropped here too, and the funnels go back to muted.
 Private Function TableState(sf As Control, Optional ByVal prefix As String = "") As Object
     Dim host As Form, key As String, st As Object, full As String
-    Set host = sf.Parent
+    Set host = OwnerForm(sf)
     If m_tables Is Nothing Then Set m_tables = CreateObject("Scripting.Dictionary")
     key = host.Name & "." & sf.Name
     full = TableFullFilter(sf.Form)
@@ -364,8 +364,8 @@ Private Sub ApplyFilters(sf As Control, st As Object)
     g.Filter = where
     g.FilterOn = Len(where) > 0
     st("Last") = where
-    StyleFunnels sf.Parent, st
-    RestartTablePages sf.Parent, sf.Name
+    StyleFunnels OwnerForm(sf), st
+    RestartTablePages OwnerForm(sf), sf.Name
 End Sub
 
 ' The page's filter (withBase) and every column's filter but skip's, each in
@@ -423,7 +423,7 @@ End Function
 ' False for a column whose field is memo, OLE or an attachment (DISTINCT and
 ' IN don't work on them). Raises error 5 when the column has no funnel.
 Private Function CanFilter(sf As Control, ByVal prefix As String, ByVal col As Long) As Boolean
-    Select Case FieldType(sf.Form, FunnelTag(sf.Parent, prefix, col)(3))
+    Select Case FieldType(sf.Form, FunnelTag(OwnerForm(sf), prefix, col)(3))
         Case dbMemo, dbLongBinary, dbAttachment, dbComplexByte To dbComplexGUID
         Case Else: CanFilter = True
     End Select

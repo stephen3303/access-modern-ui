@@ -170,8 +170,9 @@ Private Function ParkFocus(c As Control) As Boolean
 End Function
 
 ' The form a control sits on (its Parent can be a tab page, an option group or,
-' for an attached label, another control).
-Private Function OwnerForm(c As Control) As Form
+' for an attached label, another control). For a subform control on a tab
+' page, the host form whose code and controls the kit's table helpers use.
+Public Function OwnerForm(c As Control) As Form
     Dim p As Object
     Set p = c.Parent
     Do Until TypeOf p Is Form

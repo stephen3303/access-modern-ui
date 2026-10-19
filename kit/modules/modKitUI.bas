@@ -78,7 +78,7 @@ Private m_refused As Boolean
 Public Sub GridFit(sf As Control, Optional ByVal prefix As String = "")
     Dim host As Form, g As Form, c As Control, i As Long, t() As String
     Dim design As Long, avail As Long, ratio As Double, newW As Long
-    Set host = sf.Parent
+    Set host = OwnerForm(sf)
     Set g = sf.Form
     If Left$(Nz(g.Tag, ""), 5) <> "grid:" Then Exit Sub
     If m_fitting Then Exit Sub
@@ -410,7 +410,7 @@ Public Function SelectFirstRow(sf As Control) As Variant
     g.txtSel = g!id
     g.Recalc
     SelectFirstRow = g.txtSel
-    sf.Parent.GridClick sf.Name, False
+    OwnerForm(sf).GridClick sf.Name, False
 End Function
 
 ' Mark term in the search columns (BuildGrid option "s") of the table shown
