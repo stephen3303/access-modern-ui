@@ -419,7 +419,7 @@ End Sub
   - `NewReport recSrc, w`: Letter portrait, 0.5 in margins, `REPORT_W = 10800`, pop-up
     preview.
   - `SaveForm`, `Trace`
-  - `BuildSplash [nextForm], [subtitle], [glyph]`: the startup splash screen (section 6.5).
+  - `BuildSplash [nextForm], [subtitle], [glyph], [openHidden]`: the startup splash screen (section 6.5).
 - **Controls**
   - `Lbl`: transparent label.
   - `Txt`: input with `CLR_INPUT_BG`, a 1px `CLR_INPUT_BORDER` border and inner margins.
@@ -720,6 +720,8 @@ Write app-specific helpers next to the builds that use them. Examples:
   version on the right. `ThemeForm` gives it the user's palette. Once it has painted, its
   timer opens `nextForm` (the login form or `frmMain`); that form's Load does the start-up
   work (version checks, linking) and calls `SplashStatus "..."` to say what it is doing.
+  With `openHidden`, `nextForm` opens hidden and shows itself only when it needs the user
+  (a login form that signs in from Windows), so it never flashes over the splash.
   The splash closes when the form is open, and stays at least 1.2 seconds so it doesn't
   flash. `KitMsgBox` closes it first, so a start-up error is never hidden behind it.
   A plain `MsgBox` or a file dialog doesn't close it, so call `CloseSplash` before one

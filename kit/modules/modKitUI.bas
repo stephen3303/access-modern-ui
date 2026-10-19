@@ -38,6 +38,9 @@ Private m_msgTitle As String
 Private m_msgAnswer As Long
 ' The splash screen BuildSplash builds (SplashStatus, CloseSplash).
 Private Const SPLASH_FORM As String = "frmSplash"
+' Ends frmSplash's Tag when it opens its next form hidden (BuildSplash
+' openHidden).
+Public Const SPLASH_HIDDEN As String = "|hidden"
 ' The field showing the focus ring (FocusRing): the control, its form's
 ' window and its name, and the border color the ring covers.
 Private m_ringCtl As Control

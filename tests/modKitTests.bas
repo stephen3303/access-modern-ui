@@ -791,6 +791,11 @@ Public Function TestKit(ByVal root As String) As String
     CloseSplash
     Check IsFormOpen("frmSplash"), "CloseSplash closed a splash in Design view"
     DoCmd.Close acForm, "frmSplash", acSaveNo
+    BuildSplash "frmMain", "Subtitle", , True
+    DoCmd.OpenForm "frmSplash", acDesign
+    Check Forms("frmSplash").Tag = "frmMain" & SPLASH_HIDDEN, "BuildSplash openHidden not saved in the splash's Tag"
+    DoCmd.Close acForm, "frmSplash", acSaveNo
+    BuildSplash "frmMain", "Subtitle"
     HideAccessSplash
     text = CurrentProject.Path & "\" & Left$(CurrentProject.Name, InStrRev(CurrentProject.Name, ".") - 1) & ".bmp"
     Check FileLen(text) = 58, "HideAccessSplash did not write a 58-byte bitmap"
