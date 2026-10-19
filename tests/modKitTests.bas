@@ -796,6 +796,14 @@ Public Function TestKit(ByVal root As String) As String
     Check Forms("frmSplash").Tag = "frmMain" & SPLASH_HIDDEN, "BuildSplash openHidden not saved in the splash's Tag"
     DoCmd.Close acForm, "frmSplash", acSaveNo
     BuildSplash "frmMain", "Subtitle"
+    ' A table on a tab page: its subform's Parent is the Page, and the kit's
+    ' table helpers (GridFit, funnels, column layouts) use OwnerForm instead.
+    NewForm "", 0, px(300), px(200)
+    TabCtl "tabOwner", 0, 0, px(300), px(200), "pgOwner|Owner"
+    Set c = SubF("sfOwner", "", px(8), px(40), px(200), px(100), , "pgOwner")
+    Check TypeOf c.Parent Is Page, "Subform on a tab page not parented by the page"
+    Check OwnerForm(c).Name = F.Name, "OwnerForm did not find the form behind a tab page"
+    DoCmd.Close acForm, F.Name, acSaveNo
     HideAccessSplash
     text = CurrentProject.Path & "\" & Left$(CurrentProject.Name, InStrRev(CurrentProject.Name, ".") - 1) & ".bmp"
     Check FileLen(text) = 58, "HideAccessSplash did not write a 58-byte bitmap"
