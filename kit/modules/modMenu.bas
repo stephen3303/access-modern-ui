@@ -479,7 +479,7 @@ Private Sub AnchorRect(c As Control)
         Set frm = frm.Parent
     Loop
     top = c.Top
-    If c.Section = acDetail Then top = top + HeaderHeight(frm)
+    If c.Section = acDetail Then top = top + DetailTop(frm)
     hdc = GetDC(0): dpi = GetDeviceCaps(hdc, LOGPIXELSY): ReleaseDC 0, hdc
     If dpi <= 0 Then dpi = 96
     m_hAnchor = frm.hWnd
@@ -489,6 +489,21 @@ Private Sub AnchorRect(c As Control)
     m_anchor.Right = pt.x + CLng((c.Left + c.Width) * dpi / 1440)
     m_anchor.Bottom = pt.y + CLng((top + c.Height) * dpi / 1440)
 End Sub
+
+' Where the current record's Detail section starts in frm's window (twips):
+' on a continuous form, that record's row (CurrentSectionTop, which counts
+' the header and the scroll), so a button on a card or row anchors to its own
+' row; else under the form header.
+Private Function DetailTop(frm As Object) As Long
+    If frm.DefaultView = 1 Then
+        On Error Resume Next
+        DetailTop = -1
+        DetailTop = frm.CurrentSectionTop
+        On Error GoTo 0
+        If DetailTop >= 0 Then Exit Function
+    End If
+    DetailTop = HeaderHeight(frm)
+End Function
 
 Private Function HeaderHeight(frm As Object) As Long
     On Error Resume Next
