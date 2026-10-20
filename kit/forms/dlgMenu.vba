@@ -24,6 +24,10 @@ Private Sub Form_Timer()
     MenuTick Me
 End Sub
 
+Private Sub Form_Close()
+    MenuClosed
+End Sub
+
 Private Sub txtKeys_KeyDown(KeyCode As Integer, Shift As Integer)
     On Error GoTo Err_Handler
     MenuKey Me, KeyCode

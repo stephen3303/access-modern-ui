@@ -528,9 +528,13 @@ Public Function TestKit(ByVal root As String) As String
     End With
     key = vbKeyReturn: MenuKey Forms("dlgMenu"), key
     Check Not IsFormOpen("dlgMenu") And MenuResult() = "del", "Enter did not pick the lit item"
+    host.tglTest.ControlTipText = "Actions"
     Check MenuOpen(host.tglTest, Array("a|Alpha", "b|Beta")), "Menu did not open again"
+    Check host.tglTest.ControlTipText = "", "Anchor tooltip not cleared while the menu shows"
     key = vbKeyEscape: MenuKey Forms("dlgMenu"), key
     Check Not IsFormOpen("dlgMenu") And MenuResult() = "", "Esc did not close the menu with nothing picked"
+    Check host.tglTest.ControlTipText = "Actions", "Anchor tooltip not restored when the menu closed"
+    host.tglTest.ControlTipText = ""
     On Error Resume Next
     MenuOpen host.tglTest, Array("a|A", "b|B", "c|C", "d|D", "e|E", "f|F", "g|G", "h|H", "i|I", "j|J", "k|K"): badName = Err.Number: Err.Clear
     MenuOpen host.tglTest, Array("nokey"): badScale = Err.Number: Err.Clear
