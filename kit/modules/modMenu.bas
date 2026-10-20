@@ -473,7 +473,7 @@ End Sub
 
 ' The button's place on screen, in pixels.
 Private Sub AnchorRect(c As Control)
-    Dim frm As Object, pt As POINTAPI, dpi As Long, hdc As LongPtr, top As Long
+    Dim frm As Object, pt As POINTAPI, dpi As Long, hdc As LongPtr, top As Long, x As Long, w As Long
     Set frm = c.Parent
     Do While Not TypeOf frm Is Form
         Set frm = frm.Parent
@@ -484,10 +484,29 @@ Private Sub AnchorRect(c As Control)
     If dpi <= 0 Then dpi = 96
     m_hAnchor = frm.hWnd
     ClientToScreen m_hAnchor, pt
-    m_anchor.Left = pt.x + CLng(c.Left * dpi / 1440)
+    AnchoredX c, frm, x, w
+    m_anchor.Left = pt.x + CLng(x * dpi / 1440)
     m_anchor.Top = pt.y + CLng(top * dpi / 1440)
-    m_anchor.Right = pt.x + CLng((c.Left + c.Width) * dpi / 1440)
+    m_anchor.Right = pt.x + CLng((x + w) * dpi / 1440)
     m_anchor.Bottom = pt.y + CLng((top + c.Height) * dpi / 1440)
+End Sub
+
+' Where control c is across frm's window (twips): its Left and Width still
+' read their design values when the window is wider than the form, so add
+' the growth to a right-anchored control's Left, or to a stretched one's
+' Width.
+Private Sub AnchoredX(c As Control, frm As Object, x As Long, w As Long)
+    Dim grow As Long, ha As Long
+    x = c.Left: w = c.Width
+    On Error Resume Next
+    ha = c.HorizontalAnchor
+    grow = frm.InsideWidth - frm.Width
+    On Error GoTo 0
+    If grow <= 0 Then Exit Sub
+    Select Case ha
+        Case acHorizontalAnchorRight: x = x + grow
+        Case acHorizontalAnchorBoth: w = w + grow
+    End Select
 End Sub
 
 ' Where the current record's Detail section starts in frm's window (twips):
