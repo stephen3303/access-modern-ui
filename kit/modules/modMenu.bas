@@ -86,15 +86,19 @@ Private m_pick As String        ' the key picked, "" for none
 Private m_hot As Long           ' the lit row, -1 for none
 Private m_anchor As RECT        ' the button, screen pixels
 Private m_hAnchor As LongPtr    ' the button's form window (for its monitor), 0 at the pointer
-Private m_closing As Boolean
-Private m_lost As Boolean       ' the open menu's Deactivate ran
-Private m_openedAt As Single    ' Timer() when the menu opened
+' Per pop-up, so a popover closing doesn't stop the menu closing: index 0
+' for dlgMenu, 1 for dlgPopover (PopupSlot).
+Private m_closing(0 To 1) As Boolean
+Private m_lost(0 To 1) As Boolean       ' its Deactivate ran
+Private m_openedAt(0 To 1) As Single    ' Timer() when it opened
 ' The popover's (KitPopover).
 Public Const POPOVER_W As Long = 280       ' px
 Private Const POPOVER_LINES As Long = 8
 Public Const POPOVER_LINE_H As Long = 255   ' one line of 9pt text, 17px (twips)
 Private m_popTitle As String
 Private m_popText As String
+Private m_popAnchor As Control  ' the control the open popover is by
+Private m_popTip As String      ' its ControlTipText, cleared while the popover shows
 
 ' The searchable picker (PickBox, below).
 Public Const PICK_ROWS As Long = 8         ' most matches the list shows
@@ -182,8 +186,8 @@ Private Function MenuShowItems(items As Variant) As Boolean
     m_items = items
     m_pick = ""
     m_hot = -1
-    m_closing = False
-    m_lost = False
+    m_closing(0) = False
+    m_lost(0) = False
     On Error GoTo NotBuilt
     DoCmd.OpenForm "dlgMenu"
     MenuShowItems = True
@@ -322,36 +326,38 @@ End Sub
 
 ' Close the menu or popover (once: its Deactivate also asks, as it closes).
 Public Function MenuClose(frm As Form)
-    If m_closing Then Exit Function
-    m_closing = True
+    If m_closing(PopupSlot(frm)) Then Exit Function
+    m_closing(PopupSlot(frm)) = True
     DoCmd.Close acForm, frm.Name
 End Function
 
-' dlgMenu's Deactivate: a click outside the menu. Closing during the event is
-' refused, so the form's timer closes it a moment later.
+' The Deactivate of dlgMenu or dlgPopover: a click outside it. Closing during
+' the event is refused, so the form's timer closes it a moment later.
 Public Sub MenuLostFocus(frm As Form)
-    m_lost = True
-    If Not m_closing Then frm.TimerInterval = 1
+    m_lost(PopupSlot(frm)) = True
+    If Not m_closing(PopupSlot(frm)) Then frm.TimerInterval = 1
 End Sub
 
-' dlgMenu's Load, once it has the focus: start checking that it keeps it.
-' Access doesn't always raise Deactivate for a click outside the pop-up, and
-' a menu left open would keep KitMenu waiting.
+' The Load of dlgMenu or dlgPopover, once it has the focus: start checking
+' that it keeps it. Access doesn't always raise Deactivate for a click
+' outside the pop-up, and a menu left open would keep KitMenu waiting.
 Public Sub MenuStarted(frm As Form)
-    m_openedAt = Timer
+    m_openedAt(PopupSlot(frm)) = Timer
     frm.TimerInterval = MENU_TICK_MS
 End Sub
 
-' dlgMenu's timer: close the menu when its Deactivate ran or another form
-' has the focus. Just after it opens (the second click of a double-click on
-' its button), it takes the focus back instead, so Esc still reaches it.
+' The timer of dlgMenu or dlgPopover: close it when its Deactivate ran or
+' another form has the focus. Just after it opens (the second click of a
+' double-click on its button), it takes the focus back instead, so Esc
+' still reaches it.
 Public Sub MenuTick(frm As Form)
-    Dim s As Single
-    If m_closing Then Exit Sub
-    If Not m_lost And MenuIsActive(frm) Then frm.TimerInterval = MENU_TICK_MS: Exit Sub
-    s = Timer - m_openedAt
+    Dim s As Single, i As Long
+    i = PopupSlot(frm)
+    If m_closing(i) Then Exit Sub
+    If Not m_lost(i) And MenuIsActive(frm) Then frm.TimerInterval = MENU_TICK_MS: Exit Sub
+    s = Timer - m_openedAt(i)
     If s < 0 Then s = s + 86400
-    If Not m_lost And s * 1000 < MENU_GRACE_MS Then
+    If Not m_lost(i) And s * 1000 < MENU_GRACE_MS Then
         On Error Resume Next
         frm.SetFocus
         frm.Controls("txtKeys").SetFocus
@@ -361,6 +367,11 @@ Public Sub MenuTick(frm As Form)
     End If
     MenuClose frm
 End Sub
+
+' Which pop-up's state frm uses: 1 for dlgPopover, 0 for dlgMenu.
+Private Function PopupSlot(frm As Form) As Long
+    If frm.Name = "dlgPopover" Then PopupSlot = 1
+End Function
 
 ' True when frm is Access's active form.
 Private Function MenuIsActive(frm As Form) As Boolean
@@ -522,9 +533,16 @@ End Sub
 Public Function KitPopover(anchor As Control, ByVal title As String, ByVal text As String) As Boolean
     m_popTitle = title
     m_popText = text
-    m_closing = False
     AnchorRect anchor
     If IsFormOpen("dlgPopover") Then DoCmd.Close acForm, "dlgPopover"
+    ' After closing the old one, so its Deactivate can't mark this one lost.
+    m_closing(1) = False
+    m_lost(1) = False
+    ' Access's own tooltip on the anchor (a TitleTip "?" has the same text)
+    ' would cover the popover's first line while the pointer stays on it.
+    On Error Resume Next
+    m_popTip = anchor.ControlTipText
+    If Len(m_popTip) > 0 Then anchor.ControlTipText = "": Set m_popAnchor = anchor
     On Error GoTo NotBuilt
     DoCmd.OpenForm "dlgPopover"
     KitPopover = True
@@ -532,6 +550,16 @@ Public Function KitPopover(anchor As Control, ByVal title As String, ByVal text 
 NotBuilt:
     LogError "modMenu.KitPopover", "dlgPopover could not open: " & Err.Description
 End Function
+
+' dlgPopover's Close: give the anchor its tooltip back. Its form may have
+' closed first, so a failure is ignored.
+Public Sub PopoverClosed()
+    If m_popAnchor Is Nothing Then Exit Sub
+    On Error Resume Next
+    m_popAnchor.ControlTipText = m_popTip
+    On Error GoTo 0
+    Set m_popAnchor = Nothing
+End Sub
 
 ' dlgPopover's Load: fill it, size it to its text and place it.
 Public Sub PopoverShow(frm As Form)
@@ -598,7 +626,7 @@ Public Sub BuildPopoverDialog()
         .Section(acDetail).AlternateBackColor = CLR_DIALOG
         .Section(acDetail).OnClick = "=MenuClose([Form])"
     End With
-    Ev F, "OnLoad", "OnDeactivate", "OnTimer"
+    Ev F, "OnLoad", "OnDeactivate", "OnTimer", "OnClose"
     Set c = Txt("txtKeys", "", 0, 0, 15, 15)
     c.BorderStyle = 0: c.BackStyle = 0: c.OnGotFocus = "": c.OnLostFocus = ""
     Ev c, "OnKeyDown"
