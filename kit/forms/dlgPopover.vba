@@ -19,6 +19,10 @@ Private Sub Form_Deactivate()
     MenuLostFocus Me
 End Sub
 
+Private Sub Form_Close()
+    PopoverClosed
+End Sub
+
 Private Sub Form_Timer()
     Me.TimerInterval = 0
     MenuTick Me

@@ -97,6 +97,8 @@ Private Const POPOVER_LINES As Long = 8
 Public Const POPOVER_LINE_H As Long = 255   ' one line of 9pt text, 17px (twips)
 Private m_popTitle As String
 Private m_popText As String
+Private m_popAnchor As Control  ' the control the open popover is by
+Private m_popTip As String      ' its ControlTipText, cleared while the popover shows
 
 ' The searchable picker (PickBox, below).
 Public Const PICK_ROWS As Long = 8         ' most matches the list shows
@@ -535,6 +537,11 @@ Public Function KitPopover(anchor As Control, ByVal title As String, ByVal text 
     m_lost(1) = False
     AnchorRect anchor
     If IsFormOpen("dlgPopover") Then DoCmd.Close acForm, "dlgPopover"
+    ' Access's own tooltip on the anchor (a TitleTip "?" has the same text)
+    ' would cover the popover's first line while the pointer stays on it.
+    On Error Resume Next
+    m_popTip = anchor.ControlTipText
+    If Len(m_popTip) > 0 Then anchor.ControlTipText = "": Set m_popAnchor = anchor
     On Error GoTo NotBuilt
     DoCmd.OpenForm "dlgPopover"
     KitPopover = True
@@ -542,6 +549,16 @@ Public Function KitPopover(anchor As Control, ByVal title As String, ByVal text 
 NotBuilt:
     LogError "modMenu.KitPopover", "dlgPopover could not open: " & Err.Description
 End Function
+
+' dlgPopover's Close: give the anchor its tooltip back. Its form may have
+' closed first, so a failure is ignored.
+Public Sub PopoverClosed()
+    If m_popAnchor Is Nothing Then Exit Sub
+    On Error Resume Next
+    m_popAnchor.ControlTipText = m_popTip
+    On Error GoTo 0
+    Set m_popAnchor = Nothing
+End Sub
 
 ' dlgPopover's Load: fill it, size it to its text and place it.
 Public Sub PopoverShow(frm As Form)
@@ -608,7 +625,7 @@ Public Sub BuildPopoverDialog()
         .Section(acDetail).AlternateBackColor = CLR_DIALOG
         .Section(acDetail).OnClick = "=MenuClose([Form])"
     End With
-    Ev F, "OnLoad", "OnDeactivate", "OnTimer"
+    Ev F, "OnLoad", "OnDeactivate", "OnTimer", "OnClose"
     Set c = Txt("txtKeys", "", 0, 0, 15, 15)
     c.BorderStyle = 0: c.BackStyle = 0: c.OnGotFocus = "": c.OnLostFocus = ""
     Ev c, "OnKeyDown"

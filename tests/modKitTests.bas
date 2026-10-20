@@ -483,7 +483,9 @@ Public Function TestKit(ByVal root As String) As String
     Check FileExists(CStr(SliderPng(37, CLR_PRIMARY, CLR_SECONDARY_BG, CLR_SURFACE, 200, 20))), "Slider image missing"
     Check IsNull(SliderPng(50, CLR_PRIMARY, CLR_SECONDARY_BG, CLR_SURFACE, 20, 20)), "Slider image drawn narrower than its knob"
     ' Popover: opens with its title and text, sized to the text, Esc closes it.
+    host.tglTest.ControlTipText = "Due date tip"
     Check KitPopover(host.tglTest, "Due date", "Work is due then."), "Popover did not open"
+    Check host.tglTest.ControlTipText = "", "Anchor tooltip not cleared while the popover shows"
     Check IsFormOpen("dlgPopover"), "Popover form is not open"
     With Forms("dlgPopover")
         Check .Controls("lblTitle").Caption = "Due date" And .Controls("lblTitle").Visible, "Popover title differs"
@@ -492,6 +494,8 @@ Public Function TestKit(ByVal root As String) As String
     Dim pk As Integer
     pk = vbKeyEscape: PopoverKey Forms("dlgPopover"), pk
     Check Not IsFormOpen("dlgPopover"), "Esc did not close the popover"
+    Check host.tglTest.ControlTipText = "Due date tip", "Anchor tooltip not restored when the popover closed"
+    host.tglTest.ControlTipText = ""
     Check KitPopover(host.tglTest, "", "No title"), "Untitled popover did not open"
     Check Not Forms("dlgPopover").Controls("lblTitle").Visible And Forms("dlgPopover").Controls("lblText").Top = px(12), "Untitled popover kept its title"
     MenuClose Forms("dlgPopover")
