@@ -192,7 +192,9 @@ function Export-FormDesignFolder {
     }
     $list = Join-Path $SnapshotDir 'unsaved-names.list'
     if (Test-Path -LiteralPath $list) {
-        foreach ($n in @(Get-Content -LiteralPath $list -Encoding UTF8 | Where-Object { $_ })) {
+        # ReadAllLines, not Get-Content: in Windows PowerShell 5.1 Get-Content's strings carry
+        # provider note properties that ConvertTo-Json walks without end.
+        foreach ($n in @([IO.File]::ReadAllLines($list, [Text.Encoding]::UTF8) | Where-Object { $_ })) {
             if (-not $Forms -or $Forms -contains $n) { [void]$failed.Add([ordered]@{ form = $n; error = "snapshot failed: the name has a character that can't be used in a file name" }) }
         }
     }
