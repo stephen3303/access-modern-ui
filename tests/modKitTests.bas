@@ -500,57 +500,8 @@ Public Function TestKit(ByVal root As String) As String
     Check Not Forms("dlgPopover").Controls("lblTitle").Visible And Forms("dlgPopover").Controls("lblText").Top = px(12), "Untitled popover kept its title"
     MenuClose Forms("dlgPopover")
     DoCmd.SelectObject acForm, "frmTest"
-    ' Dropdown menu: placed under its button (right-aligned or above when it would
-    ' run off), sized to its items, separators and disabled items skipped by the
-    ' keys, a pick returns the key and closes it, Esc returns nothing.
-    Dim mx As Long, my As Long, key As Integer
-    MenuSpot 100, 100, 130, 130, 200, 150, 0, 0, 1000, 800, 4, mx, my
-    Check mx = 100 And my = 134, "Menu is not under its button"
-    MenuSpot 900, 100, 930, 130, 200, 150, 0, 0, 1000, 800, 4, mx, my
-    Check mx = 730 And my = 134, "Menu at the right edge is not right-aligned"
-    MenuSpot 100, 700, 130, 730, 200, 150, 0, 0, 1000, 800, 4, mx, my
-    Check mx = 100 And my = 546, "Menu at the bottom is not above its button"
-    Check MenuOpen(host.tglTest, Array("edit|Edit R&D|E70F", "-", "~arch|Archive", "del|!Delete|E74D")), "Menu did not open"
-    Check IsFormOpen("dlgMenu"), "Menu form is not open"
-    Check Not MenuOpen(host.tglTest, Array("x|Other")), "A second menu opened while one was open"
-    With Forms("dlgMenu")
-        Check .Controls("lblCap0").Caption = "Edit R&&D" And .Controls("lblIcon0").Caption = ChrW(&HE70F), "Menu item caption or icon differs"
-        Check .Controls("ruleSep1").Visible And Not .Controls("lblCap1").Visible, "Menu separator is not a line"
-        Check .Controls("lblCap2").ForeColor = CLR_MUTED_FG And .Controls("lblCap3").ForeColor = CLR_DESTRUCTIVE, "Disabled or destructive item colors differ"
-        Check Not .Controls("lblCap4").Visible, "Menu shows unused rows"
-        Check .InsideHeight = px(4 + 32 + 9 + 32 + 32 + 4), "Menu is not sized to its items"
-        key = vbKeyDown: MenuKey Forms("dlgMenu"), key
-        Check .Controls("boxRow0").Visible, "Down did not light the first item"
-        key = vbKeyDown: MenuKey Forms("dlgMenu"), key
-        Check .Controls("boxRow3").Visible And Not .Controls("boxRow0").Visible, "Down did not skip the separator and the disabled item"
-        MenuPick Forms("dlgMenu"), 2
-        Check IsFormOpen("dlgMenu"), "Disabled item closed the menu"
-    End With
-    key = vbKeyReturn: MenuKey Forms("dlgMenu"), key
-    Check Not IsFormOpen("dlgMenu") And MenuResult() = "del", "Enter did not pick the lit item"
-    host.tglTest.ControlTipText = "Actions"
-    Check MenuOpen(host.tglTest, Array("a|Alpha", "b|Beta")), "Menu did not open again"
-    Check host.tglTest.ControlTipText = "", "Anchor tooltip not cleared while the menu shows"
-    key = vbKeyEscape: MenuKey Forms("dlgMenu"), key
-    Check Not IsFormOpen("dlgMenu") And MenuResult() = "", "Esc did not close the menu with nothing picked"
-    Check host.tglTest.ControlTipText = "Actions", "Anchor tooltip not restored when the menu closed"
-    host.tglTest.ControlTipText = ""
-    On Error Resume Next
-    MenuOpen host.tglTest, Array("a|A", "b|B", "c|C", "d|D", "e|E", "f|F", "g|G", "h|H", "i|I", "j|J", "k|K"): badName = Err.Number: Err.Clear
-    MenuOpen host.tglTest, Array("nokey"): badScale = Err.Number: Err.Clear
-    On Error GoTo 0
-    Check badName = 5 And badScale = 5 And Not IsFormOpen("dlgMenu"), "Menu took too many items or a bad one"
-    ' The same menu at the pointer (a row's right-click).
-    Check MenuOpenAt(Array("a|Alpha", "-", "b|Beta")), "Menu at the pointer did not open"
-    Check IsFormOpen("dlgMenu"), "Menu at the pointer is not open"
-    Check Forms("dlgMenu").InsideHeight = px(4 + 32 + 9 + 32 + 4), "Menu at the pointer is not sized to its items"
-    MenuPick Forms("dlgMenu"), 2
-    Check Not IsFormOpen("dlgMenu") And MenuResult() = "b", "Menu at the pointer did not return its pick"
-    On Error Resume Next
-    MenuOpenAt Array("nokey"): badName = Err.Number: Err.Clear
-    On Error GoTo 0
-    Check badName = 5 And Not IsFormOpen("dlgMenu"), "Menu at the pointer took a bad item"
-    DoCmd.SelectObject acForm, "frmTest"        ' the menu was the active window
+    TestKitMenu host
+    Dim key As Integer
     ' Searchable picker: the list filters as the user types (wildcards taken
     ' literally) without taking the focus; Down and Enter pick; Esc puts the
     ' box back; leaving it empty clears the pick.
@@ -1513,6 +1464,62 @@ Public Function TestKit(ByVal root As String) As String
     g_Silent = False
     TestKit = checks & " kit checks passed"
 End Function
+
+' Dropdown menu (KitMenu, KitMenuAt). Its own procedure: TestKit is at VBA's
+' procedure size limit.
+Private Sub TestKitMenu(host As Form)
+    ' Dropdown menu: placed under its button (right-aligned or above when it would
+    ' run off), sized to its items, separators and disabled items skipped by the
+    ' keys, a pick returns the key and closes it, Esc returns nothing.
+    Dim mx As Long, my As Long, key As Integer, badName As Long, badScale As Long
+    MenuSpot 100, 100, 130, 130, 200, 150, 0, 0, 1000, 800, 4, mx, my
+    Check mx = 100 And my = 134, "Menu is not under its button"
+    MenuSpot 900, 100, 930, 130, 200, 150, 0, 0, 1000, 800, 4, mx, my
+    Check mx = 730 And my = 134, "Menu at the right edge is not right-aligned"
+    MenuSpot 100, 700, 130, 730, 200, 150, 0, 0, 1000, 800, 4, mx, my
+    Check mx = 100 And my = 546, "Menu at the bottom is not above its button"
+    Check MenuOpen(host.tglTest, Array("edit|Edit R&D|E70F", "-", "~arch|Archive", "del|!Delete|E74D")), "Menu did not open"
+    Check IsFormOpen("dlgMenu"), "Menu form is not open"
+    Check Not MenuOpen(host.tglTest, Array("x|Other")), "A second menu opened while one was open"
+    With Forms("dlgMenu")
+        Check .Controls("lblCap0").Caption = "Edit R&&D" And .Controls("lblIcon0").Caption = ChrW(&HE70F), "Menu item caption or icon differs"
+        Check .Controls("ruleSep1").Visible And Not .Controls("lblCap1").Visible, "Menu separator is not a line"
+        Check .Controls("lblCap2").ForeColor = CLR_MUTED_FG And .Controls("lblCap3").ForeColor = CLR_DESTRUCTIVE, "Disabled or destructive item colors differ"
+        Check Not .Controls("lblCap4").Visible, "Menu shows unused rows"
+        Check .InsideHeight = px(4 + 32 + 9 + 32 + 32 + 4), "Menu is not sized to its items"
+        key = vbKeyDown: MenuKey Forms("dlgMenu"), key
+        Check .Controls("boxRow0").Visible, "Down did not light the first item"
+        key = vbKeyDown: MenuKey Forms("dlgMenu"), key
+        Check .Controls("boxRow3").Visible And Not .Controls("boxRow0").Visible, "Down did not skip the separator and the disabled item"
+        MenuPick Forms("dlgMenu"), 2
+        Check IsFormOpen("dlgMenu"), "Disabled item closed the menu"
+    End With
+    key = vbKeyReturn: MenuKey Forms("dlgMenu"), key
+    Check Not IsFormOpen("dlgMenu") And MenuResult() = "del", "Enter did not pick the lit item"
+    host.tglTest.ControlTipText = "Actions"
+    Check MenuOpen(host.tglTest, Array("a|Alpha", "b|Beta")), "Menu did not open again"
+    Check host.tglTest.ControlTipText = "", "Anchor tooltip not cleared while the menu shows"
+    key = vbKeyEscape: MenuKey Forms("dlgMenu"), key
+    Check Not IsFormOpen("dlgMenu") And MenuResult() = "", "Esc did not close the menu with nothing picked"
+    Check host.tglTest.ControlTipText = "Actions", "Anchor tooltip not restored when the menu closed"
+    host.tglTest.ControlTipText = ""
+    On Error Resume Next
+    MenuOpen host.tglTest, Array("a|A", "b|B", "c|C", "d|D", "e|E", "f|F", "g|G", "h|H", "i|I", "j|J", "k|K"): badName = Err.Number: Err.Clear
+    MenuOpen host.tglTest, Array("nokey"): badScale = Err.Number: Err.Clear
+    On Error GoTo 0
+    Check badName = 5 And badScale = 5 And Not IsFormOpen("dlgMenu"), "Menu took too many items or a bad one"
+    ' The same menu at the pointer (a row's right-click).
+    Check MenuOpenAt(Array("a|Alpha", "-", "b|Beta")), "Menu at the pointer did not open"
+    Check IsFormOpen("dlgMenu"), "Menu at the pointer is not open"
+    Check Forms("dlgMenu").InsideHeight = px(4 + 32 + 9 + 32 + 4), "Menu at the pointer is not sized to its items"
+    MenuPick Forms("dlgMenu"), 2
+    Check Not IsFormOpen("dlgMenu") And MenuResult() = "b", "Menu at the pointer did not return its pick"
+    On Error Resume Next
+    MenuOpenAt Array("nokey"): badName = Err.Number: Err.Clear
+    On Error GoTo 0
+    Check badName = 5 And Not IsFormOpen("dlgMenu"), "Menu at the pointer took a bad item"
+    DoCmd.SelectObject acForm, "frmTest"        ' the menu was the active window
+End Sub
 
 ' The Windows Event Log (modKitEventLog): events are written, and LogError writes
 ' one per entry. Its own procedure: TestKit is at VBA's procedure size limit.
