@@ -25,6 +25,8 @@ Public Const MENU_PAD As Long = 4          ' inside the edge, around the rows (p
 Public Const MENU_MIN_W As Long = 160      ' narrowest menu (px)
 Public Const MENU_MAX_W As Long = 320      ' widest menu (px), its build width
 Private Const MENU_GAP As Long = 4         ' between the button and the menu (px)
+Private Const MENU_TICK_MS As Long = 150   ' how often an open menu checks it still has the focus
+Private Const MENU_GRACE_MS As Long = 500  ' after opening, a menu that lost the focus takes it back
 
 Private Type RECT
     Left As Long
@@ -85,6 +87,8 @@ Private m_hot As Long           ' the lit row, -1 for none
 Private m_anchor As RECT        ' the button, screen pixels
 Private m_hAnchor As LongPtr    ' the button's form window (for its monitor), 0 at the pointer
 Private m_closing As Boolean
+Private m_lost As Boolean       ' the open menu's Deactivate ran
+Private m_openedAt As Single    ' Timer() when the menu opened
 ' The popover's (KitPopover).
 Public Const POPOVER_W As Long = 280       ' px
 Private Const POPOVER_LINES As Long = 8
@@ -136,8 +140,10 @@ Public Function KitMenu(anchor As Control, ParamArray items() As Variant) As Str
 End Function
 
 ' Open the menu without waiting (KitMenu waits; tests drive it this way).
-' Returns False, logging why, when dlgMenu isn't built.
+' Returns False, logging why, when dlgMenu isn't built, and False when a menu
+' is already open (a second click while one waits), leaving that one as it is.
 Public Function MenuOpen(anchor As Control, items As Variant) As Boolean
+    If IsFormOpen("dlgMenu") Then Exit Function
     MenuCheck items
     AnchorRect anchor
     MenuOpen = MenuShowItems(items)
@@ -146,6 +152,7 @@ End Function
 ' Open the menu at the mouse pointer without waiting (KitMenuAt waits).
 Public Function MenuOpenAt(items As Variant) As Boolean
     Dim pt As POINTAPI
+    If IsFormOpen("dlgMenu") Then Exit Function     ' as MenuOpen
     MenuCheck items
     GetCursorPos pt
     m_anchor.Left = pt.x: m_anchor.Right = pt.x
@@ -176,7 +183,7 @@ Private Function MenuShowItems(items As Variant) As Boolean
     m_pick = ""
     m_hot = -1
     m_closing = False
-    If IsFormOpen("dlgMenu") Then DoCmd.Close acForm, "dlgMenu"
+    m_lost = False
     On Error GoTo NotBuilt
     DoCmd.OpenForm "dlgMenu"
     MenuShowItems = True
@@ -323,8 +330,43 @@ End Function
 ' dlgMenu's Deactivate: a click outside the menu. Closing during the event is
 ' refused, so the form's timer closes it a moment later.
 Public Sub MenuLostFocus(frm As Form)
+    m_lost = True
     If Not m_closing Then frm.TimerInterval = 1
 End Sub
+
+' dlgMenu's Load, once it has the focus: start checking that it keeps it.
+' Access doesn't always raise Deactivate for a click outside the pop-up, and
+' a menu left open would keep KitMenu waiting.
+Public Sub MenuStarted(frm As Form)
+    m_openedAt = Timer
+    frm.TimerInterval = MENU_TICK_MS
+End Sub
+
+' dlgMenu's timer: close the menu when its Deactivate ran or another form
+' has the focus. Just after it opens (the second click of a double-click on
+' its button), it takes the focus back instead, so Esc still reaches it.
+Public Sub MenuTick(frm As Form)
+    Dim s As Single
+    If m_closing Then Exit Sub
+    If Not m_lost And MenuIsActive(frm) Then frm.TimerInterval = MENU_TICK_MS: Exit Sub
+    s = Timer - m_openedAt
+    If s < 0 Then s = s + 86400
+    If Not m_lost And s * 1000 < MENU_GRACE_MS Then
+        On Error Resume Next
+        frm.SetFocus
+        frm.Controls("txtKeys").SetFocus
+        On Error GoTo 0
+        frm.TimerInterval = MENU_TICK_MS
+        Exit Sub
+    End If
+    MenuClose frm
+End Sub
+
+' True when frm is Access's active form.
+Private Function MenuIsActive(frm As Form) As Boolean
+    On Error Resume Next
+    MenuIsActive = (Screen.ActiveForm.hWnd = frm.hWnd)
+End Function
 
 ' Build dlgMenu, the pop-up KitMenu opens. Call it once with the app's dialogs.
 Public Sub BuildMenuDialog()

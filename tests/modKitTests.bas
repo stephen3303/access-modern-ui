@@ -508,6 +508,7 @@ Public Function TestKit(ByVal root As String) As String
     Check mx = 100 And my = 546, "Menu at the bottom is not above its button"
     Check MenuOpen(host.tglTest, Array("edit|Edit R&D|E70F", "-", "~arch|Archive", "del|!Delete|E74D")), "Menu did not open"
     Check IsFormOpen("dlgMenu"), "Menu form is not open"
+    Check Not MenuOpen(host.tglTest, Array("x|Other")), "A second menu opened while one was open"
     With Forms("dlgMenu")
         Check .Controls("lblCap0").Caption = "Edit R&&D" And .Controls("lblIcon0").Caption = ChrW(&HE70F), "Menu item caption or icon differs"
         Check .Controls("ruleSep1").Visible And Not .Controls("lblCap1").Visible, "Menu separator is not a line"
