@@ -533,10 +533,11 @@ End Sub
 Public Function KitPopover(anchor As Control, ByVal title As String, ByVal text As String) As Boolean
     m_popTitle = title
     m_popText = text
-    m_closing(1) = False
-    m_lost(1) = False
     AnchorRect anchor
     If IsFormOpen("dlgPopover") Then DoCmd.Close acForm, "dlgPopover"
+    ' After closing the old one, so its Deactivate can't mark this one lost.
+    m_closing(1) = False
+    m_lost(1) = False
     ' Access's own tooltip on the anchor (a TitleTip "?" has the same text)
     ' would cover the popover's first line while the pointer stays on it.
     On Error Resume Next
