@@ -101,6 +101,9 @@ Public Sub SetPalette(ByVal i As Long)
         DoCmd.Close acForm, "dlgHelp", acSaveNo
         reopenHelp = True
     End If
+    ' A toast showing now is closed: the main window reopening below would
+    ' leave it at the top left with its placeholder text and no fade.
+    If IsFormOpen("dlgToast") Then DoCmd.Close acForm, "dlgToast", acSaveNo
     ' Other pop-ups still open keep their contents until reopened, but their
     ' title bars follow the new palette now (forms opened later get it in
     ' ThemeForm).
