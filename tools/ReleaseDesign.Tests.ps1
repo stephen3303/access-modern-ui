@@ -141,6 +141,8 @@ Check 'sqlserver: unconverted default noted' ((ConvertTo-SqlServerSql ([pscustom
 Check 'sqlserver: bracket in a name escaped' ((Format-SqlName 'a]b') -eq '[a]]b]')
 
 Check 'system tables recognised' ((Test-SchemaSystemTable 'MSysObjects') -and (Test-SchemaSystemTable '~TMPCLP1') -and (Test-SchemaSystemTable 'f_0123456789ABCDEF0123456789ABCDEF_files') -and -not (Test-SchemaSystemTable 'Messages'))
+$dialect = (Get-Command Export-ReleaseDesign).ScriptBlock.Ast.Body.ParamBlock.Parameters | Where-Object { $_.Name.VariablePath.UserPath -eq 'Dialect' }
+Check 'release SQL defaults to SQL Server only' ($dialect.DefaultValue.Extent.Text -eq "@('SqlServer')")
 Check 'form designs loaded from review-mcp' ((Get-Command Export-FormDesignFolder -ErrorAction SilentlyContinue) -ne $null)
 
 if ($failures) { Write-Host "$failures check(s) failed"; exit 1 }

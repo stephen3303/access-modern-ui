@@ -4,11 +4,11 @@
 #   design\forms\<form>.json   each form of the front end as a JSON design
 #                              (FormDesign.ps1, schema access-form-design/1), with
 #                              index.json and, given the build palette, tokens.json
-#   design\<database>.sql      a build script for each database's own tables in Access
-#                              SQL: CREATE TABLE, CREATE INDEX, ALTER TABLE ... FOREIGN KEY
 #   design\<database>.sqlserver.sql
-#                              the same tables for SQL Server (T-SQL), for moving the data
-#                              off Access
+#                              a build script for each database's own tables in SQL Server
+#                              SQL (T-SQL): CREATE TABLE, CREATE INDEX, then the foreign
+#                              keys, for moving the data off Access
+#   design\<database>.sql      the same tables in Access SQL, only with -Dialect Access
 #
 # Only a release build makes these (release.ps1 calls Export-ReleaseDesign before it
 # compiles the front end), so they always match a tagged version. They are not kept in
@@ -20,14 +20,15 @@
 #   . "$PSScriptRoot\tools\ReleaseDesign.ps1"
 #   Export-ReleaseDesign -Access $acc -FrontEnd $fe -DataFiles $be -ThemeFile $theme -OutDir "$out\design"
 #
-# -Dialect picks the SQL files: Access, SqlServer or both (the default).
+# -Dialect picks the SQL files: SqlServer (the default, the release format), Access, or
+# both.
 #
 # The Access SQL is ANSI-92, the mode ADO uses (CurrentProject.Connection, or an OLE DB
 # connection to the file), which DEFAULT needs. Run each statement on its own, in order:
 # Access runs one statement at a time. Each Access script is checked by running it into
 # an empty database and reading that back (Test-SchemaSqlRebuild); the release stops if
-# the rebuilt tables differ. The SQL Server script can't be run without a SQL Server, so
-# it is generated from the same schema the Access check confirms was read in full.
+# the rebuilt tables differ. The SQL Server script can't be run without a SQL Server; it
+# is generated from the same DAO schema read, which the tests cover type by type.
 #
 # Converting a schema to SQL needs no Access, so it can be tested anywhere PowerShell
 # runs: see ReleaseDesign.Tests.ps1.
@@ -436,7 +437,7 @@ function Save-ReleaseFormText {
 
 # Writes a release's design folder (see the top of this file): the front end's forms as
 # JSON in <OutDir>\forms and, for the front end's own tables (when it has any) and each
-# data file, <database>.sql (Access) and/or <database>.sqlserver.sql (-Dialect). Each
+# data file, <database>.sqlserver.sql and, with -Dialect Access, <database>.sql. Each
 # Access script is rebuilt into an empty database and read back. Throws if a form can't
 # be exported or an Access script doesn't rebuild its tables, so a release never ships a
 # partial design. Returns what it wrote, with what SQL can't make (attachment fields and
@@ -448,7 +449,7 @@ function Export-ReleaseDesign {
         [string[]]$DataFiles,
         [string]$ThemeFile,
         [Parameter(Mandatory)][string]$OutDir,
-        [ValidateSet('Access', 'SqlServer')][string[]]$Dialect = @('Access', 'SqlServer'),
+        [ValidateSet('Access', 'SqlServer')][string[]]$Dialect = @('SqlServer'),
         [string]$WorkDir = $env:TEMP
     )
     if (Test-Path -LiteralPath $OutDir) { throw "$OutDir already exists." }
