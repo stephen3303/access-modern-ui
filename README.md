@@ -27,6 +27,7 @@ kit/forms/subGrid.vba         code-behind for BuildGrid tables
 tools/make_themes.py          generates the build palette and the palette modules, checks contrast
 tools/AccessWatch.ps1         makes a build script report Visual Basic and Access dialogs instead of hanging
 tools/VbaLineNumbers.ps1      numbers the build copy of the code so the error log names the failing line
+tools/ReleaseDesign.ps1       release only: every form's design as JSON and a SQL Server script of the data file's tables
 tools/review-mcp/             MCP server for visual review (also a Claude Desktop extension): opens, sizes and captures forms without the screen or mouse
 examples/build.ps1            build script that loads the kit, then the app, then calls BuildAll
 examples/modules/             modErrors (error handler and log), Build_dlgAppearance
@@ -362,6 +363,23 @@ Use CountedCaption("Transfer", 5) for one-line filter captions. Give a filter gr
 the width of its widest measured caption and use one row when space permits.
 
 LayoutFilterRow measures the widest counted caption and gives each filter the same width. LayoutNumberedTimeline keeps circle and number dimensions fixed while distributing labels and connector lengths across the available width. See tests/README.md for the native Access checks.
+
+## Release hand-off files
+
+A release can include what someone needs to rebuild the app elsewhere (another app, HTML pages, SQL Server). These files are made only by a release, never by a normal build:
+
+- `design\forms\`: every form's design as JSON, one `<form>.json` per form plus `index.json`, and `tokens.json` with the build palette's `CLR_*` colours. The format is in [tools/review-mcp/README.md](tools/review-mcp/README.md#exporting-form-designs).
+- `design\tables.sql`: a SQL Server (T-SQL) script that creates the data file's tables, with types, primary keys, defaults, indexes and relationships as foreign keys. Anything that can't be carried over, such as attachment fields or Access-only default expressions, is written as a comment where it would have gone.
+
+To add them, copy `tools/ReleaseDesign.ps1`, `tools/review-mcp/FormDesign.ps1` and `tools/review-mcp/FormSnapshot.ps1` into the app's `access\tools\`. Then call them in `release.ps1` after the build and before the front end is compiled to `.accde`:
+
+```powershell
+. (Join-Path $work 'access\tools\ReleaseDesign.ps1')
+Export-ReleaseFormDesigns -FrontEnd $accdb -OutDir (Join-Path $out 'design\forms') -ThemeFile (Join-Path $work 'access\src\themes\light\modTheme.bas')
+Export-ReleaseTableSql -DataFile $data -OutFile (Join-Path $out 'design\tables.sql') -Title "MyApp $tag"
+```
+
+The forms are copied into a blank database with nothing allowed to run, so the app's start-up code never runs. Both functions start their own hidden Access. `tools/ReleaseDesign.Tests.ps1` checks the SQL against a sample schema, without Access.
 
 ## Licence
 
