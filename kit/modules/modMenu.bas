@@ -766,7 +766,16 @@ Public Function KitPickChanged(frm As Form, ByVal nm As String)
     PickList frm.Controls(nm), PickTyped(frm.Controls(nm))
     Exit Function
 Fail:
+    If PickCanceled(Err.Number) Then Exit Function
     HandleError "modMenu.KitPickChanged", nm
+End Function
+
+' True for error n when it is the user's Esc, not a fault: Access cancels a
+' query that is running when Esc is pressed (3059), and the list's query runs
+' on each key typed. The Esc's KeyDown then closes the list as usual. Public
+' so the kit tests can check it.
+Public Function PickCanceled(ByVal n As Long) As Boolean
+    PickCanceled = (n = 3059)
 End Function
 
 ' A PickBox's KeyDown (see the top of this section): Up and Down move the
@@ -798,6 +807,7 @@ Public Sub KitPickKey(box As Control, KeyCode As Integer)
     End Select
     Exit Sub
 Fail:
+    If PickCanceled(Err.Number) Then Exit Sub
     HandleError "modMenu.KitPickKey", box.Name
 End Sub
 
