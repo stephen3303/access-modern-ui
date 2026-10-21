@@ -375,21 +375,35 @@ function ConvertTo-SqlServerSql {
 # Runs a build script's statements into a new, empty database in -WorkDir, reads that
 # database back and returns the statements that differ (in the script but not rebuilt,
 # '-', or rebuilt but not in the script, '+'). Nothing returned means the script
-# rebuilds the tables exactly as far as SQL can describe them. Closes any database the
-# Access instance has open first.
+# rebuilds the tables exactly as far as SQL can describe them.
+#
+# The database is made with DAO and the statements go through their own ADO connection
+# (ANSI-92, as the script is written for), not through Access's CurrentProject: a DEFAULT
+# that calls a function, such as Now(), made that way crashes Access in VBE7.DLL when
+# the database closes. Each statement is printed before it runs, so a hang names it.
 function Test-SchemaSqlRebuild {
     param([Parameter(Mandatory)]$Access, [Parameter(Mandatory)]$Sql, [Parameter(Mandatory)][string]$WorkDir)
     $tmp = Join-Path $WorkDir ('rebuild-' + [guid]::NewGuid().ToString('N') + '.accdb')
-    try { $Access.CloseCurrentDatabase() } catch {}
-    $Access.NewCurrentDatabase([string]$tmp)
+    $Access.DBEngine.CreateDatabase([string]$tmp, ';LANGID=0x0409;CP=1252;COUNTRY=0', 128).Close()   # dbLangGeneral, dbVersion120
     try {
-        $cn = $Access.CurrentProject.Connection
-        foreach ($st in $Sql.Statements) {
-            try { [void]$cn.Execute($st) }
-            catch { throw "Rebuilding from the SQL failed at: $st`r`n$($_.Exception.Message)" }
+        $cn = New-Object -ComObject ADODB.Connection
+        try {
+            $opened = $false
+            foreach ($provider in 'Microsoft.ACE.OLEDB.12.0', 'Microsoft.ACE.OLEDB.16.0') {
+                try { $cn.Open("Provider=$provider;Data Source=$tmp"); $opened = $true; break } catch {}
+            }
+            if (-not $opened) { throw "Could not open $tmp with the Access database engine's OLE DB provider (ACE.OLEDB 12.0 or 16.0)." }
+            $n = @($Sql.Statements).Count; $i = 0
+            foreach ($st in $Sql.Statements) {
+                $i++
+                Write-Host ("  rebuild {0}/{1}: {2}" -f $i, $n, (($st -split "`r?`n")[0]))
+                try { [void]$cn.Execute($st) }
+                catch { throw "Rebuilding from the SQL failed at: $st`r`n$($_.Exception.Message)" }
+            }
+        } finally {
+            if ($cn.State) { $cn.Close() }
+            [void][Runtime.InteropServices.Marshal]::ReleaseComObject($cn)
         }
-    } finally { $Access.CloseCurrentDatabase() }
-    try {
         $again = ConvertTo-SchemaSql (Read-AccessSchema -Access $Access -Path $tmp)
     } finally { Remove-Item -LiteralPath $tmp -ErrorAction SilentlyContinue }
     @(Compare-Object @($Sql.Statements) @($again.Statements) | ForEach-Object {
