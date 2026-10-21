@@ -115,6 +115,7 @@ Private m_pickBox As Control    ' the box the open list belongs to
 Private m_pickKeys As Collection ' the listed rows' keys, first row first
 Private m_pickText As Collection ' and their second columns, what the box shows
 Private m_pickHot As Long       ' the lit row, -1 for none
+Private m_pickEscAt As Single   ' Timer when an Esc cancelled the list's query (PickEscaped)
 
 ' The same menu at the mouse pointer, for a right-click (a table row's
 ' actions: subGrid calls the host's GridRightClick, which calls this).
@@ -766,17 +767,27 @@ Public Function KitPickChanged(frm As Form, ByVal nm As String)
     PickList frm.Controls(nm), PickTyped(frm.Controls(nm))
     Exit Function
 Fail:
-    If PickCanceled(Err.Number) Then Exit Function
+    If PickCanceled(Err.Number) Then PickEscaped: Exit Function
     HandleError "modMenu.KitPickChanged", nm
 End Function
 
 ' True for error n when it is the user's Esc, not a fault: Access cancels a
 ' query that is running when Esc is pressed (3059), and the list's query runs
-' on each key typed. The Esc's KeyDown then closes the list as usual. Public
-' so the kit tests can check it.
+' on each key typed. Public so the kit tests can check it.
 Public Function PickCanceled(ByVal n As Long) As Boolean
     PickCanceled = (n = 3059)
 End Function
+
+' The user's Esc cancelled the list's query (PickCanceled): close the list
+' as Esc does. Putting the box back runs a query too, so the same Esc may
+' cancel that as well; the box then keeps its text.
+' Its KeyDown may still follow; KitPickKey takes it then, so the box doesn't
+' undo the typing and open the list again.
+Private Sub PickEscaped()
+    m_pickEscAt = Timer
+    On Error Resume Next
+    PickClose True
+End Sub
 
 ' A PickBox's KeyDown (see the top of this section): Up and Down move the
 ' lit row (Down opens a closed list), Enter picks the lit row, Esc closes
@@ -803,11 +814,15 @@ Public Sub KitPickKey(box As Control, KeyCode As Integer)
                 KeyCode = 0
             End If
         Case vbKeyEscape
-            If PickOpenFor(box) Then PickClose True: KeyCode = 0
+            If PickOpenFor(box) Then
+                PickClose True: KeyCode = 0
+            ElseIf Abs(Timer - m_pickEscAt) < 0.5 Then
+                KeyCode = 0         ' the Esc PickEscaped has closed the list for
+            End If
     End Select
     Exit Sub
 Fail:
-    If PickCanceled(Err.Number) Then Exit Sub
+    If PickCanceled(Err.Number) Then PickEscaped: KeyCode = 0: Exit Sub
     HandleError "modMenu.KitPickKey", box.Name
 End Sub
 

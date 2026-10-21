@@ -334,10 +334,10 @@ Private Sub Build_subAbout()
 End Sub
 
 ' The accordion's Preferences section: a stepped Slider with its value, a
-' star Rating, and a help mark that opens a KitPopover. Unbound: the demo
-' keeps no settings.
+' star Rating, a help mark that opens a KitPopover, and a searchable picker
+' (PickBox) of the items. Unbound: the demo keeps no settings.
 Private Sub Build_subPrefs()
-    Dim c As Control, x2 As Long
+    Dim c As Control, x2 As Long, x3 As Long
     NewForm "", 0, CW() - px(32), px(112)
     F.KeyPreview = True                    ' arrow keys move the slider (Form_KeyDown)
     Ev F, "OnKeyDown"
@@ -352,6 +352,10 @@ Private Sub Build_subPrefs()
     FieldLbl "lblUseful", "HOW USEFUL IS THIS DEMO?", x2, px(4), px(220)
     Rating "rtUseful", "", x2, px(28), onChange:="UsefulChanged"
     Lbl "lblUseful2", "", x2, px(64), px(260), px(20), 9, False, CLR_MUTED_FG
+    x3 = px(700)
+    FieldLbl "lblWatch", "ITEM TO WATCH", x3, px(4), px(240)
+    Set c = PickBox("txtWatch", "", "SELECT id, name, owner FROM demo_item", x3, px(28), px(240), , "Type an item or owner")
+    Ev c, "OnKeyDown"
     SaveForm "subPrefs"
 End Sub
 
