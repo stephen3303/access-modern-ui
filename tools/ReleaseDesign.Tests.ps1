@@ -11,7 +11,7 @@ function Check([string]$what, [bool]$ok) {
     if ($ok) { Write-Host "ok   $what" } else { Write-Host "FAIL $what"; $script:failures++ }
 }
 function F($name, $type, [int]$size = 0, [bool]$req = $false, [string]$def = '', [bool]$auto = $false, [bool]$azl = $true) {
-    [pscustomobject]@{ name = $name; type = $type; size = $size; required = $req; allowZeroLength = $azl; default = $def; autoIncrement = $auto; precision = 0; scale = 0 }
+    [pscustomobject]@{ name = $name; type = $type; size = $size; required = $req; allowZeroLength = $azl; default = $def; autoIncrement = $auto; precision = 0; scale = 0; expression = '' }
 }
 function X($name, [bool]$primary, [bool]$unique, [string[]]$fields) {
     [pscustomobject]@{ name = $name; primary = $primary; unique = $unique; fields = @($fields | ForEach-Object { [pscustomobject]@{ name = $_.TrimEnd('-'); descending = $_.EndsWith('-') } }) }
@@ -28,11 +28,12 @@ Check 'defaults converted' ((ConvertTo-SqlDefault (F 'a' 8 0 $false '=Now()')) -
 Check 'text default quoted and escaped' ((ConvertTo-SqlDefault (F 'a' 10 20 $false '"O''Brien ""x"""')) -eq "N'O''Brien ""x""'")
 Check 'unknown expression not converted' ($null -eq (ConvertTo-SqlDefault (F 'a' 10 20 $false '=Environ("USERNAME")')))
 
+$calc = F 'words' 4 4; $calc.expression = 'Len([title])'
 $schema = [pscustomobject]@{
     tables = @(
         [pscustomobject]@{ name = 'items'; fields = @(
             (F 'id' 4 4 $false '' $true), (F 'title' 10 120 $true '' $false $false), (F 'code' 10 20), (F 'done' 1 1 $false 'False'),
-            (F 'added' 8 8 $false '=Now()'), (F 'owner' 10 50 $false '=Environ("USERNAME")'), (F 'photo' 101), (F 'cat_id' 4 4))
+            (F 'added' 8 8 $false '=Now()'), $calc, (F 'owner' 10 50 $false '=Environ("USERNAME")'), (F 'photo' 101), (F 'cat_id' 4 4))
             indexes = @((X 'PrimaryKey' $true $true @('id')), (X 'code' $false $true @('code')), (X 'by_added' $false $false @('added-', 'title'))) },
         [pscustomobject]@{ name = 'cats'; fields = @((F 'id' 4 4 $false '' $true), (F 'name]x' 10 40 $true))
             indexes = @((X 'PrimaryKey' $true $true @('id'))) })
@@ -51,6 +52,7 @@ Check 'yes/no not null with default' ($sql -match '\[done\] BIT NOT NULL CONSTRA
 Check 'date default' ($sql -match '\[added\] DATETIME2\(0\) NULL CONSTRAINT \[DF_items_added\] DEFAULT \(SYSDATETIME\(\)\)')
 Check 'unconverted default noted' ($sql -match '-- \[owner\]: Access default =Environ\("USERNAME"\) not converted\.')
 Check 'attachment noted, not created' ($sql -match '-- \[photo\]: Access field type 101' -and $sql -notmatch '\[photo\] ')
+Check 'calculated field noted, not created' ($sql -match '-- \[words\]: calculated field \(Len\(\[title\]\)\) not created' -and $sql -notmatch '\[words\] INT')
 Check 'primary key constraint' ($sql -match 'CONSTRAINT \[PK_items\] PRIMARY KEY \(\[id\]\)')
 Check 'unique index filtered on nullable column' ($sql -match 'CREATE UNIQUE INDEX \[IX_items_code\] ON \[items\] \(\[code\]\) WHERE \[code\] IS NOT NULL;')
 Check 'index with descending column' ($sql -match 'CREATE INDEX \[IX_items_by_added\] ON \[items\] \(\[added\] DESC, \[title\]\);')

@@ -18,7 +18,8 @@ foreach ($dir in $PSScriptRoot, (Join-Path $PSScriptRoot 'review-mcp')) {
 # Saves every form of a built front end (the .accdb, before it is compiled to .accde)
 # with SaveAsText and writes the JSON designs to OutDir. The forms are copied into a
 # blank database first and nothing in it is allowed to run, so the app's start-up code
-# (AutoExec, a sign-in form) never runs. Returns the forms written and any that failed.
+# (AutoExec, a sign-in form) never runs. Returns the forms written; throws when any form
+# couldn't be saved or converted, so a release never ships a partial set.
 function Export-ReleaseFormDesigns {
     param([Parameter(Mandatory)][string]$FrontEnd, [Parameter(Mandatory)][string]$OutDir, [string]$ThemeFile)
     if (-not (Get-Command Export-FormDesignFolder -ErrorAction SilentlyContinue)) { throw "FormDesign.ps1 is not next to $PSCommandPath." }
@@ -47,8 +48,10 @@ function Export-ReleaseFormDesigns {
     } finally {
         if ($watch) { [void](Stop-AccessWatch $watch $acc) } else { try { $acc.Quit(2) } catch {} }
     }
-    try { Export-FormDesignFolder -SnapshotDir $snap -OutDir $OutDir -ThemeFile $ThemeFile }
+    try { $r = Export-FormDesignFolder -SnapshotDir $snap -OutDir $OutDir -ThemeFile $ThemeFile }
     finally { Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue }
+    if (@($r.Failed).Count) { throw "Could not export these forms:`r`n  " + ((@($r.Failed) | ForEach-Object { "$($_.form): $($_.error)" }) -join "`r`n  ") }
+    $r
 }
 
 # The local tables of an Access data file as plain objects (no COM objects left in
@@ -65,8 +68,9 @@ function Get-AccessSchema {
             $fields = @(foreach ($f in $t.Fields) {
                 $o = [ordered]@{ name = [string]$f.Name; type = [int]$f.Type; size = [int]$f.Size; required = [bool]$f.Required
                                  allowZeroLength = $false; default = [string]$f.DefaultValue; autoIncrement = [bool]($f.Attributes -band 16)
-                                 precision = 0; scale = 0 }
+                                 precision = 0; scale = 0; expression = '' }
                 try { $o.allowZeroLength = [bool]$f.AllowZeroLength } catch {}
+                try { $o.expression = [string]$f.Properties.Item('Expression').Value } catch {}   # calculated field
                 if ($o.type -eq 20) {
                     try { $o.precision = [int]$f.Properties.Item('Precision').Value; $o.scale = [int]$f.Properties.Item('Scale').Value } catch {}
                 }
@@ -155,6 +159,7 @@ function ConvertTo-TableSql {
         $cols = New-Object System.Collections.Generic.List[string]
         $notes = New-Object System.Collections.Generic.List[string]
         foreach ($f in $t.fields) {
+            if ($f.expression) { $notes.Add("-- $(Format-SqlName $f.name): calculated field ($($f.expression)) not created; add it as a computed column if needed."); continue }
             $type = ConvertTo-SqlType $f
             if (-not $type) { $notes.Add("-- $(Format-SqlName $f.name): Access field type $($f.type) (attachment or multi-value) has no SQL Server column; not created."); continue }
             $c = "    $(Format-SqlName $f.name) $type"
