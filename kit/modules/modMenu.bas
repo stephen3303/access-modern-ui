@@ -97,8 +97,11 @@ Private Const POPOVER_LINES As Long = 8
 Public Const POPOVER_LINE_H As Long = 255   ' one line of 9pt text, 17px (twips)
 Private m_popTitle As String
 Private m_popText As String
-Private m_popAnchor As Control  ' the control the open popover is by
-Private m_popTip As String      ' its ControlTipText, cleared while the popover shows
+' Per pop-up (PopupSlot): the control it is by and that control's
+' ControlTipText, cleared while it shows. Access's own tooltip on the anchor
+' would otherwise sit over the pop-up's top edge while the pointer stays on it.
+Private m_tipAnchor(0 To 1) As Control
+Private m_tip(0 To 1) As String
 
 ' The searchable picker (PickBox, below).
 Public Const PICK_ROWS As Long = 8         ' most matches the list shows
@@ -150,7 +153,9 @@ Public Function MenuOpen(anchor As Control, items As Variant) As Boolean
     If IsFormOpen("dlgMenu") Then Exit Function
     MenuCheck items
     AnchorRect anchor
+    HideTip 0, anchor
     MenuOpen = MenuShowItems(items)
+    If Not MenuOpen Then RestoreTip 0
 End Function
 
 ' Open the menu at the mouse pointer without waiting (KitMenuAt waits).
@@ -325,9 +330,12 @@ Public Sub MenuKey(frm As Form, KeyCode As Integer)
 End Sub
 
 ' Close the menu or popover (once: its Deactivate also asks, as it closes).
+' The anchor's tooltip comes back here too, for an app's dlgMenu built before
+' it had a Close event.
 Public Function MenuClose(frm As Form)
     If m_closing(PopupSlot(frm)) Then Exit Function
     m_closing(PopupSlot(frm)) = True
+    RestoreTip PopupSlot(frm)
     DoCmd.Close acForm, frm.Name
 End Function
 
@@ -403,7 +411,7 @@ Public Sub BuildMenuDialog()
         .Section(acDetail).AlternateBackColor = CLR_DIALOG
         .Section(acDetail).OnMouseMove = "=MenuHover([Form],-1)"
     End With
-    Ev F, "OnLoad", "OnDeactivate", "OnTimer"
+    Ev F, "OnLoad", "OnDeactivate", "OnTimer", "OnClose"
     ' Takes the keys: a 1px box with no border, the only Tab stop.
     Set c = Txt("txtKeys", "", 0, 0, 15, 15)
     c.BorderStyle = 0: c.BackStyle = 0: c.OnGotFocus = "": c.OnLostFocus = ""
@@ -572,27 +580,43 @@ Public Function KitPopover(anchor As Control, ByVal title As String, ByVal text 
     ' After closing the old one, so its Deactivate can't mark this one lost.
     m_closing(1) = False
     m_lost(1) = False
-    ' Access's own tooltip on the anchor (a TitleTip "?" has the same text)
-    ' would cover the popover's first line while the pointer stays on it.
-    On Error Resume Next
-    m_popTip = anchor.ControlTipText
-    If Len(m_popTip) > 0 Then anchor.ControlTipText = "": Set m_popAnchor = anchor
+    ' A TitleTip "?" has the same text, so it is covered too.
+    HideTip 1, anchor
     On Error GoTo NotBuilt
     DoCmd.OpenForm "dlgPopover"
     KitPopover = True
     Exit Function
 NotBuilt:
+    RestoreTip 1
     LogError "modMenu.KitPopover", "dlgPopover could not open: " & Err.Description
 End Function
 
-' dlgPopover's Close: give the anchor its tooltip back. Its form may have
-' closed first, so a failure is ignored.
+' dlgPopover's Close: give the anchor its tooltip back.
 Public Sub PopoverClosed()
-    If m_popAnchor Is Nothing Then Exit Sub
+    RestoreTip 1
+End Sub
+
+' dlgMenu's Close: the same for the menu's anchor.
+Public Sub MenuClosed()
+    RestoreTip 0
+End Sub
+
+' Clear anchor's tooltip while pop-up slot shows, noting it for RestoreTip.
+Private Sub HideTip(ByVal slot As Long, anchor As Control)
+    m_tip(slot) = ""
     On Error Resume Next
-    m_popAnchor.ControlTipText = m_popTip
+    m_tip(slot) = anchor.ControlTipText
+    If Len(m_tip(slot)) > 0 Then anchor.ControlTipText = "": Set m_tipAnchor(slot) = anchor
+End Sub
+
+' Give the anchor its tooltip back. Its form may have closed first, so a
+' failure is ignored.
+Private Sub RestoreTip(ByVal slot As Long)
+    If m_tipAnchor(slot) Is Nothing Then Exit Sub
+    On Error Resume Next
+    m_tipAnchor(slot).ControlTipText = m_tip(slot)
     On Error GoTo 0
-    Set m_popAnchor = Nothing
+    Set m_tipAnchor(slot) = Nothing
 End Sub
 
 ' dlgPopover's Load: fill it, size it to its text and place it.
