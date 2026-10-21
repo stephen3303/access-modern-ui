@@ -33,6 +33,11 @@ Err_Handler:
     HandleError "subPrefs.UsefulChanged"
 End Sub
 
+' The item picker's keys (PickBox): Up, Down, Enter and Esc work its list.
+Private Sub txtWatch_KeyDown(KeyCode As Integer, Shift As Integer)
+    KitPickKey Me.txtWatch, KeyCode
+End Sub
+
 ' Left and Right on the slider move it a step (the kit leaves keys to the form).
 Private Sub Form_KeyDown(KeyCode As Integer, Shift As Integer)
     On Error GoTo Err_Handler

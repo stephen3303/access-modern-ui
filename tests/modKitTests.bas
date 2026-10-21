@@ -1519,6 +1519,8 @@ Private Sub TestKitMenu(host As Form)
     On Error GoTo 0
     Check badName = 5 And Not IsFormOpen("dlgMenu"), "Menu at the pointer took a bad item"
     DoCmd.SelectObject acForm, "frmTest"        ' the menu was the active window
+    ' The picker (modMenu too): Esc cancelling its query is not an error.
+    Check PickCanceled(3059) And Not PickCanceled(5), "Picker took Esc cancelling its query as an error"
 End Sub
 
 ' The Windows Event Log (modKitEventLog): events are written, and LogError writes
