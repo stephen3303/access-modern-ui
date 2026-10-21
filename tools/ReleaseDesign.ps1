@@ -114,7 +114,7 @@ function ConvertTo-SqlType($Field) {
         12 { 'NVARCHAR(MAX)' }          # Long Text (Memo, Hyperlink)
         15 { 'UNIQUEIDENTIFIER' }       # Replication ID
         16 { 'BIGINT' }                 # Large Number
-        19 { 'DATETIME2(7)' }           # Date/Time Extended
+        26 { 'DATETIME2(7)' }           # Date/Time Extended (dbDateTime2; 19 is dbNumeric)
         20 { if ($Field.precision -gt 0) { "DECIMAL($($Field.precision), $($Field.scale))" } else { 'DECIMAL(18, 0)' } }
         default { $null }
     }

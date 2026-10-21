@@ -22,6 +22,7 @@ Check 'text type with size' ((ConvertTo-SqlType (F 'a' 10 50)) -eq 'NVARCHAR(50)
 Check 'memo, date, money, guid' ((ConvertTo-SqlType (F 'a' 12)) -eq 'NVARCHAR(MAX)' -and (ConvertTo-SqlType (F 'a' 8)) -eq 'DATETIME2(0)' -and (ConvertTo-SqlType (F 'a' 5)) -eq 'MONEY' -and (ConvertTo-SqlType (F 'a' 15)) -eq 'UNIQUEIDENTIFIER')
 $dec = F 'a' 20; $dec.precision = 9; $dec.scale = 2
 Check 'decimal keeps precision' ((ConvertTo-SqlType $dec) -eq 'DECIMAL(9, 2)')
+Check 'date/time extended is type 26, not dbNumeric 19' ((ConvertTo-SqlType (F 'a' 26)) -eq 'DATETIME2(7)' -and $null -eq (ConvertTo-SqlType (F 'a' 19)))
 Check 'attachment has no type' ($null -eq (ConvertTo-SqlType (F 'a' 101)))
 Check 'defaults converted' ((ConvertTo-SqlDefault (F 'a' 8 0 $false '=Now()')) -eq 'SYSDATETIME()' -and (ConvertTo-SqlDefault (F 'a' 8 0 $false 'Date()')) -eq 'CAST(GETDATE() AS date)' -and (ConvertTo-SqlDefault (F 'a' 4 0 $false '0')) -eq '0' -and (ConvertTo-SqlDefault (F 'a' 1 0 $false 'Yes')) -eq '1')
 Check 'text default quoted and escaped' ((ConvertTo-SqlDefault (F 'a' 10 20 $false '"O''Brien ""x"""')) -eq "N'O''Brien ""x""'")
