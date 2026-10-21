@@ -13,7 +13,7 @@ function Check([string]$Name, [bool]$Ok) {
 }
 
 function F($Name, $Type, $Ordinal, [hashtable]$More = @{}) {
-    $f = [ordered]@{ Name = $Name; Ordinal = $Ordinal; Type = $Type; Size = 0; Required = $false; Default = ''; AutoIncrement = $false; Expression = ''; Precision = $null; Scale = $null }
+    $f = [ordered]@{ Name = $Name; Ordinal = $Ordinal; Type = $Type; Size = 0; Required = $false; AllowZeroLength = $false; Default = ''; AutoIncrement = $false; Expression = ''; Precision = $null; Scale = $null }
     foreach ($k in $More.Keys) { $f[$k] = $More[$k] }
     [pscustomobject]$f
 }
@@ -116,6 +116,29 @@ $again = ConvertTo-SchemaSql $schema -Title 'Test_be.accdb'
 Check 'same schema, same script' ($again.Text -eq $sql.Text)
 $shuffled = [pscustomobject]@{ Tables = @($schema.Tables[1], $schema.Tables[0]); Relations = @($schema.Relations | Sort-Object Name -Descending) }
 Check 'order of tables and relationships does not matter' ((ConvertTo-SchemaSql $shuffled -Title 'Test_be.accdb').Text -eq $sql.Text)
+
+Check 'Date/Time Extended has no Access SQL type' ((ConvertTo-SchemaSql ([pscustomobject]@{ Tables = @([pscustomobject]@{ Name = 'T'; Fields = @((F 'a' 4 0), (F 'x' 26 1)); Indexes = @() }); Relations = @() })).Skipped[0] -match 'Date/Time Extended')
+
+# SQL Server (T-SQL) from the same schema.
+$ss = ConvertTo-SqlServerSql $schema -Title 'Test_be.accdb'
+$t = $ss.Text
+Check 'sqlserver: header' ($t -like '-- Tables of Test_be.accdb for SQL Server (T-SQL).*')
+Check 'sqlserver: autonumber as identity' ($t -match '\[id\] INT IDENTITY\(1,1\) NOT NULL')
+Check 'sqlserver: required text not empty' ($t -match "\[subject\] NVARCHAR\(120\) NOT NULL CONSTRAINT \[DF_Messages_subject\] DEFAULT \(N''\) CHECK \(LEN\(\[subject\]\) > 0\)")
+Check 'sqlserver: date default' ($t -match '\[created\] DATETIME2\(0\) NULL CONSTRAINT \[DF_Messages_created\] DEFAULT \(SYSDATETIME\(\)\)')
+Check 'sqlserver: yes/no not null with default' ($t -match '\[final\] BIT NOT NULL CONSTRAINT \[DF_Messages_final\] DEFAULT \(0\)')
+Check 'sqlserver: decimal, guid, money, memo' ($t -match '\[amount\] DECIMAL\(18, 4\) NULL' -and $t -match '\[key\] UNIQUEIDENTIFIER NULL' -and $t -match '\[money\] MONEY NULL' -and $t -match '\[body\] NVARCHAR\(MAX\) NULL')
+Check 'sqlserver: primary key constraint' ($t -match 'CONSTRAINT \[PK_Messages\] PRIMARY KEY \(\[id\]\)')
+Check 'sqlserver: unique index filtered on nullable columns' ($t -match 'CREATE UNIQUE INDEX \[IX_Messages_bySubject\] ON \[Messages\] \(\[subject\], \[created\] DESC\) WHERE \[created\] IS NOT NULL;')
+Check 'sqlserver: attachment and calculated noted, not created' ($t -match '-- \[Messages\]\.\[files\]: attachment field, not created\.' -and $t -match '\[words\]: calculated field' -and $t -notmatch '    \[files\] ')
+Check 'sqlserver: foreign key with cascades' ($t -match 'ALTER TABLE \[Messages\] ADD CONSTRAINT \[FK_TemplatesMessages\] FOREIGN KEY \(\[templateId\]\) REFERENCES \[Templates\] \(\[id\]\) ON DELETE CASCADE ON UPDATE CASCADE;')
+Check 'sqlserver: unenforced relationship as a comment' ($t -match '-- ALTER TABLE \[Messages\] ADD CONSTRAINT \[FK_Loose\]')
+Check 'sqlserver: foreign keys after every table' ($t.IndexOf('ALTER TABLE') -gt $t.LastIndexOf('CREATE TABLE'))
+Check 'sqlserver: skipped list' (($ss.Skipped -join '|') -match '\[files\]: attachment field' -and ($ss.Skipped -join '|') -match '\[Loose\].*not enforced')
+Check 'sqlserver: Date/Time Extended' ((ConvertTo-SqlServerSql ([pscustomobject]@{ Tables = @([pscustomobject]@{ Name = 'T'; Fields = @((F 'x' 26 0)); Indexes = @() }); Relations = @() })).Text -match '\[x\] DATETIME2\(7\) NULL')
+Check 'sqlserver: defaults' ((ConvertTo-SqlServerDefault (F 'a' 8 0 @{ Default = 'Date()' })) -eq 'CAST(GETDATE() AS date)' -and (ConvertTo-SqlServerDefault (F 'a' 1 0 @{ Default = 'Yes' })) -eq '1' -and (ConvertTo-SqlServerDefault (F 'a' 10 0 @{ Default = '"O''B"' })) -eq "N'O''B'" -and $null -eq (ConvertTo-SqlServerDefault (F 'a' 10 0 @{ Default = '=Environ("USERNAME")' })))
+Check 'sqlserver: unconverted default noted' ((ConvertTo-SqlServerSql ([pscustomobject]@{ Tables = @([pscustomobject]@{ Name = 'T'; Fields = @((F 'u' 10 0 @{ Size = 20; Default = '=Environ("USERNAME")' })); Indexes = @() }); Relations = @() })).Text -match '-- \[T\]\.\[u\]: Access default =Environ\("USERNAME"\) not converted\.')
+Check 'sqlserver: bracket in a name escaped' ((Format-SqlName 'a]b') -eq '[a]]b]')
 
 Check 'system tables recognised' ((Test-SchemaSystemTable 'MSysObjects') -and (Test-SchemaSystemTable '~TMPCLP1') -and (Test-SchemaSystemTable 'f_0123456789ABCDEF0123456789ABCDEF_files') -and -not (Test-SchemaSystemTable 'Messages'))
 Check 'form designs loaded from review-mcp' ((Get-Command Export-FormDesignFolder -ErrorAction SilentlyContinue) -ne $null)
