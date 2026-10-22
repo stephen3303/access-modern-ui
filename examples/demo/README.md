@@ -31,6 +31,22 @@ line (`-NoLineNumbers` leaves them out). Edit the files here, not the built copy
 Then open `examples\demo\KitDemo.accdb`. The build stops and prints any Visual Basic or
 Access dialog it meets (a compile error, an error message) instead of hanging.
 
+## Release
+
+`release.ps1` builds a locked showcase copy from a tag `kitdemo-v<version>`, in a clean
+export in TEMP, so this folder and its KitDemo.accdb are never touched:
+
+```powershell
+git tag kitdemo-v1.0.0 <merged commit>
+.\release.ps1 -Version 1.0.0     # writes <repo>\Releases\KitDemo\v1.0.0
+```
+
+It runs the kit checks (`tests\native-smoke.ps1`), builds the demo, stops if the build
+logged an error, and writes `KitDemo.accde` (the locked app), `KitDemo.accdb` (the full,
+editable program), `KitDemo.bmp`, `design\` (every form as JSON and a SQL Server script
+for the tables; only release builds make these), `RELEASE-NOTES.md` and `SHA256SUMS.txt`.
+Released copies go in the private navy-access-programs repository under `KitDemo/v<version>/`.
+
 ## What to check after a kit change
 
 Click through every page in one light palette (Navy) and one dark palette (Midnight),
@@ -104,6 +120,7 @@ watching for Visual Basic error dialogs as well as the error log:
 
 ```
 build.ps1                 builds KitDemo.accdb (stages kit\forms and src\forms together)
+release.ps1               builds a locked release from a kitdemo-v<version> tag
 src/modules/modDemo.bas   the names the kit calls, and the pages' shared helpers
 src/modules/modDemoBuild.bas  BuildAll, the table and seed data, Build_<form>
 src/modules/modPalette.bas    generated: python ..\..\tools\make_themes.py src
