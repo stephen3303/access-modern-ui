@@ -138,6 +138,23 @@ Check 'sqlserver: skipped list' (($ss.Skipped -join '|') -match '\[files\]: atta
 Check 'sqlserver: Date/Time Extended' ((ConvertTo-SqlServerSql ([pscustomobject]@{ Tables = @([pscustomobject]@{ Name = 'T'; Fields = @((F 'x' 26 0)); Indexes = @() }); Relations = @() })).Text -match '\[x\] DATETIME2\(7\) NULL')
 Check 'sqlserver: defaults' ((ConvertTo-SqlServerDefault (F 'a' 8 0 @{ Default = 'Date()' })) -eq 'CAST(GETDATE() AS date)' -and (ConvertTo-SqlServerDefault (F 'a' 1 0 @{ Default = 'Yes' })) -eq '1' -and (ConvertTo-SqlServerDefault (F 'a' 10 0 @{ Default = '"O''B"' })) -eq "N'O''B'" -and $null -eq (ConvertTo-SqlServerDefault (F 'a' 10 0 @{ Default = '=Environ("USERNAME")' })))
 Check 'sqlserver: unconverted default noted' ((ConvertTo-SqlServerSql ([pscustomobject]@{ Tables = @([pscustomobject]@{ Name = 'T'; Fields = @((F 'u' 10 0 @{ Size = 20; Default = '=Environ("USERNAME")' })); Indexes = @() }); Relations = @() })).Text -match '-- \[T\]\.\[u\]: Access default =Environ\("USERNAME"\) not converted\.')
+Check 'sqlserver: foreign key already indexed by its own index' ($t -notmatch 'IX_Messages_TemplatesMessages')
+
+# Cascade routes: Event cascades to Area, Area to Grp, and Event straight to Grp (a
+# shortcut, a second route to Grp). Loop and Back cascade to each other (a loop).
+function Tbl($Name, [string[]]$Keys) { [pscustomobject]@{ Name = $Name; Fields = @(@((F 'id' 4 0 @{ AutoIncrement = $true })) + @(foreach ($k in $Keys) { F $k 4 1 })); Indexes = @((I 'PrimaryKey' @('id') @{ Primary = $true; Unique = $true; Required = $true })) } }
+function Rel($Name, $Parent, $Child, $Key, $Attr) { [pscustomobject]@{ Name = $Name; Table = $Parent; ForeignTable = $Child; Attributes = $Attr; Fields = @([pscustomobject]@{ Name = 'id'; ForeignName = $Key }) } }
+$routes = ConvertTo-SqlServerSql ([pscustomobject]@{
+        Tables = @((Tbl 'Event'), (Tbl 'Area' @('eventId')), (Tbl 'Grp' @('eventId', 'areaId')), (Tbl 'Loop' @('backId')), (Tbl 'Back' @('loopId')))
+        Relations = @((Rel 'a_EventGrp' 'Event' 'Grp' 'eventId' (4096 + 256)), (Rel 'b_AreaGrp' 'Area' 'Grp' 'areaId' 4096), (Rel 'c_EventArea' 'Event' 'Area' 'eventId' 4096),
+            (Rel 'd_LoopBack' 'Loop' 'Back' 'loopId' 4096), (Rel 'e_BackLoop' 'Back' 'Loop' 'backId' 4096)) })
+$rt = $routes.Text
+Check 'sqlserver: cascade chain kept' ($rt -match '\[FK_c_EventArea\] FOREIGN KEY \(\[eventId\]\) REFERENCES \[Event\] \(\[id\]\) ON DELETE CASCADE;' -and $rt -match '\[FK_b_AreaGrp\] FOREIGN KEY \(\[areaId\]\) REFERENCES \[Area\] \(\[id\]\) ON DELETE CASCADE;')
+Check 'sqlserver: shortcut loses its delete cascade only' ($rt -match '\[FK_a_EventGrp\] FOREIGN KEY \(\[eventId\]\) REFERENCES \[Event\] \(\[id\]\) ON UPDATE CASCADE;' -and $rt -match '-- \[a_EventGrp\]: ON DELETE CASCADE in Access, left off here')
+Check 'sqlserver: a loop keeps one cascade' (([regex]::Matches($rt, 'REFERENCES \[(Loop|Back)\] \(\[id\]\) ON DELETE CASCADE;')).Count -eq 1)
+Check 'sqlserver: cascades left off are listed' (@($routes.Skipped | Where-Object { $_ -match 'left off' }).Count -eq 2)
+Check 'sqlserver: each foreign key indexed once' ($rt -match 'CREATE INDEX \[IX_Grp_a_EventGrp\] ON \[Grp\] \(\[eventId\]\);' -and $rt -match 'CREATE INDEX \[IX_Grp_b_AreaGrp\] ON \[Grp\] \(\[areaId\]\);' -and ([regex]::Matches($rt, 'CREATE INDEX')).Count -eq 5)
+Check 'sqlserver: unenforced relationship gets no index' ($t -notmatch 'IX_Messages_Loose')
 Check 'sqlserver: bracket in a name escaped' ((Format-SqlName 'a]b') -eq '[a]]b]')
 
 Check 'system tables recognised' ((Test-SchemaSystemTable 'MSysObjects') -and (Test-SchemaSystemTable '~TMPCLP1') -and (Test-SchemaSystemTable 'f_0123456789ABCDEF0123456789ABCDEF_files') -and -not (Test-SchemaSystemTable 'Messages'))
