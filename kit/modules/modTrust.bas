@@ -18,11 +18,16 @@ Option Explicit
 '                    for this session. Once Access remembers the file as a
 '                    trusted document, or every macro is allowed, the page
 '                    stays away.
-'   dlgTrust         has no code and no Open hook, so it works with the code
-'                    off. Its Close button runs the macro mcrTrustClose.
+'   dlgTrust         has no code, no Open hook and no expressions, so it works
+'                    with the code off. It isn't modal, so Access's Enable
+'                    Content bar stays usable while it is open. Its Close button
+'                    runs the macro mcrTrustQuit (quit Access: with the code off
+'                    the app can't run); ShowTrustHelp, with the code on, points it
+'                    at mcrTrustClose (close the page) and fills in the folder.
 
 Private Const TRUST_FORM As String = "dlgTrust"
 Private Const CLOSE_MACRO As String = "mcrTrustClose"
+Private Const QUIT_MACRO As String = "mcrTrustQuit"
 Private Const MAIN_FORM_PROP As String = "KitMainForm"    ' database property: the form TrustStartup opens
 
 Private Const HKEY_CURRENT_USER As LongPtr = &H80000001
@@ -52,7 +57,8 @@ Private Declare PtrSafe Function GetDriveTypeW Lib "kernel32" (ByVal root As Lon
 ' ---------------------------------------------------------------------------
 
 ' Build step, in place of setting StartUpForm: builds dlgTrust and the macros
-' AutoExec and mcrTrustClose, and remembers mainForm for TrustStartup.
+' AutoExec, mcrTrustClose and mcrTrustQuit, and remembers mainForm for
+' TrustStartup.
 ' mainForm is the form the app starts on: the login form, frmMain, or the
 ' splash screen (frmSplash) when the app has one. Call it after anything that
 ' sets StartUpForm: it removes StartUpForm, so the first form opens only
@@ -64,6 +70,8 @@ Public Sub BuildTrustCheck(ByVal mainForm As String)
     ' Save stays at Prompt (0): with the code off Access refuses Close with any other
     ' Save argument. dlgTrust is never changed, so no save prompt can appear.
     LoadMacro CLOSE_MACRO, MacroRow("", "Close", "2", TRUST_FORM, "0")      ' form dlgTrust, Save Prompt
+    ' Quit (QuitAccess in the macro builder) with Options at Prompt, for the same reason.
+    LoadMacro QUIT_MACRO, MacroRow("", "Quit", "0")
     LoadMacro "AutoExec", _
         MacroRow("Not [CurrentProject].[IsTrusted]", "OpenForm", TRUST_FORM, "0", "", "", "-1", "0") & _
         MacroRow("Not [CurrentProject].[IsTrusted]", "StopMacro") & _
@@ -85,18 +93,22 @@ Public Sub BuildTrustCheck(ByVal mainForm As String)
     On Error GoTo 0
 End Sub
 
-' dlgTrust: heading, why it shows, the folder (selectable, to copy), the Trust
-' Center steps, and a note for computers where IT manages the settings. Text
-' heights come from MeasureText, so each block sits Sp(SP_ROW_GAP) under the
-' one above. Built with no code module and no Open hook (it must open with the
-' code turned off); ShowTrustHelp themes it when the code is on.
+' dlgTrust: heading, why it shows, Enable Content, the folder (selectable, to
+' copy), the Trust Center steps, and a note for computers where IT manages the
+' settings. Text heights come from MeasureText, so each block sits
+' Sp(SP_ROW_GAP) under the one above. Built with no code module, no Open hook
+' and no expressions (it must open with the code turned off); ShowTrustHelp
+' themes it and shows the folder when the code is on. With the code off the
+' folder box can't be filled, so a hint in its place says where Access shows it.
 Private Sub Build_dlgTrust()
-    Dim c As Control, pad As Long, w As Long, x As Long, y As Long, h As Long, s As String
+    Dim c As Control, pad As Long, w As Long, x As Long, y As Long, h As Long, s As String, boxH As Long
     Const DLG_W As Long = 7200          ' 480 px
     pad = Sp(SP_DIALOG)
     x = pad: w = DLG_W - 2 * pad
     NewDialog APP_NAME, DLG_W, px(400)
     F.HasModule = False
+    F.Modal = False                     ' Access's Enable Content bar must work while the page is open
+    F.CloseButton = False               ' with the code off the window's X would leave an empty Access open
     y = pad
     Lbl "lblTitle", "Trust this app's folder", x, y, w, px(26), 13, True
     y = y + px(26) + Sp(SP_ROW_GAP)
@@ -104,14 +116,24 @@ Private Sub Build_dlgTrust()
         "app's code off, each time the app opens. Trust the folder once and the app opens without asking."
     h = TextH(s, 10, w)
     Lbl "lblWhy", s, x, y, w, h
+    y = y + h + Sp(SP_ROW_GAP)
+    s = "If Access shows a bar with Enable Content at the top, choosing it turns the app's code on now. " & _
+        "Access usually remembers that for this file, and then this page doesn't show again. If it still " & _
+        "shows next time, trust the folder."
+    h = TextH(s, 10, w)
+    Lbl "lblEnable", s, x, y, w, h
     y = y + h + Sp(SP_ROW_GAP) * 2
     Lbl "lblFolderCap", "FOLDER", x, y, w, px(16), 8, True, CLR_MUTED_FG
     y = y + px(18)
-    Set c = RO("txtFolder", "=[CurrentProject].[Path]", x, y, w, px(44), 10)
-    c.BackStyle = 1: c.BackColor = CLR_SURFACE
-    c.BorderStyle = 1: c.BorderColor = CLR_BORDER
-    c.LeftMargin = px(8): c.TopMargin = px(4): c.RightMargin = px(8)
-    y = y + px(44) + Sp(SP_ROW_GAP) * 2
+    s = "In Access, choose File, then Info: the folder is in the path shown under the app's name."
+    boxH = TextH(s, 10, w - px(16)) + px(8)
+    If boxH < px(44) Then boxH = px(44)
+    Set c = RO("txtFolder", "", x, y, w, boxH, 10)     ' ShowTrustHelp fills it: no expression
+    FolderBox c
+    c.Visible = False
+    Set c = Lbl("lblFolderHint", s, x, y, w, boxH)     ' shown in its place with the code off
+    FolderBox c
+    y = y + boxH + Sp(SP_ROW_GAP) * 2
     Lbl "lblStepsCap", "TO TRUST IT", x, y, w, px(16), 8, True, CLR_MUTED_FG
     y = y + px(18)
     s = "1. In Access, choose File, then Options, then Trust Center, then Trust Center Settings." & vbCrLf & _
@@ -127,23 +149,30 @@ Private Sub Build_dlgTrust()
     Lbl "lblIT", s, x, y, w, h, 9, False, CLR_MUTED_FG
     y = y + h + Sp(SP_DIALOG)
     Set c = Btn("btnClose", "Close", DLG_W - pad - px(96), y, px(96), px(32))
-    c.OnClick = CLOSE_MACRO             ' a macro, not code: works with the code off
     c.Default = True: c.Cancel = True
     F.Section(acDetail).Height = y + px(32) + pad
-    ClearEvents F, "btnClose"
+    ClearEvents F
+    c.OnClick = QUIT_MACRO              ' a macro, not code: works with the code off
     SaveForm TRUST_FORM
 End Sub
 
-' Empty every event property (On...) of frm and its controls, except on the
-' control keep: whatever NewDialog or the control builders hook up now or
-' later (ThemeForm on Open, a backdrop on Close, [Event Procedure] on
+' The folder box's look, for txtFolder and the hint in its place.
+Private Sub FolderBox(c As Control)
+    c.BackStyle = 1: c.BackColor = CLR_SURFACE
+    c.BorderStyle = 1: c.BorderColor = CLR_BORDER
+    c.LeftMargin = px(8): c.TopMargin = px(4): c.RightMargin = px(8)
+End Sub
+
+' Empty every event property (On...) of frm and its controls: whatever
+' NewDialog or the control builders hook up now or later (ThemeForm on Open,
+' a backdrop on Close, [Event Procedure] and a focus-ring expression on
 ' buttons) would fail with the code off. Properties a control doesn't take
 ' are skipped.
-Private Sub ClearEvents(frm As Object, ByVal keep As String)
+Private Sub ClearEvents(frm As Object)
     Dim c As Control
     ClearOnProps frm.Properties
     For Each c In frm.Controls
-        If c.Name <> keep Then ClearOnProps c.Properties
+        ClearOnProps c.Properties
     Next
 End Sub
 
@@ -321,10 +350,18 @@ End Function
 
 ' Open the trust page (dlgTrust) in the current palette, centred over Access
 ' like the other dialogs. It has no code of its own (AutoCenter places it when
-' the code is off), so it opens hidden, is themed and placed, then shown.
+' the code is off), so it opens hidden, is themed and placed, then shown. With
+' the code on, its Close only closes the page and the folder box shows the
+' folder (neither is saved: the page opens as built next time).
 Public Function ShowTrustHelp()
     On Error GoTo Err_Handler
     DoCmd.OpenForm TRUST_FORM, WindowMode:=acHidden
+    With Forms(TRUST_FORM)
+        .Controls("btnClose").OnClick = CLOSE_MACRO
+        .Controls("txtFolder").Value = CurrentProject.Path
+        .Controls("txtFolder").Visible = True
+        .Controls("lblFolderHint").Visible = False
+    End With
     ThemeForm Forms(TRUST_FORM)
     CenterOnApp Forms(TRUST_FORM)
     Forms(TRUST_FORM).Visible = True

@@ -81,8 +81,10 @@ watching for Visual Basic error dialogs as well as the error log:
   states; Print previews and Export writes exactly the rows shown, with the captions.
 - Folder trust: the page shows this folder's path and the steps, nothing is cut off, and
   Close (or Esc) closes it. Opened from a folder that isn't a Trusted Location, with the
-  code turned off, the demo shows the page on its own. After Enable Content, Access
-  remembers the file as trusted, so the page doesn't open over the main window.
+  code turned off, Access first shows its own "active content is blocked" notice, then
+  the demo shows the page on its own: its folder box says to look under File, then Info,
+  Enable Content works while the page is open, and Close quits Access. After Enable Content, Access remembers the file as
+  trusted, so the page doesn't open over the main window.
 - Date picker (Due's calendar button): October 2026 shows Columbus Day (12th) underlined in
   the danger color and item due dates (1st, 4th, 7th...) in the warning color, with
   tooltips naming them; July 2026 marks Friday the 3rd as Independence Day (observed).
