@@ -276,7 +276,8 @@ Public Function TestKit(ByVal root As String) As String
     Check host.segTest_th1.Left = host.segTest_th0.Left + host.segTest_th0.Width, "Segmented options are not side by side"
     Check host.segTest_b2.Left + host.segTest_b2.Width <= host.segTest_bg.Left + host.segTest_bg.Width, "Segmented option overruns its track"
     Check InStr(Nz(host.segTest_th1.Properties("ControlSource").Value, ""), "PillPng(") > 0, "Segmented thumb is not drawn"
-    Check host.segTest_t0.FormatConditions.Count = 1, "Segmented caption has no picked format"
+    Check host.segTest_t0.FormatConditions.Count = 1 And InStr(host.segTest_t0.FormatConditions(0).Expression1, """day""") > 0 _
+        And InStr(host.segTest_t2.FormatConditions(0).Expression1, """month""") > 0, "Segmented caption is not bold for its own option"
     SegmentClick host, "segTest", "week"
     Check SegmentValue(host, "segTest") = "week", "Segmented click did not pick its item"
     Check host.segmentChanges = 1, "Segmented onChange did not run"

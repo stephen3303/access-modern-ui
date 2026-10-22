@@ -866,6 +866,7 @@ Public Function Segmented(ByVal nm As String, ByVal src As String, ByVal x As Lo
     Next
     For i = 0 To n - 1
         sx = x + px(PAD + i * segPx)
+        cond = "Nz([" & nm & "_val],"""") & """"=""" & keys(i) & """"
         Set c = RO(nm & "_t" & i, "=""" & Replace(caps(i), """", """""") & """", sx, y + px(PAD), px(segPx), px(thPx), 9, False, CLR_MUTED_FG, sec, parentCtl)
         c.TextAlign = 2
         CF c, cond, -1, CLR_FG, True
