@@ -1341,7 +1341,7 @@ Public Function TestKit(ByVal root As String) As String
     KitLinkTables be2, Array("be_items")
     Check PersonnelDefaultPath("be_items") = Left$(root, InStrRev(root, "\") - 1) & "\Personnel\" & PERSONNEL_FILE, "Default Personnel place not beside the data folder"
     CurrentDb.TableDefs.Delete "be_items"
-    Check PersonnelPath() = "" And PersonnelStatus("no_table") = PERSONNEL_NOT_SET_UP, "Personnel reported set up before it was"
+    TestPersonnelNotSetUp root, be2
     pePath = root & "\pe\" & PERSONNEL_FILE
     peId = CreatePersonnelFile(pePath, "TEST", "Pat", "O'Neil", "LT")
     Check PersonnelPath() = pePath And PersonnelStatus("no_table") = PERSONNEL_READY And PersonnelFileProblem(pePath) = "", "New Personnel file not linked"
@@ -1521,6 +1521,18 @@ Private Sub TestKitMenu(host As Form)
     DoCmd.SelectObject acForm, "frmTest"        ' the menu was the active window
     ' The picker (modMenu too): Esc cancelling its query is not an error.
     Check PickCanceled(3059) And Not PickCanceled(5), "Picker took Esc cancelling its query as an error"
+End Sub
+
+' Personnel not set up: asked for a data file whose neighbour has no Personnel
+' folder, since the front end's own neighbour may have one (a Personnel folder
+' beside the run's output). Its own procedure: TestKit is at VBA's procedure
+' size limit.
+Private Sub TestPersonnelNotSetUp(ByVal root As String, ByVal be2 As String)
+    On Error Resume Next: MkDir root & "\pe0": MkDir root & "\pe0\data": On Error GoTo 0
+    FileCopy be2, root & "\pe0\data\be_two.accdb"
+    KitLinkTables root & "\pe0\data\be_two.accdb", Array("be_items")
+    Check PersonnelPath() = "" And PersonnelStatus("be_items") = PERSONNEL_NOT_SET_UP, "Personnel reported set up before it was"
+    CurrentDb.TableDefs.Delete "be_items"
 End Sub
 
 ' The Windows Event Log (modKitEventLog): events are written, and LogError writes
