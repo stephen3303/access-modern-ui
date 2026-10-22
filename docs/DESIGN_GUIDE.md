@@ -101,13 +101,17 @@ access/
     had) that opens the form when the code is on, and opens `dlgTrust` instead when Access
     has turned the code off. When Access would still ask next time (not a Trusted
     Location, not a remembered trusted document), `dlgTrust` also opens over the form.
-    `dlgTrust` has no code module or Open hook, so it works with the code off; it explains
-    how to add the folder in the Trust Center. Code never changes Trust Center settings.
+    `dlgTrust` has no code module, Open hook or expressions, so it works with the code off;
+    it explains how to add the folder in the Trust Center, and that Enable Content on
+    Access's bar also works (Access usually remembers that for the file). It isn't modal,
+    so that bar stays usable while it is open. Code never changes Trust Center settings.
     The check reads the user's (HKCU) settings and policies only, not machine-wide (HKLM)
     policy locations, so on such a PC the page can show when it isn't needed.
-    With the code off, Access first shows its own "active content is blocked" notice;
-    `dlgTrust` follows it. Its Close macro keeps Save at Prompt, the only setting Access
-    allows then.
+    With the code off, its Close button quits Access (macro `mcrTrustQuit`: the app can't
+    run anyway) and its folder box says where Access shows the folder (File, then Info);
+    with the code on, `ShowTrustHelp` points Close at `mcrTrustClose` (close the page) and
+    fills in the folder. Both macros keep Save at Prompt, the only setting Access allows
+    then. The page has no X, so it can't leave an empty Access window open.
   - `HideAccessSplash`, called just before `BuildTrustCheck`, hides Access's own splash.
   - Hidden: the DB window, document tabs and datasheet schema.
   - Name AutoCorrect off.

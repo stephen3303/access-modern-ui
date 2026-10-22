@@ -637,28 +637,7 @@ Public Function TestKit(ByVal root As String) As String
     Check Not ShowDetail(host, "sfRefuse", "subRefuse", "id=2"), "ShowDetail moved on after a refused save"
     host.sfRefuse.Form.Undo
     DoCmd.Close acForm, "frmTest", acSaveNo
-    ' Trust check: matching Trusted Locations, a codeless dlgTrust, and the AutoExec
-    ' macro that opens it with the code off.
-    Check PathCovers("C:\Apps\", False, "c:\apps") And Not PathCovers("C:\Apps", False, "C:\Apps\Sub"), "Trusted Location matching differs"
-    Check PathCovers("C:\", True, "C:\Apps\Sub") And Not PathCovers("C:\Apps", True, "C:\AppsOld"), "Trusted Location subfolder matching differs"
-    Check RecordPath("%USERPROFILE%/My%20Apps/App.accdb") = LCase$(Environ$("USERPROFILE") & "\my apps\app.accdb"), "Trusted document name not decoded"
-    BuildTrustCheck "frmTest"
-    DoCmd.OpenForm "dlgTrust", acDesign
-    Check Not Forms("dlgTrust").HasModule And Len(Forms("dlgTrust").OnOpen) = 0 And Len(Forms("dlgTrust").OnClose) = 0, _
-        "dlgTrust needs code to open or close"
-    Check Forms("dlgTrust").btnClose.OnClick = "mcrTrustClose", "dlgTrust Close doesn't run its macro"
-    DoCmd.Close acForm, "dlgTrust", acSaveNo
-    text = CurrentProject.Path & "\autoexec_test.txt"
-    Application.SaveAsText acMacro, "AutoExec", text
-    fitted = Replace(ReadTextFile(text), vbNullChar, "")   ' SaveAsText may write UTF-16
-    Kill text
-    Check InStr(fitted, "IsTrusted") > 0 And InStr(fitted, "dlgTrust") > 0 And InStr(fitted, "TrustStartup") > 0, "AutoExec lost its trust rows"
-    Application.SaveAsText acMacro, "mcrTrustClose", text
-    fitted = Replace(Replace(Replace(Replace(ReadTextFile(text), vbNullChar, ""), " ", ""), vbCr, ""), vbLf, "")
-    Kill text
-    ' With the code off Access only runs Close with Save at Prompt, so No (2) or Yes (1) breaks it
-    Check InStr(fitted, "dlgTrust") > 0 And InStr(fitted, "Argument=""dlgTrust""Argument=""1""") = 0 And _
-        InStr(fitted, "Argument=""dlgTrust""Argument=""2""") = 0, "mcrTrustClose doesn't close with Save at Prompt"
+    TestTrustCheck
     BuildMessageDialog
     DoCmd.OpenForm "dlgMessage"
     Set host = Forms("dlgMessage")
@@ -1535,6 +1514,74 @@ Private Sub TestPersonnelNotSetUp(ByVal root As String, ByVal be2 As String)
     Check PersonnelPath() = "" And PersonnelStatus("be_items") = PERSONNEL_NOT_SET_UP, "Personnel reported set up before it was"
     CurrentDb.TableDefs.Delete "be_items"
 End Sub
+
+' Trust check: matching Trusted Locations, a dlgTrust that runs no code or
+' expressions (it opens with the code off), isn't modal and quits Access from
+' Close, the AutoExec macro that opens it with the code off, and the page as
+' ShowTrustHelp shows it with the code on. Its own procedure: TestKit is at
+' VBA's procedure size limit.
+Private Sub TestTrustCheck()
+    Dim frm As Form, c As Control, text As String, fitted As String, found As String
+    Check PathCovers("C:\Apps\", False, "c:\apps") And Not PathCovers("C:\Apps", False, "C:\Apps\Sub"), "Trusted Location matching differs"
+    Check PathCovers("C:\", True, "C:\Apps\Sub") And Not PathCovers("C:\Apps", True, "C:\AppsOld"), "Trusted Location subfolder matching differs"
+    Check RecordPath("%USERPROFILE%/My%20Apps/App.accdb") = LCase$(Environ$("USERPROFILE") & "\my apps\app.accdb"), "Trusted document name not decoded"
+    BuildTrustCheck "frmTest"
+    DoCmd.OpenForm "dlgTrust", acDesign
+    Set frm = Forms("dlgTrust")
+    Check Not frm.HasModule, "dlgTrust has a code module"
+    Check Not frm.Modal And frm.PopUp, "dlgTrust is modal, so Enable Content doesn't work while it is open"
+    Check Not frm.CloseButton, "dlgTrust's X would leave an empty Access open with the code off"
+    Check frm.btnClose.OnClick = "mcrTrustQuit", "dlgTrust Close doesn't quit Access with the code off"
+    ' Every event and expression would be blocked with the code off.
+    found = SetEventNames(frm.Properties)
+    For Each c In frm.Controls
+        text = SetEventNames(c.Properties)
+        If c.Name = "btnClose" Then text = Replace(text, " OnClick", "")
+        found = found & text
+        If c.ControlType = acTextBox Then
+            If Left$(c.ControlSource, 1) = "=" Then found = found & " " & c.Name & ".ControlSource"
+        End If
+    Next
+    Check Len(found) = 0, "dlgTrust runs code or expressions:" & found
+    Check Not frm.txtFolder.Visible And frm.lblFolderHint.Visible, "dlgTrust's folder hint doesn't show with the code off"
+    Set frm = Nothing
+    DoCmd.Close acForm, "dlgTrust", acSaveNo
+    text = CurrentProject.Path & "\autoexec_test.txt"
+    Application.SaveAsText acMacro, "AutoExec", text
+    fitted = Replace(ReadTextFile(text), vbNullChar, "")   ' SaveAsText may write UTF-16
+    Kill text
+    Check InStr(fitted, "IsTrusted") > 0 And InStr(fitted, "dlgTrust") > 0 And InStr(fitted, "TrustStartup") > 0, "AutoExec lost its trust rows"
+    Application.SaveAsText acMacro, "mcrTrustClose", text
+    fitted = Replace(Replace(Replace(Replace(ReadTextFile(text), vbNullChar, ""), " ", ""), vbCr, ""), vbLf, "")
+    Kill text
+    ' With the code off Access only runs Close with Save at Prompt, so No (2) or Yes (1) breaks it
+    Check InStr(fitted, "dlgTrust") > 0 And InStr(fitted, "Argument=""dlgTrust""Argument=""1""") = 0 And _
+        InStr(fitted, "Argument=""dlgTrust""Argument=""2""") = 0, "mcrTrustClose doesn't close with Save at Prompt"
+    Application.SaveAsText acMacro, "mcrTrustQuit", text
+    fitted = Replace(Replace(Replace(Replace(ReadTextFile(text), vbNullChar, ""), " ", ""), vbCr, ""), vbLf, "")
+    Kill text
+    Check InStr(fitted, "Quit") > 0 And InStr(fitted, "Argument=""1""") = 0 And InStr(fitted, "Argument=""2""") = 0, _
+        "mcrTrustQuit doesn't quit with Options at Prompt"
+    ' With the code on: Close only closes the page, and the box shows the folder.
+    ShowTrustHelp
+    Set frm = Forms("dlgTrust")
+    Check frm.btnClose.OnClick = "mcrTrustClose", "dlgTrust Close quits Access with the code on"
+    Check frm.txtFolder.Visible And frm.txtFolder.Value = CurrentProject.Path And Not frm.lblFolderHint.Visible, _
+        "dlgTrust doesn't show the folder with the code on"
+    Set frm = Nothing
+    DoCmd.Close acForm, "dlgTrust", acSaveNo
+End Sub
+
+' The names of props' event properties (On...) that are set, each after a space.
+Private Function SetEventNames(props As Object) As String
+    Dim prp As Object
+    On Error Resume Next
+    For Each prp In props
+        If Left$(prp.Name, 2) = "On" Then
+            If Len(Nz(prp.Value, "")) > 0 Then SetEventNames = SetEventNames & " " & prp.Name
+        End If
+    Next
+End Function
 
 ' The Windows Event Log (modKitEventLog): events are written, and LogError writes
 ' one per entry. Its own procedure: TestKit is at VBA's procedure size limit.
