@@ -107,8 +107,10 @@ access/
     so that bar stays usable while it is open. Code never changes Trust Center settings.
     The check reads the user's (HKCU) settings and policies only, not machine-wide (HKLM)
     policy locations, so on such a PC the page can show when it isn't needed.
-    With the code off, its Close button quits Access (macro `mcrTrustQuit`: the app can't
-    run anyway) and its folder box says where Access shows the folder (File, then Info);
+    With the code off, Access first shows its own "active content is blocked" notice (it
+    stays even with no expressions on the page); `dlgTrust` follows it. Its Close button
+    then quits Access (macro `mcrTrustQuit`: the app can't run anyway) and its folder box
+    says where Access shows the folder (File, then Info);
     with the code on, `ShowTrustHelp` points Close at `mcrTrustClose` (close the page) and
     fills in the folder. Both macros keep Save at Prompt, the only setting Access allows
     then. The page has no X, so it can't leave an empty Access window open.
