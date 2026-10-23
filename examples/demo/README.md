@@ -155,9 +155,10 @@ watching for Visual Basic error dialogs as well as the error log:
   Generate: the table lists every demo_item row with its column captions, Stretches across
   widens it with the preview window; the first chip and tab are on, and clicking another
   chip or tab moves it; the breadcrumb's crumbs do nothing, and the current one reads in
-  CLR_FG in Midnight too; an accordion header opens and closes its section. Tab goes
+  CLR_FG in Midnight too; an accordion header opens and closes its section, whose body is
+  the page's color in Midnight, not white. Tab goes
   through the breadcrumb and the accordion headers in reading order and skips the table,
-  whose rows take clicks. Build_pg<Name>.txt starts with the table's BuildGrid, and pg<Name>.vba
+  whose rows take clicks. Build_pg<Name>.txt starts with the table's BuildGrid and the accordion's BuildBlank, and pg<Name>.vba
   has chips1Chip, tabs1Tab, crumb1Crumb, GridClick and a Form_Load. Check it in Navy and
   Midnight.
 - Dialogs: Appearance in the sidebar and the buttons on Cards and progress dim the whole

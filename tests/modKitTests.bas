@@ -1923,7 +1923,8 @@ Private Sub TestDesignerMore()
     Check InStr(code, "ChipRow ""chips1"", px(24), px(48), ""chips1Chip"", ""Mine"", ""Everyone""") > 0 _
         And InStr(code, "TabStrip px(24), px(0), px(360), ""tabs1Tab"", ""overview|Overview"", ""details|Details"", ""history|History""") > 0 _
         And InStr(code, "Breadcrumb ""crumb1"", px(440), px(8), px(320), 3, ""crumb1Crumb"", ""home|Home"", ""reports|Reports"", ""thisreport|This report""") > 0 _
-        And InStr(code, "Accordion ""acc1"", px(416), px(120), px(360), False, ""General||80|open"", ""Notes||80""") > 0 _
+        And InStr(code, "Accordion ""acc1"", px(416), px(120), px(360), False, ""General|subPgDzMore_acc1|80|open"", ""Notes|subPgDzMore_acc1|80""") > 0 _
+        And InStr(code, "BuildBlank ""subPgDzMore_acc1"", px(360), px(80)" & vbCrLf) > 0 And InStr(code, "BuildBlank ") < InStr(code, "NewForm ") _
         And InStr(code, "Ev F, ""OnLoad""") > 0 _
         And InStr(code, "TabOrder Array(""crumb10_k"", ""crumb11_k"", ""acc1_h1"", ""acc1_b1"", ""acc1_h2"", ""acc1_b2"")") > 0, _
         "Designer chips, tabs, breadcrumb or accordion build code wrong: " & code
@@ -1947,6 +1948,9 @@ Private Sub TestDesignerMore()
             And .ul_overview.Visible And Not .ul_details.Visible And .crumb10.OnClick = "" And .crumb10_k.OnClick = "" _
             And .crumb12.ForeColor = Th(CLR_FG) And .crumb10.ForeColor = Th(CLR_MUTED_FG) _
             And .acc1_b1.Visible And Not .acc1_b2.Visible, "Designer preview chips, tabs, breadcrumb or accordion wrong"
+        ' An open body shows the blank form in the palette's page color, not Access's white.
+        Check .acc1_b1.SourceObject = "dzPreview_acc1" And .acc1_b2.SourceObject = "dzPreview_acc1" _
+            And .acc1_b1.Form.Section(acDetail).BackColor = Th(CLR_BG), "Designer preview accordion body not the blank form"
         Check .crumb10_k.TabIndex < .crumb11_k.TabIndex And .crumb11_k.TabIndex < .acc1_h1.TabIndex _
             And .acc1_h1.TabIndex < .acc1_b1.TabIndex And Not .tbl1.TabStop, _
             "Designer preview tab order wrong for the new kinds"
@@ -1962,9 +1966,12 @@ Private Sub TestDesignerMore()
     Check DesignerSetForm("", "776", "408", "dialog", "") = "" And DesignerSave(frm), "Designer new kinds dialog not saved"
     code = DesignerCode(id)
     Check InStr(code, "BuildGrid ""subDlgDzMore_tbl1""") > 0 And InStr(code, "BuildGrid ") < InStr(code, "NewDialog ") _
-        And InStr(code, "SubF(""tbl1"", ""subDlgDzMore_tbl1""") > 0, "Designer dialog lost its table's rows: " & code
+        And InStr(code, "SubF(""tbl1"", ""subDlgDzMore_tbl1""") > 0 _
+        And InStr(code, "BuildBlank ""subDlgDzMore_acc1"", px(360), px(80), CLR_DIALOG" & vbCrLf) > 0, _
+        "Designer dialog lost its table's rows or its accordion's blank body: " & code
     DoCmd.DeleteObject acForm, "dzPreview"
     DoCmd.DeleteObject acForm, "dzPreview_tbl1"
+    DoCmd.DeleteObject acForm, "dzPreview_acc1"
     DoCmd.Close acForm, DZ_FORM, acSaveNo
     DoCmd.DeleteObject acForm, DZ_FORM
     CurrentDb.TableDefs.Delete "kit_layout_item": CurrentDb.TableDefs.Delete "kit_layout"

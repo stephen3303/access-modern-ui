@@ -1071,7 +1071,8 @@ End Sub
 ' close the gap, like a web accordion. Use it for a long form or settings page
 ' split into parts the user opens one or a few at a time. sections are
 ' "Title|sourceObject|body height px|open" ("open" shows the body at first;
-' sourceObject may be "" for one set at run time). oneOpen:=True keeps one
+' sourceObject may be "" for one set at run time, but Access paints a subform
+' with no source object white: show a BuildBlank form until then). oneOpen:=True keeps one
 ' section open at a time. Put the accordion last in its column: only its own
 ' parts move. The form's section is made tall enough for every body open at
 ' once (the tallest, with oneOpen), since Access raises error 2100 for a control moved past its bottom. Parts (i from 1): <prefix> an invisible frame (its Tag keeps
@@ -1560,6 +1561,20 @@ Public Function SubF(ByVal nm As String, ByVal srcObj As String, ByVal x As Long
     End If
     Set SubF = c
 End Function
+
+' A blank form to show in a subform the app fills later, such as an
+' Accordion body: it has no controls, w x h of back (CLR_BG on a page,
+' CLR_DIALOG in a dialog), and the palette paints it, so an open section
+' shows the page's color, not the white Access gives a subform with no
+' source object. Saved as finalName. It builds a form of its own, so build
+' it before the form that shows it, as with BuildGrid.
+Public Sub BuildBlank(ByVal finalName As String, ByVal w As Long, ByVal h As Long, Optional ByVal back As Long = CLR_BG)
+    NewForm "", 0, w, h
+    F.Section(acDetail).BackColor = back
+    F.Section(acDetail).AlternateBackColor = back
+    F.Controls("txtFocusSink").TabStop = False
+    SaveForm finalName
+End Sub
 
 ' ---------------------------------------------------------------------------
 ' Styled tables

@@ -43,8 +43,8 @@ Option Explicit
 '
 ' A table lists a table or query of its own (BuildGrid rows in a subform,
 ' GridHeaders captions); chips, a tab strip and a breadcrumb call the form's
-' code (ChipOn, SelectTab, SetBreadcrumb); an accordion's bodies are empty
-' subforms for the app to fill. A form takes one tab strip and one
+' code (ChipOn, SelectTab, SetBreadcrumb); an accordion's bodies show a
+' blank form (BuildBlank) for the app to replace. A form takes one tab strip and one
 ' breadcrumb: their parts have fixed names (tab_<key>) or names that would
 ' run into another's (crumb1 and crumb11).
 
@@ -994,7 +994,7 @@ Public Function DesignerCode(ByVal id As Long) As String
     s = "' " & nm & ", built from the form designer layout """ & title & """ (" & Format$(Now(), "yyyy-mm-dd hh:nn") & ")." & vbCrLf & _
         "' Call it from the app's build, and keep " & nm & ".vba, its code-behind, in src\forms." & vbCrLf & _
         "Private Sub Build_" & nm & "()" & vbCrLf
-    body = GridLines(id, nm)
+    body = GridLines(id, nm, isPage)
     If isPage Then
         body = body & "    NewForm " & VbText(src) & ", 0, px(" & Nz(rs!form_width, 0) & "), px(" & Nz(rs!form_height, 0) & ")" & vbCrLf
     Else
@@ -1137,6 +1137,8 @@ Public Sub DesignerPreview(ByVal id As Long)
     Set rs = db.OpenRecordset(ItemsSql(id), dbOpenSnapshot)
     Do Until rs.EOF
         If rs!kind = "table" Then PreviewGrid rs
+        If rs!kind = "accordion" Then BuildBlank DZ_PREVIEW & "_" & ItemName(rs), px(Nz(rs!w, 0)), px(Val(Nz(rs!item_text2, ""))), _
+            IIf(isPage, CLR_BG, CLR_DIALOG)
         rs.MoveNext
     Loop
     rs.Close
@@ -1334,20 +1336,24 @@ Private Function LoadLines(ByVal id As Long) As String
     LoadLines = out
 End Function
 
-' Layout id's BuildGrid calls, one per table, for the top of its build
-' procedure (form nm; "" for none).
-Private Function GridLines(ByVal id As Long, ByVal nm As String) As String
+' Layout id's BuildGrid calls, one per table, and BuildBlank calls, one per
+' accordion (its bodies' blank form, in the color of a page or a dialog), for
+' the top of its build procedure (form nm; "" for none).
+Private Function GridLines(ByVal id As Long, ByVal nm As String, ByVal isPage As Boolean) As String
     Dim rs As DAO.Recordset, out As String
     Set rs = CurrentDb.OpenRecordset(ItemsSql(id), dbOpenSnapshot)
     Do Until rs.EOF
         If rs!kind = "table" Then
             out = out & "    BuildGrid " & VbText(GridFormName(nm, ItemName(rs))) & ", " & _
                 VbArray(GridCols(Nz(rs!item_text, ""), Nz(rs!item_text2, ""), Nz(rs!w, 0))) & ", px(" & Nz(rs!w, 0) & ")" & vbCrLf
+        ElseIf rs!kind = "accordion" Then
+            out = out & "    BuildBlank " & VbText(GridFormName(nm, ItemName(rs))) & ", px(" & Nz(rs!w, 0) & "), px(" & _
+                CLng(Val(Nz(rs!item_text2, ""))) & ")" & IIf(isPage, "", ", CLR_DIALOG") & vbCrLf
         End If
         rs.MoveNext
     Loop
     rs.Close
-    If Len(out) > 0 Then out = "    ' The tables' rows, each a form of its own (BuildGrid builds a form)." & vbCrLf & out
+    If Len(out) > 0 Then out = "    ' The tables' rows and the accordions' empty bodies, each a form of its own, built first." & vbCrLf & out
     GridLines = out
 End Function
 
@@ -1481,7 +1487,7 @@ Private Function ItemCall(rs As DAO.Recordset, ByVal anc As String, ByVal formNa
                 VbList(Split(SegmentItems(t1), ";"))
         Case "accordion"
             ItemCall = "Accordion " & n & ", " & x & ", " & y & ", " & w & ", " & IIf(ch = "any number", "False", "True") & _
-                VbList(AccSections(t1, t2))
+                VbList(AccSections(t1, t2, GridFormName(formName, nm)))
     End Select
 End Function
 
@@ -1548,7 +1554,7 @@ Private Sub BuildItem(rs As DAO.Recordset, ByVal anc As String)
             For i = 0 To PartCount(t1) - 1
                 F.Controls(nm & i).OnClick = "": F.Controls(nm & i & "_k").OnClick = ""
             Next
-        Case "accordion": Accordion nm, x, y, w, (ch <> "any number"), AccSections(t1, t2)
+        Case "accordion": Accordion nm, x, y, w, (ch <> "any number"), AccSections(t1, t2, DZ_PREVIEW & "_" & nm)
     End Select
     If Len(before) > 0 Then AnchorBuilt before, ah, av
 End Sub
@@ -2307,7 +2313,7 @@ Private Function KindHint(ByVal kind As String) As String
         Case "chips": KindHint = "2 to 8 chips. The form's code turns one on (ChipOn) and filters by it."
         Case "tabs": KindHint = "2 to 8 tabs; one tab strip to a form. The form's code shows the open tab (SelectTab)."
         Case "breadcrumb": KindHint = "2 to 12 crumbs, top page first; one breadcrumb to a form. The app sets the path at run time (SetBreadcrumb)."
-        Case "accordion": KindHint = "1 to 6 sections, each body 40 to 600 px tall; the first starts open. The bodies are empty subforms for the app to fill."
+        Case "accordion": KindHint = "1 to 6 sections, each body 40 to 600 px tall; the first starts open. The bodies are blank for the app to fill."
         Case Else: KindHint = ""
     End Select
 End Function
@@ -2659,15 +2665,16 @@ Private Function GridSource(ByVal src As String) As String
     GridSource = "SELECT * FROM [" & src & "]"
 End Function
 
-' An accordion's sections, as Accordion takes them: "Title||body px", the
-' first "|open"; no body form yet.
-Private Function AccSections(ByVal t1 As String, ByVal t2 As String) As Variant
+' An accordion's sections, as Accordion takes them: "Title|body|body px", the
+' first "|open"; body is the blank form (BuildBlank) every section shows
+' until the app gives it a form of its own.
+Private Function AccSections(ByVal t1 As String, ByVal t2 As String, ByVal body As String) As Variant
     Dim p As Variant, out() As String, i As Long
     p = TrimParts(t1)
     If UBound(p) < 0 Then AccSections = Array(): Exit Function
     ReDim out(0 To UBound(p))
     For i = 0 To UBound(p)
-        out(i) = Replace(CStr(p(i)), "|", "/") & "||" & CLng(Val(t2)) & IIf(i = 0, "|open", "")
+        out(i) = Replace(CStr(p(i)), "|", "/") & "|" & body & "|" & CLng(Val(t2)) & IIf(i = 0, "|open", "")
     Next
     AccSections = out
 End Function
