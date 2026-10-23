@@ -1348,6 +1348,8 @@ Public Function TestKit(ByVal root As String) As String
     Check SignedInPersonID() = 0 And Not PersonnelSignInWindows("OTHER", True), "Sign-in let a person into an app they lack"
     Check PersonnelWindowsPersonId() = peId, "Windows account's person not found without app access"
     Check PersonnelAdminNames() = " (LT P. O'Neil)", "Admin to ask not named: " & PersonnelAdminNames()
+    Check PersonnelWindowsWhy("OTHER") = "noaccess" And PersonnelWindowsWhy("TEST") = "" And _
+        InStr(PersonnelSignInWhyText("noaccess"), "access to " & APP_NAME) > 0 And PersonnelSignInWhyText("signout") = "", "Why the Windows sign-in failed not told apart"
     pe2 = AddPerson("Ann", "Lee", "YN2", "", "alee")
     SetPersonApp pe2, "TEST", True
     peErr = 0: On Error Resume Next: AddPerson "Ann", "Lee", "", "", "alee": peErr = Err.Number: On Error GoTo 0

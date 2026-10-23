@@ -63,7 +63,7 @@ Public Function KitPersonnelStart(ByVal appTable As String, ByVal appCode As Str
     End If
     SplashStatus "Checking your Windows sign-in" & ChrW(8230)
     If PersonnelSignInWindows(appCode) Then KitPersonnelStart = True: Exit Function
-    m_signInWhy = WindowsSignInWhy()
+    m_signInWhy = PersonnelWindowsWhy(appCode)
     CloseSplash
     KitPersonnelStart = RunDialog(SIGNIN_FORM)
     Exit Function
@@ -99,25 +99,28 @@ Fail:
     HandleError "modPersonnelUI.KitPersonnelManage", appCode, "The Personnel page couldn't be opened."
 End Function
 
-' Why this Windows account wasn't signed in: "noaccess" (an active person
-' without access to the app), "off" (a person who is turned off) or
-' "notset" (nobody's account).
-Private Function WindowsSignInWhy() As String
+' Why the Windows account running Access can't sign in to appCode:
+' "notset" (nobody's account), "off" (a person who is turned off),
+' "noaccess" (an active person without access to appCode), or "" when it
+' can. For an app's own sign-in form too, with PersonnelSignInWhyText.
+Public Function PersonnelWindowsWhy(ByVal appCode As String) As String
     Dim id As Long
     id = PersonnelWindowsPersonId()
     If id = 0 Then
-        WindowsSignInWhy = "notset"
+        PersonnelWindowsWhy = "notset"
     ElseIf DCount("*", PERSON_TABLE, "is_active AND person_id=" & id) = 0 Then
-        WindowsSignInWhy = "off"
-    Else
-        WindowsSignInWhy = "noaccess"
+        PersonnelWindowsWhy = "off"
+    ElseIf Not PersonCanUse(id, appCode) Then
+        PersonnelWindowsWhy = "noaccess"
     End If
 End Function
 
-' The sign-in screen's line on why it shows, for each PersonnelUiSignInWhy
-' but "signout" (""), with who to ask (PersonnelAdminNames).
-Public Function PersonnelSignInWhyText() As String
-    Select Case m_signInWhy
+' The sign-in screen's line on why it shows, with who to ask
+' (PersonnelAdminNames): for why (PersonnelWindowsWhy), or else for
+' PersonnelUiSignInWhy. "" for "signout" or "".
+Public Function PersonnelSignInWhyText(Optional ByVal why As Variant) As String
+    If IsMissing(why) Then why = m_signInWhy
+    Select Case why
         Case "notset"
             PersonnelSignInWhyText = "This Windows account isn't set up in Personnel yet. Ask a Personnel admin" & _
                 PersonnelAdminNames() & " to add it, or sign in with your sign-in name and app password."
@@ -132,7 +135,7 @@ End Function
 
 ' For the dialogs: the app's code and linked table, why the setup screen is
 ' open (PERSONNEL_NOT_SET_UP or PERSONNEL_LOST), why the sign-in screen is
-' ("notset", "noaccess" or "off": WindowsSignInWhy; "signout").
+' ("notset", "noaccess" or "off": PersonnelWindowsWhy; "signout").
 ' A searchable picker (PickBox, modMenu) of the active people in the
 ' Personnel file: typing part of a last or first name, a rank or a sign-in
 ' name lists the matches as "Smith, John (LT)" with the sign-in name on the
