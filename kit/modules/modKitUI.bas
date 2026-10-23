@@ -1774,3 +1774,24 @@ Public Sub StyleChip(lbl As Control, ByVal isOn As Boolean, Optional ByVal n As 
     lbl.ForeColor = IIf(isOn, Th(CLR_WHITE), Th(CLR_MUTED_FG))
     If Not IsMissing(n) Then SetCount lbl, n
 End Sub
+
+' Paint ChipRow prefix's chips: chip i on (StyleChip), the others off; -1
+' turns them all off.
+Public Sub ChipOn(frm As Form, ByVal prefix As String, ByVal i As Long)
+    Dim n As Long, j As Long
+    n = CLng(Split(frm.Controls(prefix).Tag, "|")(1))
+    For j = 0 To n - 1
+        StyleChip frm.Controls(prefix & "_" & j), j = i
+    Next
+End Sub
+
+' Show tab key of the form's TabStrip as the open one: its caption CLR_FG
+' with its underline, the other captions CLR_MUTED_FG without. Call it on
+' load (the builder shows every underline) and from the strip's handler.
+Public Sub SelectTab(frm As Form, ByVal key As String)
+    Dim c As Control
+    For Each c In frm.Controls
+        If c.Name Like "tab_*" Then c.ForeColor = Th(IIf(StrComp(Mid$(c.Name, 5), key, vbTextCompare) = 0, CLR_FG, CLR_MUTED_FG))
+        If c.Name Like "ul_*" Then c.Visible = (StrComp(Mid$(c.Name, 4), key, vbTextCompare) = 0)
+    Next
+End Sub

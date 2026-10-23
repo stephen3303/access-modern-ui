@@ -991,11 +991,14 @@ End Function
 ' deepest of them). Parts: <prefix> an invisible frame holding the trail's
 ' place and width, <prefix><i> the crumbs, <prefix><i>_k their KeyButtons (the
 ' current page's is hidden) and <prefix>_s<i> the chevrons before them. Raises error 5 for a bad slot count or more items than slots.
+' items may also be one array of them.
 Public Sub Breadcrumb(ByVal prefix As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal slots As Long, _
         ByVal handler As String, ParamArray items() As Variant)
     Dim i As Long, c As Control, path As Variant
+    path = items
+    path = ArgList(path)
     If slots < 2 Or slots > 12 Then Err.Raise 5, , "Breadcrumb " & prefix & " takes 2 to 12 slots: " & slots
-    If UBound(items) + 1 > slots Then Err.Raise 5, , "Breadcrumb " & prefix & " has more items than slots"
+    If UBound(path) - LBound(path) + 1 > slots Then Err.Raise 5, , "Breadcrumb " & prefix & " has more items than slots"
     Set c = Box(prefix, x, y, w, px(20), -1)
     c.Tag = handler & "|0|" & slots
     For i = 0 To slots - 1
@@ -1010,7 +1013,6 @@ Public Sub Breadcrumb(ByVal prefix As String, ByVal x As Long, ByVal y As Long, 
         Set c = KeyButton(prefix & i & "_k", prefix & i, x, y, px(40), px(20), "=CrumbClick([Form],""" & prefix & """," & i & ")", "")
         c.Visible = False
     Next
-    path = items
     LayoutCrumbs F, prefix, path
 End Sub
 
@@ -1069,24 +1071,29 @@ End Sub
 ' close the gap, like a web accordion. Use it for a long form or settings page
 ' split into parts the user opens one or a few at a time. sections are
 ' "Title|sourceObject|body height px|open" ("open" shows the body at first;
-' sourceObject may be "" for one set at run time). oneOpen:=True keeps one
+' sourceObject may be "" for one set at run time, but Access paints a subform
+' with no source object white: show a BuildBlank form until then). oneOpen:=True keeps one
 ' section open at a time. Put the accordion last in its column: only its own
 ' parts move. The form's section is made tall enough for every body open at
 ' once (the tallest, with oneOpen), since Access raises error 2100 for a control moved past its bottom. Parts (i from 1): <prefix> an invisible frame (its Tag keeps
 ' single and the body heights), <prefix>_h<i> a transparent header button
 ' (click, Tab stop and Space), _t<i> the title, _v<i> the chevron, _u<i> the
 ' rule and _b<i> the body subform. Raises error 5 for no section or a bad one.
+' sections may also be one array of them.
 Public Sub Accordion(ByVal prefix As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal oneOpen As Boolean, _
         ParamArray sections() As Variant)
     Dim n As Long, i As Long, p() As String, hs As String, c As Control, yy As Long, allOpen As Long, tallest As Long
-    n = UBound(sections) + 1
+    Dim list As Variant
+    list = sections
+    list = ArgList(list)
+    n = UBound(list) - LBound(list) + 1
     If n < 1 Then Err.Raise 5, , "Accordion " & prefix & " has no sections"
     Set c = Box(prefix, x, y, w, px(40) * n, -1)
     yy = y
     For i = 1 To n
-        p = Split(CStr(sections(i - 1)), "|")
-        If UBound(p) < 2 Then Err.Raise 5, , "Accordion " & prefix & " section is not Title|sourceObject|height: " & sections(i - 1)
-        If Not IsNumeric(p(2)) Then Err.Raise 5, , "Accordion " & prefix & " section height is not a number: " & sections(i - 1)
+        p = Split(CStr(list(LBound(list) + i - 1)), "|")
+        If UBound(p) < 2 Then Err.Raise 5, , "Accordion " & prefix & " section is not Title|sourceObject|height: " & list(LBound(list) + i - 1)
+        If Not IsNumeric(p(2)) Then Err.Raise 5, , "Accordion " & prefix & " section height is not a number: " & list(LBound(list) + i - 1)
         hs = hs & IIf(i > 1, ",", "") & px(CLng(p(2)))
         allOpen = allOpen + px(41) + px(15) + px(CLng(p(2)))
         If px(CLng(p(2))) > tallest Then tallest = px(CLng(p(2)))
@@ -1554,6 +1561,21 @@ Public Function SubF(ByVal nm As String, ByVal srcObj As String, ByVal x As Long
     End If
     Set SubF = c
 End Function
+
+' A blank form to show in a subform the app fills later, such as an
+' Accordion body: it has no controls, w x h of back (CLR_BG on a page,
+' CLR_DIALOG in a dialog), and the palette paints it, so an open section
+' shows the page's color, not the white Access gives a subform with no
+' source object. Saved as finalName. It builds a form of its own, so build
+' it before the form that shows it, as with BuildGrid. It has nothing to
+' focus, so give the subform showing it TabStop = False, or Tab stays in it.
+Public Sub BuildBlank(ByVal finalName As String, ByVal w As Long, ByVal h As Long, Optional ByVal back As Long = CLR_BG)
+    NewForm "", 0, w, h
+    F.Section(acDetail).BackColor = back
+    F.Section(acDetail).AlternateBackColor = back
+    F.Controls("txtFocusSink").TabStop = False
+    SaveForm finalName
+End Sub
 
 ' ---------------------------------------------------------------------------
 ' Styled tables
@@ -2148,14 +2170,66 @@ Public Sub ContextBanner(ByVal x As Long, ByVal y As Long, ByVal w As Long, Opti
     End If
 End Sub
 
+' Filter chips in a row (a web chip group), one per caption: a label as wide
+' as its caption and a two-digit count (ChipWidth), 6px apart and 26px tall,
+' in CLR_MUTED_FG. handler names a Public Function on the form taking the
+' chip's number (from 0), called on a click; "" makes them unclickable.
+' Paint which one is on with ChipOn (on load too: the builder paints them all
+' off, in the build palette), and show counts with StyleChip or SetCount.
+' Parts: <prefix> an invisible frame (its Tag holds the handler and how many
+' chips) and <prefix>_<i> the chips. Raises error 5 for fewer than 2 or more
+' than 8. caps may also be one array of them. Returns the x just after the
+' last chip.
+Public Function ChipRow(ByVal prefix As String, ByVal x As Long, ByVal y As Long, ByVal handler As String, _
+        ParamArray caps() As Variant) As Long
+    Dim i As Long, n As Long, w As Long, c As Control, x0 As Long, list As Variant
+    list = caps
+    list = ArgList(list)
+    n = UBound(list) - LBound(list) + 1
+    If n < 2 Or n > 8 Then Err.Raise 5, , "ChipRow " & prefix & " takes 2 to 8 chips"
+    x0 = x
+    Set c = Box(prefix, x, y, px(26), px(26), -1)
+    c.Tag = handler & "|" & n
+    For i = 0 To n - 1
+        w = ChipWidth(CStr(list(LBound(list) + i)))
+        Set c = Link(prefix & "_" & i, CStr(list(LBound(list) + i)), x, y, w, px(26), _
+            IIf(Len(handler) > 0, "=" & handler & "(" & i & ")", ""), 9, CLR_MUTED_FG)
+        c.TextAlign = 2
+        c.Tag = CStr(list(LBound(list) + i))   ' the caption without a count (SetCount)
+        x = x + w + px(6)
+    Next
+    F.Controls(prefix).Width = x - px(6) - x0
+    ChipRow = x - px(6)
+End Function
+
+' A builder's ParamArray (copied to a Variant) as its list: its items, or,
+' when it holds just one array, that array's items.
+Private Function ArgList(ByVal args As Variant) As Variant
+    If UBound(args) - LBound(args) = 0 Then
+        If IsArray(args(LBound(args))) Then
+            ArgList = args(LBound(args))
+            Exit Function
+        End If
+    End If
+    ArgList = args
+End Function
+
+' A ChipRow chip's width for its caption, with room for a two-digit count.
+Public Function ChipWidth(ByVal cap As String) As Long
+    ChipWidth = px(Len(cap & " (00)") * 7 + 20)
+End Function
+
 ' Tab strip of labels with underline boxes. tabs are "key|Caption", or
 ' "key|Caption|n" to show a count, "Caption (n)", which SetCount updates at
-' run time (the tab is sized for a three-digit count).
+' run time (the tab is sized for a three-digit count). tabs may also be one
+' array of them. Show which tab is open with SelectTab.
 Public Sub TabStrip(ByVal x As Long, ByVal y As Long, ByVal totalW As Long, ByVal handler As String, ParamArray tabs() As Variant)
-    Dim i As Long, k As String, cap As String, w As Long, c As Control, x0 As Long, p() As String
+    Dim i As Long, k As String, cap As String, w As Long, c As Control, x0 As Long, p() As String, list As Variant
+    list = tabs
+    list = ArgList(list)
     x0 = x
-    For i = 0 To UBound(tabs)
-        p = Split(tabs(i), "|")
+    For i = LBound(list) To UBound(list)
+        p = Split(list(i), "|")
         k = p(0)
         cap = p(1)
         If UBound(p) >= 2 Then

@@ -1598,6 +1598,7 @@ Private Sub TestMore()
     TestDesigner
     TestDesignerKinds
     TestDesignerData
+    TestDesignerMore
 End Sub
 
 ' Form designer (BuildDesigner, modKitDesigner): elements dropped from the
@@ -1855,6 +1856,128 @@ Private Sub TestDesignerData()
     DoCmd.Close acForm, DZ_FORM, acSaveNo
     DoCmd.DeleteObject acForm, DZ_FORM
     CurrentDb.TableDefs.Delete "kit_layout_item": CurrentDb.TableDefs.Delete "kit_layout": CurrentDb.TableDefs.Delete "dz_item"
+End Sub
+
+' Form designer tables, chips, tab strips, breadcrumbs and accordions: each
+' kind's settings are checked (a table's source, its id field and columns),
+' a form takes one tab strip and one breadcrumb, and Generate writes the
+' table's rows form first, the handlers and Form_Load, and builds a preview
+' whose table lists its source and whose chips and tabs light up.
+Private Sub TestDesignerMore()
+    Const DZ_FORM As String = "pgDesignerMore"
+    Dim frm As Form, id As Long, code As String
+    CurrentDb.Execute "CREATE TABLE dz_crew (id COUNTER PRIMARY KEY, crew_name TEXT(60), rate TEXT(10), qual TEXT(20))", dbFailOnError
+    CurrentDb.Execute "INSERT INTO dz_crew (crew_name, rate, qual) VALUES ('Smith', 'ET1', 'EOOW')", dbFailOnError
+    CurrentDb.Execute "CREATE TABLE dz_noid (code TEXT(10))", dbFailOnError
+    BuildDesigner DZ_FORM, px(32), px(1056), px(560)
+    DoCmd.OpenForm DZ_FORM, WindowMode:=acHidden
+    Set frm = Forms(DZ_FORM)
+    ' An element that can't be made small enough for the form is refused.
+    Check DesignerSetForm("", "200", "120", "page", "") = "" And DesignerPlace(frm, "empty", 50, 50) = 0 _
+        And DesignerCount() = 0, "Designer placed an element bigger than the form"
+    Check DesignerPlace(frm, "rating", 50, 50) = 1 And DesignerSetProps(1, "10", "", "", "") <> "", "Designer took a rating wider than the form"
+    DesignerDelete frm
+    Check DesignerSetForm("", "776", "408", "page", "") = "", "Designer form not set back to the canvas's size"
+    Check DesignerPlace(frm, "tabs", 200, 16) = 1 And DesignerPlace(frm, "chips", 150, 60) = 2 _
+        And DesignerPlace(frm, "breadcrumb", 600, 16) = 3 And DesignerPlace(frm, "table", 200, 200) = 4 _
+        And DesignerPlace(frm, "accordion", 600, 250) = 5, "Designer tables, chips, tabs, breadcrumb or accordion not placed"
+    Check DesignerItem(1) = "tabs 24,0 360x32 Overview;Details;History" And DesignerItem(2) = "chips 24,48 254x26 All;Open;Done" _
+        And DesignerItem(3) = "breadcrumb 440,8 320x20 Home;Reports;This report" And DesignerItem(4) = "table 24,112 360x180 " _
+        And DesignerItem(5) = "accordion 416,120 360x258 General;Details;Notes", "Designer new kinds landed as " & _
+        DesignerItem(1) & " / " & DesignerItem(2) & " / " & DesignerItem(5)
+    Check DesignerPlace(frm, "tabs", 300, 300) = 0 And DesignerPlace(frm, "breadcrumb", 300, 300) = 0 And DesignerCount() = 5, _
+        "Designer took a second tab strip or breadcrumb"
+    ' Settings refused with the reason: too few or many, a body too short, a form too small.
+    Check DesignerSetProps(1, "Only", "", "", "") <> "" And DesignerSetProps(2, "A;B;C;D;E;F;G;H;I", "", "", "") <> "" _
+        And DesignerSetProps(3, "Home", "", "", "") <> "", "Designer took a bad tab strip, chip row or breadcrumb"
+    Check DesignerSetProps(5, "A;B", "20", "", "one at a time") <> "" And DesignerSetProps(5, "A;B", "120", "", "all") <> "" _
+        And DesignerSetProps(5, "A;B;C;D;E;F", "600", "", "any number") <> "", "Designer took a bad accordion"
+    ' A table lists a source with an id, its own fields; empty columns are its first fields.
+    Check DesignerSetProps(4, "", "", "", "", "dz_noid") <> "" And DesignerSetProps(4, "crew_name;missing", "", "", "", "dz_crew") <> "" _
+        And DesignerSetProps(4, "crew_name;rate", "Name", "", "", "dz_crew") <> "" And DesignerSetProps(4, "", "", "", "", "") <> "", _
+        "Designer took a table without an id, a field its source lacks, or captions that don't match"
+    Check DesignerSetProps(4, "", "", "", "", "dz_crew") = "" And DesignerItem(4) = "table 24,112 360x180 crew_name;rate;qual" _
+        And DesignerItemData(4) = "dz_crew||0", "Designer table didn't take its source's fields: " & DesignerItem(4)
+    Check DesignerSetProps(4, "crew_name;rate", "Name;Rate", "", "", , "across") = "" And DesignerSetProps(4, "crew_name", "", "", "", , "br") <> "", _
+        "Designer table anchors wrong"
+    Check DesignerSetForm("", "776", "408", "page", "") = "", "Designer took a table's source for a bound field"
+    ' Settings that change what fits: chips are as wide as their captions, an accordion as tall as its bodies.
+    Check DesignerSetProps(2, "Mine;Everyone", "", "", "") = "" And DesignerItem(2) = "chips 24,48 200x26 Mine;Everyone", _
+        "Designer chips not resized: " & DesignerItem(2)
+    Check DesignerSetProps(5, "General;Notes", "80", "", "any number") = "" And DesignerItem(5) = "accordion 416,120 360x272 General;Notes", _
+        "Designer accordion not resized: " & DesignerItem(5)
+    DesignerRedraw frm
+    Check frm("dzGen4_t").Caption = "Table of dz_crew: crew_name, rate" And frm("dzGen5_t").Caption = "Accordion: General, Notes", _
+        "Designer new kinds not redrawn"
+    ' Generate: the rows form before NewForm, each builder, Form_Load and the handlers.
+    frm("txtDzName").Value = "Dz more"
+    Check DesignerSave(frm), "Designer new kinds layout not saved"
+    id = Nz(DLookup("id", "kit_layout", "layout_name='Dz more'"), 0)
+    code = DesignerCode(id)
+    Check InStr(code, "BuildGrid ""subPgDzMore_tbl1"", Array(""crew_name|Name|172"", ""rate|Rate|172""), px(360)") > 0 _
+        And InStr(code, "BuildGrid ") < InStr(code, "NewForm ") _
+        And InStr(code, "GridHeaders ""tbl1_h"", Array(""crew_name|Name|172"", ""rate|Rate|172""), px(24), px(112), , , px(360)") > 0 _
+        And InStr(code, "SubF(""tbl1"", ""subPgDzMore_tbl1"", px(24), px(134), px(360), px(158)).TabStop = False" & vbCrLf & _
+            "    Anchor F.Controls(""tbl1""), 2, 0") > 0, _
+        "Designer table build code wrong: " & code
+    Check InStr(code, "ChipRow ""chips1"", px(24), px(48), ""chips1Chip"", ""Mine"", ""Everyone""") > 0 _
+        And InStr(code, "TabStrip px(24), px(0), px(360), ""tabs1Tab"", ""overview|Overview"", ""details|Details"", ""history|History""") > 0 _
+        And InStr(code, "Breadcrumb ""crumb1"", px(440), px(8), px(320), 3, ""crumb1Crumb"", ""home|Home"", ""reports|Reports"", ""thisreport|This report""") > 0 _
+        And InStr(code, "Accordion ""acc1"", px(416), px(120), px(360), False, ""General|subPgDzMore_acc1|80|open"", ""Notes|subPgDzMore_acc1|80""") > 0 _
+        And InStr(code, "BuildBlank ""subPgDzMore_acc1"", px(360), px(80)" & vbCrLf) > 0 And InStr(code, "BuildBlank ") < InStr(code, "NewForm ") _
+        And InStr(code, "    F.Controls(""acc1_b1"").TabStop = False" & vbCrLf & "    F.Controls(""acc1_b2"").TabStop = False") > 0 _
+        And InStr(code, "Ev F, ""OnLoad""") > 0 _
+        And InStr(code, "TabOrder Array(""crumb10_k"", ""crumb11_k"", ""acc1_h1"", ""acc1_b1"", ""acc1_h2"", ""acc1_b2"")") > 0, _
+        "Designer chips, tabs, breadcrumb or accordion build code wrong: " & code
+    code = DesignerStub(id)
+    Check InStr(code, "Public Function chips1Chip(ByVal i As Long)") > 0 And InStr(code, "    ChipOn Me, ""chips1"", i") > 0 _
+        And InStr(code, "Public Function tabs1Tab(ByVal key As String)") > 0 And InStr(code, "    SelectTab Me, key") > 0 _
+        And InStr(code, "Exit Function") > 0 And InStr(code, "Public Sub crumb1Crumb(ByVal key As String)") > 0 _
+        And InStr(code, "Public Sub GridClick(ByVal grid As String, ByVal dbl As Boolean)") > 0, "Designer new kinds' handlers wrong: " & code
+    Check InStr(code, "Private Sub Form_Load()") > 0 And InStr(code, "    ChipOn Me, ""chips1"", 0") > 0 _
+        And InStr(code, "    SelectTab Me, ""overview""") > 0 _
+        And InStr(code, "    SetBreadcrumb Me, ""crumb1"", ""home|Home"", ""reports|Reports"", ""thisreport|This report""") > 0 _
+        And InStr(code, "    Me(""tbl1"").Form.RecordSource = ""SELECT * FROM [dz_crew]""") > 0, "Designer new kinds' Form_Load wrong: " & code
+    ' The preview: the table lists its source, the chips and tabs paint and click, the crumbs call nothing.
+    DesignerPreview id
+    Check IsFormOpen("dzPreview"), "Designer new kinds preview not open"
+    With Forms("dzPreview")
+        Check .tbl1.SourceObject = "dzPreview_tbl1" And .tbl1.Form.RecordSource Like "SELECT [*] FROM*dz_crew*" _
+            And .tbl1.Form!crew_name = "Smith" And .tbl1.Form.txtCol0.OnClick = "" And .tbl1.HorizontalAnchor = 2 _
+            And .tbl1_h0.Caption = "NAME", "Designer preview table wrong"
+        Check .OnLoad = "=DesignerPreviewLoad([Form],"""",""chips1"",""overview"",""crumb1"")" And .chips1_0.BackStyle = 1 And .chips1_1.BackStyle = 0 _
+            And .ul_overview.Visible And Not .ul_details.Visible And .crumb10.OnClick = "" And .crumb10_k.OnClick = "" _
+            And .crumb12.ForeColor = Th(CLR_FG) And .crumb10.ForeColor = Th(CLR_MUTED_FG) _
+            And .acc1_b1.Visible And Not .acc1_b2.Visible, "Designer preview chips, tabs, breadcrumb or accordion wrong"
+        ' An open body shows the blank form in the palette's page color, not Access's white.
+        Check .acc1_b1.SourceObject = "dzPreview_acc1" And .acc1_b2.SourceObject = "dzPreview_acc1" _
+            And .acc1_b1.Form.Section(acDetail).BackColor = Th(CLR_BG) And Not .acc1_b1.TabStop And Not .acc1_b2.TabStop, _
+            "Designer preview accordion body not the blank form, or a Tab stop"
+        Check .crumb10_k.TabIndex < .crumb11_k.TabIndex And .crumb11_k.TabIndex < .acc1_h1.TabIndex _
+            And .acc1_h1.TabIndex < .acc1_b1.TabIndex And Not .tbl1.TabStop, _
+            "Designer preview tab order wrong for the new kinds"
+    End With
+    DesignerChipClick Forms("dzPreview"), "chips1", 1
+    DesignerTabClick Forms("dzPreview"), "history"
+    With Forms("dzPreview")
+        Check .chips1_1.BackStyle = 1 And .chips1_0.BackStyle = 0 And .ul_history.Visible And Not .ul_overview.Visible, _
+            "Designer preview chip or tab click didn't light it"
+    End With
+    DoCmd.Close acForm, "dzPreview", acSaveNo
+    ' A dialog builds its table's rows first too.
+    Check DesignerSetForm("", "776", "408", "dialog", "") = "" And DesignerSave(frm), "Designer new kinds dialog not saved"
+    code = DesignerCode(id)
+    Check InStr(code, "BuildGrid ""subDlgDzMore_tbl1""") > 0 And InStr(code, "BuildGrid ") < InStr(code, "NewDialog ") _
+        And InStr(code, "SubF(""tbl1"", ""subDlgDzMore_tbl1""") > 0 _
+        And InStr(code, "BuildBlank ""subDlgDzMore_acc1"", px(360), px(80), CLR_DIALOG" & vbCrLf) > 0, _
+        "Designer dialog lost its table's rows or its accordion's blank body: " & code
+    DoCmd.DeleteObject acForm, "dzPreview"
+    DoCmd.DeleteObject acForm, "dzPreview_tbl1"
+    DoCmd.DeleteObject acForm, "dzPreview_acc1"
+    DoCmd.Close acForm, DZ_FORM, acSaveNo
+    DoCmd.DeleteObject acForm, DZ_FORM
+    CurrentDb.TableDefs.Delete "kit_layout_item": CurrentDb.TableDefs.Delete "kit_layout"
+    CurrentDb.TableDefs.Delete "dz_crew": CurrentDb.TableDefs.Delete "dz_noid"
 End Sub
 
 Private Sub TestEventLog()
