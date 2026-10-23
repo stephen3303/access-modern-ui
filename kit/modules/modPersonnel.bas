@@ -297,13 +297,27 @@ Public Function PersonDisplayName(ByVal rank As String, ByVal firstName As Strin
     PersonDisplayName = Trim$(Trim$(rank) & " " & IIf(Len(Trim$(firstName)) > 0, UCase$(Left$(Trim$(firstName), 1)) & ". ", "") & Trim$(lastName))
 End Function
 
-' Sign in the person whose Windows account is running Access: by SID, else
-' by DOMAIN\user (saving the SID, so a renamed account still matches).
-' True when they are active and may open appCode; then the session is set
-' and a toast says who. False, changing nothing, otherwise.
+' Sign in the person whose Windows account is running Access
+' (PersonnelWindowsPersonId). True when they are active and may open
+' appCode; then the session is set and a toast says who. False otherwise.
 Public Function PersonnelSignInWindows(ByVal appCode As String, Optional ByVal quiet As Boolean = False) As Boolean
-    Dim id As Variant, sid As String
+    Dim id As Long
     On Error GoTo Fail
+    id = PersonnelWindowsPersonId()
+    If id = 0 Then Exit Function
+    If Not PersonCanUse(id, appCode) Then Exit Function
+    StartSession id, quiet
+    PersonnelSignInWindows = True
+    Exit Function
+Fail:
+    RaiseAgain "modPersonnel.PersonnelSignInWindows", appCode
+End Function
+
+' The person_id saved for the Windows account running Access, active or
+' not, or 0: by SID, else by DOMAIN\user (saving the SID, so a renamed
+' account still matches).
+Public Function PersonnelWindowsPersonId() As Long
+    Dim id As Variant, sid As String
     id = Null                                   ' Empty would skip the DOMAIN\user lookup
     sid = WinSid()
     If Len(sid) > 0 Then id = DLookup("person_id", PERSON_TABLE, "windows_sid=" & SqlText(sid))
@@ -313,13 +327,27 @@ Public Function PersonnelSignInWindows(ByVal appCode As String, Optional ByVal q
             KitExecute "UPDATE " & PERSON_TABLE & " SET windows_sid=" & SqlText(sid) & " WHERE person_id=" & id
         End If
     End If
-    If IsNull(id) Then Exit Function
-    If Not PersonCanUse(id, appCode) Then Exit Function
-    StartSession id, quiet
-    PersonnelSignInWindows = True
-    Exit Function
-Fail:
-    RaiseAgain "modPersonnel.PersonnelSignInWindows", appCode
+    PersonnelWindowsPersonId = Nz(id, 0)
+End Function
+
+' Who to ask for a Personnel change: " (LT J. Smith or CDR K. Lee)", the
+' names of up to three active directory admins, or "" when there are none.
+' For the end of "Ask a Personnel admin".
+Public Function PersonnelAdminNames() As String
+    Dim rs As DAO.Recordset, names(1 To 3) As String, n As Long
+    Set rs = CurrentDb.OpenRecordset("SELECT display_name, username FROM " & PERSON_TABLE & _
+        " WHERE is_admin AND is_active ORDER BY last_name, first_name", dbOpenSnapshot)
+    Do While Not rs.EOF And n < 3
+        n = n + 1
+        names(n) = Nz(rs!display_name, rs!username)
+        rs.MoveNext
+    Loop
+    rs.Close
+    Select Case n
+        Case 1: PersonnelAdminNames = " (" & names(1) & ")"
+        Case 2: PersonnelAdminNames = " (" & names(1) & " or " & names(2) & ")"
+        Case 3: PersonnelAdminNames = " (" & names(1) & ", " & names(2) & " or " & names(3) & ")"
+    End Select
 End Function
 
 ' The login screen's check: "" and the session set when username and
@@ -335,7 +363,7 @@ Public Function PersonnelSignIn(ByVal username As String, ByVal password As Stri
     If Not rs.EOF Then ok = VerifyPassword(password, Nz(rs!password_hash, ""))
     If ok Then
         If Not PersonCanUse(rs!person_id, appCode) Then
-            PersonnelSignIn = "You don't have access to this app yet. Ask a Personnel admin to add it."
+            PersonnelSignIn = "You don't have access to " & APP_NAME & " yet. Ask a Personnel admin" & PersonnelAdminNames() & " to give you access."
         Else
             StartSession rs!person_id, False
         End If

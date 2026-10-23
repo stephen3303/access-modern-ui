@@ -1346,6 +1346,10 @@ Public Function TestKit(ByVal root As String) As String
     Check DLookup("windows_sid", PERSON_TABLE, "person_id=" & peId) = WinSid(), "SID not saved"
     PersonnelSignOut
     Check SignedInPersonID() = 0 And Not PersonnelSignInWindows("OTHER", True), "Sign-in let a person into an app they lack"
+    Check PersonnelWindowsPersonId() = peId, "Windows account's person not found without app access"
+    Check PersonnelAdminNames() = " (LT P. O'Neil)", "Admin to ask not named: " & PersonnelAdminNames()
+    Check PersonnelWindowsWhy("OTHER") = "noaccess" And PersonnelWindowsWhy("TEST") = "" And _
+        InStr(PersonnelSignInWhyText("noaccess"), "access to " & APP_NAME) > 0 And PersonnelSignInWhyText("signout") = "", "Why the Windows sign-in failed not told apart"
     pe2 = AddPerson("Ann", "Lee", "YN2", "", "alee")
     SetPersonApp pe2, "TEST", True
     peErr = 0: On Error Resume Next: AddPerson "Ann", "Lee", "", "", "alee": peErr = Err.Number: On Error GoTo 0
@@ -1357,7 +1361,9 @@ Public Function TestKit(ByVal root As String) As String
     Check PersonnelSignIn("alee", "long enough 1", "TEST") = "" And SignedInPersonID() = pe2 And Not SignedInIsAdmin() And KitUser() = "alee", "Password sign-in failed"
     PersonnelSignOut
     SetPersonApp pe2, "TEST", False
-    Check InStr(PersonnelSignIn("alee", "long enough 1", "TEST"), "access") > 0, "Sign-in ignored the app access"
+    Dim peWhy As String
+    peWhy = PersonnelSignIn("alee", "long enough 1", "TEST")
+    Check InStr(peWhy, "access to " & APP_NAME) > 0 And InStr(peWhy, "LT P. O'Neil") > 0, "Sign-in ignored the app access, or didn't say who to ask: " & peWhy
     peErr = 0: On Error Resume Next: PersonnelSaveWindowsAccount: peErr = Err.Number: On Error GoTo 0
     Check peErr = 5, "Windows account saved with nobody signed in"
     ' Personnel admin: changing people, the list, import.

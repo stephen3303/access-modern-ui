@@ -35,7 +35,7 @@ An app password is only needed on the sign-in screen, after Sign out or on a com
 - Passwords need 8 or more characters, and capitals count.
 
 === directory.signin | Signing in
-APP signs you in with your Windows account when it is saved in Personnel. This screen shows when it isn't, or after **Sign out**.
+APP signs you in with your Windows account when it is saved in Personnel and has access to APP. This screen shows when it isn't, when it has no access to APP or is turned off, or after **Sign out**. It names the Personnel admins to ask.
 - Type your sign-in name and app password, then **Sign in**.
 - Tick **Use my Windows sign-in next time** to skip this screen on this account.
 - No password yet? If this is your own Windows account, you can choose one now. Otherwise ask a Personnel admin to set one.
