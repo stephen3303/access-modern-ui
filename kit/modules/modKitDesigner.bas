@@ -40,6 +40,13 @@ Option Explicit
 ' to. On a page each element can be anchored to the right or bottom edge, or
 ' stretch with the window. Tab order lists the elements that take the focus:
 ' in reading order (top to bottom, then left to right) until moved.
+'
+' A table lists a table or query of its own (BuildGrid rows in a subform,
+' GridHeaders captions); chips, a tab strip and a breadcrumb call the form's
+' code (ChipOn, SelectTab, SetBreadcrumb); an accordion's bodies are empty
+' subforms for the app to fill. A form takes one tab strip and one
+' breadcrumb: their parts have fixed names (tab_<key>) or names that would
+' run into another's (crumb1 and crumb11).
 
 Private Const DZ_GRID As Long = 8               ' snap, px
 Private Const DZ_GRIP As Long = 8               ' resize handle, px
@@ -51,10 +58,10 @@ Private Const DZ_BTNS As Long = 12
 Private Const DZ_MAX As Long = 66               ' all five pools
 ' Palette order: tile i (two columns, row by row) places kind i.
 Private Const DZ_KINDS As String = "card;button;label;progress;text;date;secret;toggle;segmented;slider;" & _
-    "rating;stepper;search;stat;alert;avatar;empty"
+    "rating;stepper;search;stat;alert;avatar;empty;table;chips;tabs;breadcrumb;accordion"
 Private Const DZ_TILE_W As Long = 80            ' palette tile, px
-Private Const DZ_TILE_H As Long = 26
-Private Const DZ_TILE_STEP As Long = 30         ' tile to tile, down
+Private Const DZ_TILE_H As Long = 22
+Private Const DZ_TILE_STEP As Long = 26         ' tile to tile, down
 Private Const DZ_PREVIEW As String = "dzPreview"   ' the form Generate builds to show a layout
 Private Const DZ_PROPS As String = "dlgDzProps"    ' the settings dialog
 Private Const DZ_TABS As String = "dlgDzTabs"      ' the tab order dialog
@@ -145,7 +152,7 @@ Public Sub BuildDesigner(ByVal formName As String, ByVal x As Long, ByVal w As L
     kinds = Split(DZ_KINDS, ";")
     rows = (UBound(kinds) + 2) \ 2
     ty = px(76)
-    Card "DzTools", "Elements", x, ty, lw, px(44 + rows * DZ_TILE_STEP + 12)
+    Card "DzTools", "Elements", x, ty, lw, px(44 + rows * DZ_TILE_STEP + 8)
     For i = 0 To UBound(kinds)
         Box "dzTile" & i, x + px(16 + (i Mod 2) * (DZ_TILE_W + 8)), ty + px(44 + (i \ 2) * DZ_TILE_STEP), _
             px(DZ_TILE_W), px(DZ_TILE_H), CLR_BG, CLR_BORDER
@@ -158,13 +165,13 @@ Public Sub BuildDesigner(ByVal formName As String, ByVal x As Long, ByVal w As L
     c.ControlTipText = "Drag onto the canvas, or click and then click the canvas"
 
     ' The selected element.
-    py = ty + px(44 + rows * DZ_TILE_STEP + 12) + px(12)
+    py = ty + px(44 + rows * DZ_TILE_STEP + 8) + px(12)
     Card "DzProps", "Selected", x, py, lw, h - py - px(16)
-    Lbl "lblDzKind", "Nothing selected", x + px(16), py + px(40), lw - px(32), px(20), 9, True
-    Lbl "lblDzPos", "", x + px(16), py + px(62), lw - px(32), px(20), 9, False, CLR_MUTED_FG
-    Set c = Btn("btnDzEdit", "Edit" & ChrW(8230), x + px(16), py + px(90), px(84), px(28))
+    Lbl "lblDzKind", "Nothing selected", x + px(16), py + px(36), lw - px(32), px(20), 9, True
+    Lbl "lblDzPos", "", x + px(16), py + px(56), lw - px(32), px(20), 9, False, CLR_MUTED_FG
+    Set c = Btn("btnDzEdit", "Edit" & ChrW(8230), x + px(16), py + px(78), px(84), px(28))
     c.Enabled = False
-    Set c = Btn("btnDzDelete", "Delete", x + px(108), py + px(90), px(76), px(28), "outline")
+    Set c = Btn("btnDzDelete", "Delete", x + px(108), py + px(78), px(76), px(28), "outline")
     c.Enabled = False
 
     ' Layout list, name, Form, Tab order, New, Generate and Save.
@@ -648,7 +655,11 @@ Public Sub DesignerPropsLoad(dlg As Form)
         dlg("txtP3").Value = m_text3(i)
         dlg("cboP4").RowSource = ChoiceList(m_kind(i))
         dlg("cboP4").Value = IIf(Len(m_choice(i)) = 0, Null, m_choice(i))
-        dlg("cboP5").RowSource = """""" & FieldList(m_recSrc)  ' an empty first row unbinds
+        If m_kind(i) = "table" Then
+            dlg("cboP5").RowSource = SourceList()     ' what the table lists
+        Else
+            dlg("cboP5").RowSource = """""" & FieldList(m_recSrc)  ' an empty first row unbinds
+        End If
         dlg("cboP5").Value = IIf(Len(m_field(i)) = 0, Null, m_field(i))
         dlg("cboP6").RowSource = AnchorList(m_kind(i))
         dlg("cboP6").Value = IIf(Len(m_anchor(i)) = 0, "tl", m_anchor(i))
@@ -691,7 +702,9 @@ End Function
 ' Give item i these settings (the dialog's rows: three texts, a choice, the
 ' field it is bound to and its anchor; a field or anchor left out stays as
 ' it is), then keep it inside the sizes they allow (a segmented control's
-' options, a rating's stars). Returns what is wrong with them instead,
+' options, a rating's stars). A table's field is the table or query it
+' lists; columns left empty are that source's first fields (DefaultColumns).
+' Returns what is wrong with them instead,
 ' changing nothing; "" when applied. The caller redraws the item
 ' (DesignerRedraw).
 Public Function DesignerSetProps(ByVal i As Long, ByVal t1 As String, ByVal t2 As String, ByVal t3 As String, _
@@ -701,8 +714,12 @@ Public Function DesignerSetProps(ByVal i As Long, ByVal t1 As String, ByVal t2 A
     If IsMissing(fld) Then fld = m_field(i) Else fld = Trim$(Nz(fld, ""))
     If IsMissing(anc) Then anc = m_anchor(i) Else anc = Trim$(Nz(anc, ""))
     If anc = "tl" Then anc = ""
+    If m_kind(i) = "table" And Len(t1) = 0 Then t1 = DefaultColumns(CStr(fld))
     msg = PropsProblem(m_kind(i), t1, t2, t3, choice)
-    If Len(msg) = 0 Then msg = FieldProblem(m_kind(i), CStr(fld))
+    If Len(msg) = 0 Then
+        If m_kind(i) = "table" Then msg = TableProblem(CStr(fld), t1, t2) Else msg = FieldProblem(m_kind(i), CStr(fld))
+    End If
+    If Len(msg) = 0 Then msg = SizeProblem(m_kind(i), t1, t2, choice)
     If Len(msg) = 0 And Len(anc) > 0 And InStr(";" & AnchorList(m_kind(i)) & ";", ";" & anc & ";") = 0 Then _
         msg = "Pick an anchor from the list."
     If Len(msg) > 0 Then DesignerSetProps = msg: Exit Function
@@ -717,7 +734,7 @@ End Function
 ' table or query, "" for none). Returns what is wrong with them instead,
 ' changing nothing: a size outside DZ_MIN_FW x DZ_MIN_FH to the canvas, or
 ' smaller than the elements reach; a record source that isn't here, or
-' lacks a field an element is bound to. "" when applied; the caller redraws
+' lacks a field an element is bound to (a table lists its own source). "" when applied; the caller redraws
 ' the canvas (ShowCanvas).
 Public Function DesignerSetForm(ByVal title As String, ByVal w As String, ByVal h As String, ByVal kind As String, _
         ByVal src As String) As String
@@ -740,7 +757,7 @@ Public Function DesignerSetForm(ByVal title As String, ByVal w As String, ByVal 
         msg = "There is no table or query called """ & src & """ here."
     Else
         For i = 1 To m_n
-            If Len(m_field(i)) > 0 Then
+            If Len(m_field(i)) > 0 And m_kind(i) <> "table" Then
                 If Not FieldExists(src, m_field(i)) Then
                     msg = IIf(Len(src) = 0, "Without a record source", """" & src & """ has no field """ & m_field(i) & """, and") & _
                         " a " & LCase$(KindCaption(m_kind(i))) & " is bound to """ & m_field(i) & """. " & _
@@ -848,7 +865,7 @@ Private Function TabCaption(ByVal i As Long) As String
     If Len(what) = 0 Then
         Select Case m_kind(i)
             Case "empty": what = m_text3(i)
-            Case "button", "segmented", "stepper", "search": what = m_text(i)
+            Case "button", "segmented", "stepper", "search", "breadcrumb", "accordion": what = m_text(i)
         End Select
     End If
     TabCaption = KindCaption(m_kind(i)) & IIf(Len(what) > 0, ": " & OneLine(what), "") & "   (" & m_x(i) & ", " & m_y(i) & ")"
@@ -959,9 +976,11 @@ End Function
 ' Layout id as a Build_<form> procedure for an app's build module: NewForm
 ' (a page) or NewDialog at the form's size, with its record source; one kit
 ' builder call per element back to front, each anchored on a page; the tab
-' order; SaveForm. The elements that call the form's code name a handler
-' after themselves (seg1Changed, step1Step, search1Search: see
-' DesignerStub). Bound elements take their field as "[field]".
+' order; SaveForm. A table's rows come first, as a BuildGrid form of their
+' own (sub<Form>_<table>), since BuildGrid builds a form. The elements that
+' call the form's code name a handler after themselves (seg1Changed,
+' step1Step, chips1Chip: see DesignerStub). Bound elements take their field
+' as "[field]".
 Public Function DesignerCode(ByVal id As Long) As String
     Dim db As DAO.Database, rs As DAO.Recordset, nm As String, ln As String, s As String, body As String, title As String
     Dim isPage As Boolean, src As String, anc As String, h As Integer, v As Integer, anchored As Boolean
@@ -975,8 +994,9 @@ Public Function DesignerCode(ByVal id As Long) As String
     s = "' " & nm & ", built from the form designer layout """ & title & """ (" & Format$(Now(), "yyyy-mm-dd hh:nn") & ")." & vbCrLf & _
         "' Call it from the app's build, and keep " & nm & ".vba, its code-behind, in src\forms." & vbCrLf & _
         "Private Sub Build_" & nm & "()" & vbCrLf
+    body = GridLines(id, nm)
     If isPage Then
-        body = "    NewForm " & VbText(src) & ", 0, px(" & Nz(rs!form_width, 0) & "), px(" & Nz(rs!form_height, 0) & ")" & vbCrLf
+        body = body & "    NewForm " & VbText(src) & ", 0, px(" & Nz(rs!form_width, 0) & "), px(" & Nz(rs!form_height, 0) & ")" & vbCrLf
     Else
         body = "    NewDialog " & VbText(DialogTitle(rs)) & ", px(" & Nz(rs!form_width, 0) & "), px(" & Nz(rs!form_height, 0) & ")" & vbCrLf
         If Len(src) > 0 Then body = body & "    F.RecordSource = " & VbText(src) & vbCrLf
@@ -984,13 +1004,13 @@ Public Function DesignerCode(ByVal id As Long) As String
     ' Tab past the last control stays on the record, not on to the next one.
     If Len(src) > 0 Then body = body & "    F.Cycle = 1" & vbCrLf
     rs.Close
-    If Len(StepperNames(id)) > 0 Then body = body & "    Ev F, ""OnLoad""" & vbCrLf     ' Form_Load paints the steppers (DesignerStub)
+    If Len(LoadLines(id)) > 0 Then body = body & "    Ev F, ""OnLoad""" & vbCrLf     ' Form_Load (DesignerStub's LoadLines)
     Set rs = db.OpenRecordset(ItemsSql(id), dbOpenSnapshot)
     Do Until rs.EOF
         anc = IIf(isPage, Nz(rs!item_anchor, ""), "")
-        ln = ItemCall(rs, anc)
+        ln = ItemCall(rs, anc, nm)
         If Len(ln) > 0 Then
-            If Len(anc) > 0 And rs!kind <> "card" Then
+            If Len(anc) > 0 And rs!kind <> "card" And rs!kind <> "table" Then
                 ' Every part of the element moves (or stretches) with the window.
                 AnchorOf anc, h, v
                 body = body & "    k = BuiltNames()" & vbCrLf & "    " & ln & vbCrLf & "    AnchorBuilt k, " & h & ", " & v & vbCrLf
@@ -1008,13 +1028,17 @@ Public Function DesignerCode(ByVal id As Long) As String
     DesignerCode = s & body & "    SaveForm """ & nm & """" & vbCrLf & "End Sub" & vbCrLf
 End Function
 
-' Layout id's code-behind to start from: an empty handler, with the kit's
-' error handling, for each button's click, each empty state's button and
-' each segmented control, toggle, slider, rating, stepper and search box
-' that DesignerCode names, for the app to fill in.
+' Layout id's code-behind to start from: a Form_Load that paints the
+' steppers, chips and tab strip and gives each table its rows (LoadLines),
+' and a handler, with the kit's error handling, for each button's click,
+' each empty state's button and each segmented control, toggle, slider,
+' rating, stepper, search box, chip row, tab strip and breadcrumb that
+' DesignerCode names, and GridClick for the tables, for the app to fill in.
+' Chips and tabs call theirs from an expression, so those are Functions.
 Public Function DesignerStub(ByVal id As Long) As String
     Dim db As DAO.Database, rs As DAO.Recordset, nm As String, s As String, title As String, b As Variant
-    Dim sig As String, proc As String, what As String, isDialog As Boolean
+    Dim sig As String, proc As String, what As String, isDialog As Boolean, lines As String, code As String
+    Dim endWord As String, grids As Boolean
     Set db = CurrentDb
     title = OneLine(Nz(DLookup("layout_name", "kit_layout", "id=" & id), ""))
     isDialog = (Nz(DLookup("form_kind", "kit_layout", "id=" & id), "page") = "dialog")
@@ -1025,19 +1049,18 @@ Public Function DesignerStub(ByVal id As Long) As String
         s = s & "' A dialog: open it with RunDialog, which is True when the dialog sets" & vbCrLf & _
             "' TempVars(""DialogResult"") = ""ok"" before it closes." & vbCrLf
     End If
-    If Len(StepperNames(id)) > 0 Then
-        s = s & vbCrLf & "' A stepper is built in the build's palette: SetStep paints it in the user's." & vbCrLf & _
-            "Private Sub Form_Load()" & vbCrLf & "    On Error GoTo Err_Handler" & vbCrLf
-        For Each b In Split(StepperNames(id), ";")
-            s = s & "    SetStep Me, " & VbText(CStr(b)) & ", CurrentStep(Me, " & VbText(CStr(b)) & ")" & vbCrLf
-        Next
-        s = s & "    Exit Sub" & vbCrLf & "Err_Handler:" & vbCrLf & "    HandleError """ & nm & ".Form_Load""" & vbCrLf & _
+    lines = LoadLines(id)
+    If Len(lines) > 0 Then
+        s = s & vbCrLf & "' Steppers, chips and tabs are built in the build's palette: paint them in the" & vbCrLf & _
+            "' user's. A table's rows come from its source." & vbCrLf & _
+            "Private Sub Form_Load()" & vbCrLf & "    On Error GoTo Err_Handler" & vbCrLf & lines & _
+            "    Exit Sub" & vbCrLf & "Err_Handler:" & vbCrLf & "    HandleError """ & nm & ".Form_Load""" & vbCrLf & _
             "End Sub" & vbCrLf
     End If
     Set rs = db.OpenRecordset(ItemsSql(id), dbOpenSnapshot)
     Do Until rs.EOF
         b = ItemName(rs)
-        sig = ""
+        sig = "": code = "": endWord = "Sub"
         Select Case Nz(rs!kind, "")
             Case "button"
                 sig = "Private Sub " & b & "_Click()": proc = b & "_Click"
@@ -1056,15 +1079,32 @@ Public Function DesignerStub(ByVal id As Long) As String
             Case "search"
                 sig = "Public Sub " & b & "Search(ByVal text As String)": proc = b & "Search"
                 what = "Filter the page by text, as the user types (and """" when cleared)."
+            Case "chips"
+                sig = "Public Function " & b & "Chip(ByVal i As Long)": proc = b & "Chip": endWord = "Function"
+                code = "    ChipOn Me, " & VbText(CStr(b)) & ", i" & vbCrLf
+                what = "Filter the page by chip i (from 0) goes here."
+            Case "tabs"
+                sig = "Public Function " & b & "Tab(ByVal key As String)": proc = b & "Tab": endWord = "Function"
+                code = "    SelectTab Me, key" & vbCrLf
+                what = "Show tab key's content goes here."
+            Case "breadcrumb"
+                sig = "Public Sub " & b & "Crumb(ByVal key As String)": proc = b & "Crumb"
+                what = "Open the page key, a crumb above this one, goes here."
+            Case "table"
+                If Not grids Then
+                    sig = "Public Sub GridClick(ByVal grid As String, ByVal dbl As Boolean)": proc = "GridClick"
+                    what = "The user clicked a row of table grid (dbl: a double click); Me(grid).Form!id is its id."
+                    grids = True
+                End If
         End Select
         If Len(sig) > 0 Then
             s = s & vbCrLf & sig & vbCrLf & _
-                "    On Error GoTo Err_Handler" & vbCrLf & _
+                "    On Error GoTo Err_Handler" & vbCrLf & code & _
                 "    ' " & what & vbCrLf & _
-                "    Exit Sub" & vbCrLf & _
+                "    Exit " & endWord & vbCrLf & _
                 "Err_Handler:" & vbCrLf & _
                 "    HandleError """ & nm & "." & proc & """" & vbCrLf & _
-                "End Sub" & vbCrLf
+                "End " & endWord & vbCrLf
         End If
         rs.MoveNext
     Loop
@@ -1076,11 +1116,16 @@ End Function
 ' DesignerCode writes but no handlers, and open it. Its controls work (a
 ' toggle switches, a slider slides) but call no code. A page's preview can
 ' be resized, to try its anchors; a dialog's can't. A bound preview shows
-' the first record read-only, so trying it never changes the data.
+' the first record read-only, so trying it never changes the data. A
+' table's rows are the form dzPreview_<table> (PreviewGrid); chips and tabs
+' light up when clicked, as their generated handlers make them.
 Public Sub DesignerPreview(ByVal id As Long)
     Dim db As DAO.Database, rs As DAO.Recordset, title As String, fw As Long, fh As Long, isPage As Boolean, src As String
-    Dim names As String
+    Dim names As String, i As Long, ld As String
     If IsFormOpen(DZ_PREVIEW) Then DoCmd.Close acForm, DZ_PREVIEW, acSaveNo
+    For i = CurrentProject.AllForms.Count - 1 To 0 Step -1  ' the last preview's tables
+        If CurrentProject.AllForms(i).Name Like DZ_PREVIEW & "_*" Then DoCmd.DeleteObject acForm, CurrentProject.AllForms(i).Name
+    Next
     Set db = CurrentDb
     Set rs = db.OpenRecordset("SELECT * FROM kit_layout WHERE id=" & id, dbOpenSnapshot)
     If rs.EOF Then Err.Raise 5, , "No form designer layout " & id
@@ -1089,6 +1134,12 @@ Public Sub DesignerPreview(ByVal id As Long)
     fw = Nz(rs!form_width, 0): fh = Nz(rs!form_height, 0): src = Nz(rs!record_source, "")
     rs.Close
     On Error GoTo Fail
+    Set rs = db.OpenRecordset(ItemsSql(id), dbOpenSnapshot)
+    Do Until rs.EOF
+        If rs!kind = "table" Then PreviewGrid rs
+        rs.MoveNext
+    Loop
+    rs.Close
     If isPage Then NewForm src, 0, px(fw), px(fh) Else NewDialog title, px(fw), px(fh)
     F.RecordSource = src
     F.Caption = "Preview: " & title
@@ -1112,7 +1163,8 @@ Public Sub DesignerPreview(ByVal id As Long)
     rs.Close
     names = TabNames(id)
     If Len(names) > 0 Then TabOrder Split(names, ";")
-    If Len(StepperNames(id)) > 0 Then F.OnLoad = "=DesignerPreviewLoad([Form]," & VbText(StepperNames(id)) & ")"
+    ld = PreviewLoad(id)
+    If Len(ld) > 0 Then F.OnLoad = ld
     SaveForm DZ_PREVIEW
     On Error GoTo 0
     DoCmd.OpenForm DZ_PREVIEW
@@ -1129,23 +1181,87 @@ End Sub
 
 ' dzPreview's Form_Load (its OnLoad expression; the preview has no code):
 ' paint each stepper (names, ;-separated) in the current palette, as an
-' app's Form_Load does with SetStep. The builder painted them in the
-' palette it ran under, which leaves dark text on a dark palette.
-Public Function DesignerPreviewLoad(frm As Form, ByVal names As String)
+' app's Form_Load does with SetStep, turn on the first chip of each chip
+' row (chips) and show tab tabKey open. The builders painted them in the
+' palette they ran under, which leaves dark text on a dark palette.
+Public Function DesignerPreviewLoad(frm As Form, ByVal names As String, Optional ByVal chips As String = "", _
+        Optional ByVal tabKey As String = "")
     Dim nm As Variant
     On Error GoTo Fail
     For Each nm In Split(names, ";")
         SetStep frm, CStr(nm), CurrentStep(frm, CStr(nm))
     Next
+    For Each nm In Split(chips, ";")
+        ChipOn frm, CStr(nm), 0
+    Next
+    If Len(tabKey) > 0 Then SelectTab frm, tabKey
     Exit Function
 Fail:
     HandleError "modKitDesigner.DesignerPreviewLoad", names
 End Function
 
-' What stops layout id generating: its record source gone, or a field an
-' element is bound to gone from it ("" when nothing does).
+' A preview chip's click (dzPreview has no code): chip i of row prefix on,
+' as the generated handler does with ChipOn.
+Public Function DesignerChipClick(frm As Form, ByVal prefix As String, ByVal i As Long)
+    On Error GoTo Fail
+    ChipOn frm, prefix, i
+    Exit Function
+Fail:
+    HandleError "modKitDesigner.DesignerChipClick", prefix & "_" & i
+End Function
+
+' A preview tab's click: tab key open, as the generated handler does with SelectTab.
+Public Function DesignerTabClick(frm As Form, ByVal key As String)
+    On Error GoTo Fail
+    SelectTab frm, key
+    Exit Function
+Fail:
+    HandleError "modKitDesigner.DesignerTabClick", key
+End Function
+
+' The preview's OnLoad expression for layout id ("" when nothing needs
+' painting): its steppers, chip rows and first tab, for DesignerPreviewLoad.
+Private Function PreviewLoad(ByVal id As Long) As String
+    Dim rs As DAO.Recordset, steps As String, chips As String, tabKey As String
+    Set rs = CurrentDb.OpenRecordset(ItemsSql(id), dbOpenSnapshot)
+    Do Until rs.EOF
+        Select Case rs!kind
+            Case "stepper": steps = steps & IIf(Len(steps) > 0, ";", "") & ItemName(rs)
+            Case "chips": chips = chips & IIf(Len(chips) > 0, ";", "") & ItemName(rs)
+            Case "tabs": tabKey = FirstKey(Nz(rs!item_text, ""))
+        End Select
+        rs.MoveNext
+    Loop
+    rs.Close
+    If Len(steps) + Len(chips) + Len(tabKey) = 0 Then Exit Function
+    PreviewLoad = "=DesignerPreviewLoad([Form]," & VbText(steps)
+    If Len(chips) + Len(tabKey) > 0 Then PreviewLoad = PreviewLoad & "," & VbText(chips) & "," & VbText(tabKey)
+    PreviewLoad = PreviewLoad & ")"
+End Function
+
+' A table's rows for the preview: its BuildGrid form, dzPreview_<table>,
+' listing its source, with the rows' clicks off (the preview has no
+' GridClick to tell).
+Private Sub PreviewGrid(rs As DAO.Recordset)
+    Dim nm As String, g As Form, c As Control
+    nm = DZ_PREVIEW & "_" & ItemName(rs)
+    BuildGrid nm, GridCols(Nz(rs!item_text, ""), Nz(rs!item_text2, ""), Nz(rs!w, 0)), px(Nz(rs!w, 0))
+    DoCmd.OpenForm nm, acDesign, WindowMode:=acHidden
+    Set g = Forms(nm)
+    g.RecordSource = GridSource(Nz(rs!item_field, ""))
+    For Each c In g.Controls
+        If c.Name Like "txtCol*" Then
+            c.OnClick = "": c.OnDblClick = "": c.OnMouseDown = "": c.OnMouseUp = ""
+        End If
+    Next
+    DoCmd.Close acForm, nm, acSaveYes
+End Sub
+
+' What stops layout id generating: its record source gone, a field an
+' element is bound to gone from it, or a table whose source or columns
+' don't fit (TableProblem) ("" when nothing does).
 Private Function LayoutProblem(ByVal id As Long) As String
-    Dim rs As DAO.Recordset, src As String
+    Dim rs As DAO.Recordset, src As String, msg As String
     src = Nz(DLookup("record_source", "kit_layout", "id=" & id), "")
     If Len(src) > 0 And Not SourceExists(src) Then
         LayoutProblem = "The record source """ & src & """ isn't here any more. Pick another under Form."
@@ -1153,7 +1269,13 @@ Private Function LayoutProblem(ByVal id As Long) As String
     End If
     Set rs = CurrentDb.OpenRecordset(ItemsSql(id), dbOpenSnapshot)
     Do Until rs.EOF
-        If Len(Nz(rs!item_field, "")) > 0 Then
+        If rs!kind = "table" Then
+            msg = TableProblem(Nz(rs!item_field, ""), Nz(rs!item_text, ""), Nz(rs!item_text2, ""))
+            If Len(msg) > 0 Then
+                LayoutProblem = "Table " & ItemName(rs) & " isn't ready: " & msg & " Double-click it to fix it."
+                Exit Do
+            End If
+        ElseIf Len(Nz(rs!item_field, "")) > 0 Then
             If Not FieldExists(src, rs!item_field) Then
                 LayoutProblem = "A " & LCase$(KindCaption(rs!kind)) & " is bound to """ & rs!item_field & """, which " & _
                     IIf(Len(src) = 0, "needs a record source.", """" & src & """ doesn't have. Bind it to another field.")
@@ -1177,16 +1299,41 @@ Private Function DialogTitle(rs As DAO.Recordset) As String
     If Len(DialogTitle) = 0 Then DialogTitle = OneLine(rs!layout_name)
 End Function
 
-' Layout id's steppers' control names, ;-separated ("" for none).
-Private Function StepperNames(ByVal id As Long) As String
-    Dim rs As DAO.Recordset, out As String
+' The lines of layout id's Form_Load (DesignerStub; "" for none): SetStep
+' for each stepper, ChipOn for each chip row's first chip, SelectTab for the
+' tab strip's first tab, and each table's rows from its source.
+Private Function LoadLines(ByVal id As Long) As String
+    Dim rs As DAO.Recordset, out As String, n As String
     Set rs = CurrentDb.OpenRecordset(ItemsSql(id), dbOpenSnapshot)
     Do Until rs.EOF
-        If rs!kind = "stepper" Then out = out & IIf(Len(out) > 0, ";", "") & ItemName(rs)
+        n = VbText(ItemName(rs))
+        Select Case rs!kind
+            Case "stepper": out = out & "    SetStep Me, " & n & ", CurrentStep(Me, " & n & ")" & vbCrLf
+            Case "chips": out = out & "    ChipOn Me, " & n & ", 0" & vbCrLf
+            Case "tabs": out = out & "    SelectTab Me, " & VbText(FirstKey(Nz(rs!item_text, ""))) & vbCrLf
+            Case "table": out = out & "    Me(" & n & ").Form.RecordSource = " & VbText(GridSource(Nz(rs!item_field, ""))) & vbCrLf
+        End Select
         rs.MoveNext
     Loop
     rs.Close
-    StepperNames = out
+    LoadLines = out
+End Function
+
+' Layout id's BuildGrid calls, one per table, for the top of its build
+' procedure (form nm; "" for none).
+Private Function GridLines(ByVal id As Long, ByVal nm As String) As String
+    Dim rs As DAO.Recordset, out As String
+    Set rs = CurrentDb.OpenRecordset(ItemsSql(id), dbOpenSnapshot)
+    Do Until rs.EOF
+        If rs!kind = "table" Then
+            out = out & "    BuildGrid " & VbText(GridFormName(nm, ItemName(rs))) & ", " & _
+                VbArray(GridCols(Nz(rs!item_text, ""), Nz(rs!item_text2, ""), Nz(rs!w, 0))) & ", px(" & Nz(rs!w, 0) & ")" & vbCrLf
+        End If
+        rs.MoveNext
+    Loop
+    rs.Close
+    If Len(out) > 0 Then out = "    ' The tables' rows, each a form of its own (BuildGrid builds a form)." & vbCrLf & out
+    GridLines = out
 End Function
 
 ' Layout id's elements that take the focus, in tab order (TabRank), as
@@ -1197,7 +1344,7 @@ Private Function TabNames(ByVal id As Long) As String
     ReDim nms(0 To DZ_MAX): ReDim keys(0 To DZ_MAX): ReDim idx(0 To DZ_MAX)
     Do Until rs.EOF
         If Focusable(Nz(rs!kind, ""), Nz(rs!item_text3, "")) And n <= DZ_MAX Then
-            nms(n) = ItemName(rs)
+            nms(n) = TabTargets(rs)
             keys(n) = TabRank(Nz(rs!item_tab, 0), Nz(rs!x, 0), Nz(rs!y, 0))
             idx(n) = n
             n = n + 1
@@ -1210,6 +1357,27 @@ Private Function TabNames(ByVal id As Long) As String
         out = out & IIf(i > 0, ";", "") & nms(idx(i))
     Next
     TabNames = out
+End Function
+
+' The names TabOrder takes for the row's element (;-separated): its own, or
+' an accordion's headers each before its body, and a breadcrumb's crumbs'
+' keys (crumb1 is followed by crumb10_k, which doesn't share its prefix).
+Private Function TabTargets(rs As DAO.Recordset) As String
+    Dim nm As String, i As Long, n As Long, out As String
+    nm = ItemName(rs)
+    n = PartCount(Nz(rs!item_text, ""))
+    Select Case rs!kind
+        Case "accordion"
+            For i = 1 To n
+                out = out & IIf(i > 1, ";", "") & nm & "_h" & i & ";" & nm & "_b" & i
+            Next
+        Case "breadcrumb"
+            For i = 0 To n - 2                          ' the last crumb is this page: no key
+                out = out & IIf(i > 0, ";", "") & nm & i & "_k"
+            Next
+        Case Else: out = nm
+    End Select
+    TabTargets = out
 End Function
 
 ' The TabOrder call for layout id, 8 names to a line ("" when nothing takes
@@ -1231,13 +1399,15 @@ Private Function ItemsSql(ByVal id As Long) As String
         "x, y, w, h FROM kit_layout_item WHERE layout_id=" & id & " ORDER BY item_order"
 End Function
 
-' The row's element as a kit builder call (DesignerCode); "" for a kind the
-' designer doesn't know. A card takes anc (AnchorOf, "" for none) itself.
-' BuildItem makes the same call.
-Private Function ItemCall(rs As DAO.Recordset, ByVal anc As String) As String
+' The row's element as a kit builder call (DesignerCode) on form formName;
+' "" for a kind the designer doesn't know. A card and a table take anc
+' (AnchorOf, "" for none) themselves: a table is its captions and the
+' subform of its rows (GridLines builds them), and only the subform
+' stretches. BuildItem makes the same calls.
+Private Function ItemCall(rs As DAO.Recordset, ByVal anc As String, ByVal formName As String) As String
     Dim nm As String, t1 As String, t2 As String, t3 As String, ch As String, n As String, src As String
     Dim x As String, y As String, w As String, h As String, at As String, parts() As String, i As Long
-    Dim ah As Integer, av As Integer
+    Dim ah As Integer, av As Integer, ln As String
     nm = ItemName(rs): n = VbText(nm)
     t1 = Nz(rs!item_text, ""): t2 = Nz(rs!item_text2, ""): t3 = Nz(rs!item_text3, ""): ch = Nz(rs!item_choice, "")
     src = FieldSource(rs)
@@ -1281,21 +1451,39 @@ Private Function ItemCall(rs As DAO.Recordset, ByVal anc As String) As String
         Case "empty"
             ItemCall = "EmptyState " & n & ", " & x & ", " & y & ", " & w & ", " & VbText(DZ_EMPTY_GLYPH) & ", " & VbText(t1) & ", " & _
                 VbText(t2) & ", " & VbText(t3) & ", """", True"
+        Case "table"
+            ln = "SubF " & n & ", " & VbText(GridFormName(formName, nm)) & ", " & x & ", px(" & (Nz(rs!y, 0) + 22) & "), " & w & _
+                ", px(" & (Nz(rs!h, 0) - 22) & ")"
+            If Len(anc) > 0 Then AnchorOf anc, ah, av
+            If ah = 2 Then ln = "Anchor SubF(" & Mid$(ln, 6) & "), 2, " & av
+            ItemCall = "GridHeaders " & VbText(nm & "_h") & ", " & VbArray(GridCols(t1, t2, Nz(rs!w, 0))) & ", " & x & ", " & y & _
+                ", , , " & w & vbCrLf & "    " & ln
+        Case "chips": ItemCall = "ChipRow " & n & ", " & x & ", " & y & ", " & VbText(nm & "Chip") & VbList(TrimParts(t1))
+        Case "tabs": ItemCall = "TabStrip " & x & ", " & y & ", " & w & ", " & VbText(nm & "Tab") & VbList(Split(SegmentItems(t1), ";"))
+        Case "breadcrumb"
+            ItemCall = "Breadcrumb " & n & ", " & x & ", " & y & ", " & w & ", " & PartCount(t1) & ", " & VbText(nm & "Crumb") & _
+                VbList(Split(SegmentItems(t1), ";"))
+        Case "accordion"
+            ItemCall = "Accordion " & n & ", " & x & ", " & y & ", " & w & ", " & IIf(ch = "any number", "False", "True") & _
+                VbList(AccSections(t1, t2))
     End Select
 End Function
 
 ' The row's element built on the form under construction (DesignerPreview):
 ' the call ItemCall writes, with no handlers, buttons that call no code, and
-' anchored by anc (AnchorOf, "" for none) as DesignerCode anchors it.
+' anchored by anc (AnchorOf, "" for none) as DesignerCode anchors it. A
+' table shows its preview rows (PreviewGrid); chips and tabs click through
+' DesignerChipClick and DesignerTabClick, and breadcrumbs call nothing.
 Private Sub BuildItem(rs As DAO.Recordset, ByVal anc As String)
     Dim nm As String, t1 As String, t2 As String, t3 As String, ch As String, c As Control, parts() As String, src As String
-    Dim x As Long, y As Long, w As Long, h As Long, ah As Integer, av As Integer, before As String
+    Dim x As Long, y As Long, w As Long, h As Long, ah As Integer, av As Integer, before As String, i As Long, k As Variant
+    Dim key As String
     nm = ItemName(rs)
     t1 = Nz(rs!item_text, ""): t2 = Nz(rs!item_text2, ""): t3 = Nz(rs!item_text3, ""): ch = Nz(rs!item_choice, "")
     src = FieldSource(rs)
     x = px(Nz(rs!x, 0)): y = px(Nz(rs!y, 0)): w = px(Nz(rs!w, 0)): h = px(Nz(rs!h, 0))
     If Len(anc) > 0 Then AnchorOf anc, ah, av
-    If Len(anc) > 0 And rs!kind <> "card" Then before = BuiltNames()
+    If Len(anc) > 0 And rs!kind <> "card" And rs!kind <> "table" Then before = BuiltNames()
     Select Case Nz(rs!kind, "")
         Case "card": Card nm, t1, x, y, w, h, "", ah, av
         Case "button"
@@ -1322,6 +1510,28 @@ Private Sub BuildItem(rs As DAO.Recordset, ByVal anc As String)
             On Error Resume Next                 ' no button without a caption
             F.Controls(nm & "_b").OnClick = ""
             On Error GoTo 0
+        Case "table"
+            GridHeaders nm & "_h", GridCols(t1, t2, w \ 15), x, y, , , w
+            Set c = SubF(nm, DZ_PREVIEW & "_" & nm, x, y + px(22), w, h - px(22))
+            c.LinkMasterFields = "": c.LinkChildFields = ""   ' the rows list the whole source
+            If ah = 2 Then Anchor c, ah, av
+        Case "chips"
+            ChipRow nm, x, y, "", TrimParts(t1)
+            For i = 0 To PartCount(t1) - 1
+                F.Controls(nm & "_" & i).OnClick = "=DesignerChipClick([Form],""" & nm & """," & i & ")"
+            Next
+        Case "tabs"
+            TabStrip x, y, w, "", Split(SegmentItems(t1), ";")
+            For Each k In Split(SegmentItems(t1), ";")
+                key = Split(k, "|")(0)
+                F.Controls("tab_" & key).OnClick = "=DesignerTabClick([Form],""" & key & """)"
+            Next
+        Case "breadcrumb"
+            Breadcrumb nm, x, y, w, PartCount(t1), "", Split(SegmentItems(t1), ";")
+            For i = 0 To PartCount(t1) - 1
+                F.Controls(nm & i).OnClick = "": F.Controls(nm & i & "_k").OnClick = ""
+            Next
+        Case "accordion": Accordion nm, x, y, w, (ch <> "any number"), AccSections(t1, t2)
     End Select
     If Len(before) > 0 Then AnchorBuilt before, ah, av
 End Sub
@@ -1507,12 +1717,22 @@ End Sub
 ' ---------------------------------------------------------------------------
 
 ' New item of kind centred on (x, y) px, snapped and kept on the canvas, then
-' selected. 0 (with a toast) when that kind's pool is full.
+' selected. 0 (with a toast) when that kind's pool is full, or for a second
+' tab strip or breadcrumb.
 Private Function Place(frm As Form, ByVal kind As String, ByVal x As Long, ByVal y As Long) As Long
     Dim i As Long, lx As Long, ly As Long
     m_mode = MODE_IDLE
     m_tool = ""
     Status frm, ""
+    If kind = "tabs" Or kind = "breadcrumb" Then
+        For i = 1 To m_n
+            If m_kind(i) = kind Then
+                KitToast "A form takes one " & LCase$(KindCaption(kind)) & ": its parts' names would clash.", "warning"
+                ShowSelection frm
+                Exit Function
+            End If
+        Next
+    End If
     Landing kind, x, y, lx, ly
     i = AddItem(kind, lx, ly, DefaultW(kind), DefaultH(kind), KindDefault(kind, 1), KindDefault(kind, 2), _
         KindDefault(kind, 3), KindDefault(kind, 4), "", "", 0)
@@ -1732,6 +1952,16 @@ Private Function DescText(ByVal i As Long) As String
         Case "toggle": DescText = "On"           ' "Toggle" doesn't fit its 44px
         Case "text", "date", "secret"
             If Len(m_field(i)) > 0 Then DescText = "[" & m_field(i) & "]" Else DescText = KindCaption(m_kind(i))
+        Case "table"
+            If Len(m_field(i)) = 0 Then
+                DescText = "Table: double-click to pick what it lists"
+            Else
+                DescText = "Table of " & m_field(i) & ": " & Replace(m_text(i), ";", ", ")
+            End If
+        Case "chips": DescText = Replace(m_text(i), ";", "    ")
+        Case "tabs": DescText = Replace(m_text(i), ";", "     ")
+        Case "breadcrumb": DescText = Replace(m_text(i), ";", "  " & ChrW(8250) & "  ")
+        Case "accordion": DescText = "Accordion: " & Replace(m_text(i), ";", ", ")
         Case Else: DescText = KindCaption(m_kind(i))
     End Select
 End Function
@@ -1817,7 +2047,7 @@ Private Function KindPool(ByVal kind As String) As String
     Select Case kind
         Case "card", "progress", "label", "button": KindPool = kind
         Case "text", "date", "secret", "toggle", "segmented", "slider", "rating", "stepper", "search", "stat", _
-            "alert", "avatar", "empty": KindPool = "gen"
+            "alert", "avatar", "empty", "table", "chips", "tabs", "breadcrumb", "accordion": KindPool = "gen"
     End Select
 End Function
 
@@ -1882,6 +2112,11 @@ Private Function KindCaption(ByVal kind As String) As String
         Case "alert": KindCaption = "Alert"
         Case "avatar": KindCaption = "Avatar"
         Case "empty": KindCaption = "Empty state"
+        Case "table": KindCaption = "Table"
+        Case "chips": KindCaption = "Chips"
+        Case "tabs": KindCaption = "Tab strip"
+        Case "breadcrumb": KindCaption = "Breadcrumb"
+        Case "accordion": KindCaption = "Accordion"
     End Select
 End Function
 
@@ -1904,17 +2139,23 @@ Private Function KindPrefix(ByVal kind As String) As String
         Case "stat": KindPrefix = "stat"
         Case "alert": KindPrefix = "alert"
         Case "avatar": KindPrefix = "av"
+        Case "table": KindPrefix = "tbl"
+        Case "chips": KindPrefix = "chips"
+        Case "tabs": KindPrefix = "tabs"
+        Case "breadcrumb": KindPrefix = "crumb"
+        Case "accordion": KindPrefix = "acc"
         Case Else: KindPrefix = "empty"
     End Select
 End Function
 
 ' The caption of the settings dialog's row r (1-3 text, 4 a list, 5 the
-' field, 6 the anchor) for a kind, "" when it doesn't use that row. Anchors
-' are for a page: a dialog doesn't resize.
+' field, or what a table lists, 6 the anchor) for a kind, "" when it doesn't
+' use that row. Anchors are for a page: a dialog doesn't resize.
 Private Function RowCaption(ByVal kind As String, ByVal r As Long) As String
     Dim caps As Variant
     If r = 5 Then
         If BindKind(kind) Then RowCaption = "FIELD (EMPTY FOR NONE)"
+        If kind = "table" Then RowCaption = "LISTS (A TABLE OR QUERY WITH AN ID FIELD)"
         Exit Function
     ElseIf r = 6 Then
         If m_formKind <> "dialog" And Len(KindPool(kind)) > 0 Then RowCaption = "ANCHOR (AS THE WINDOW RESIZES)"
@@ -1934,6 +2175,11 @@ Private Function RowCaption(ByVal kind As String, ByVal r As Long) As String
         Case "alert": caps = Array("TITLE", "MESSAGE", "", "VARIANT")
         Case "avatar": caps = Array("NAME", "", "", "")
         Case "empty": caps = Array("TITLE", "TEXT", "BUTTON (OPTIONAL)", "")
+        Case "table": caps = Array("COLUMNS: FIELDS, SEPARATED BY ;", "CAPTIONS, SEPARATED BY ; (EMPTY FOR THE FIELDS)", "", "")
+        Case "chips": caps = Array("CHIPS, SEPARATED BY ;", "", "", "")
+        Case "tabs": caps = Array("TABS, SEPARATED BY ;", "", "", "")
+        Case "breadcrumb": caps = Array("PATH, SEPARATED BY ; (THE LAST IS THIS PAGE)", "", "", "")
+        Case "accordion": caps = Array("SECTIONS, SEPARATED BY ;", "BODY HEIGHT (PX)", "", "OPEN")
         Case Else: caps = Array("", "", "", "")
     End Select
     RowCaption = caps(r - 1)
@@ -1956,7 +2202,11 @@ Private Function KindDefault(ByVal kind As String, ByVal r As Long) As String
         Case "alert": v = Array("Heads up", "Something here needs your attention.", "", "info")
         Case "avatar": v = Array("Jane Doe", "", "", "")
         Case "empty": v = Array("Nothing here yet", "Items you add show here.", "Add an item", "")
-        Case Else: v = Array("", "", "", "")
+        Case "chips": v = Array("All;Open;Done", "", "", "")
+        Case "tabs": v = Array("Overview;Details;History", "", "", "")
+        Case "breadcrumb": v = Array("Home;Reports;This report", "", "", "")
+        Case "accordion": v = Array("General;Details;Notes", "120", "", "one at a time")
+        Case Else: v = Array("", "", "", "")            ' a table starts empty: its columns come from its source
     End Select
     KindDefault = v(r - 1)
 End Function
@@ -1966,6 +2216,7 @@ Private Function ChoiceList(ByVal kind As String) As String
     Select Case kind
         Case "button": ChoiceList = "primary;outline;destructive;ghost"
         Case "alert": ChoiceList = "info;success;warning;destructive"
+        Case "accordion": ChoiceList = "one at a time;any number"
     End Select
 End Function
 
@@ -1988,15 +2239,23 @@ End Function
 ' button, text3).
 Private Function Focusable(ByVal kind As String, ByVal text3 As String) As Boolean
     Select Case kind
-        Case "button", "text", "date", "secret", "toggle", "segmented", "slider", "rating", "stepper", "search": Focusable = True
+        Case "button", "text", "date", "secret", "toggle", "segmented", "slider", "rating", "stepper", "search", "table", _
+            "breadcrumb", "accordion": Focusable = True
         Case "empty": Focusable = (Len(text3) > 0)
     End Select
 End Function
 
 ' The anchors a kind can take, as row 6's list: the key, then what it shows.
+' A table stays put or stretches (its captions stay at the top); an
+' accordion moves its own sections down, so it keeps to the top.
 Private Function AnchorList(ByVal kind As String) As String
-    AnchorList = "tl;Top left (stays put);tr;Top right;bl;Bottom left;br;Bottom right"
-    If StretchKind(kind) Then AnchorList = AnchorList & ";across;Top - stretches across;both;Stretches across and down"
+    Select Case kind
+        Case "table": AnchorList = "tl;Top left (stays put);across;Top - stretches across;both;Stretches across and down"
+        Case "accordion": AnchorList = "tl;Top left (stays put);tr;Top right"
+        Case Else
+            AnchorList = "tl;Top left (stays put);tr;Top right;bl;Bottom left;br;Bottom right"
+            If StretchKind(kind) Then AnchorList = AnchorList & ";across;Top - stretches across;both;Stretches across and down"
+    End Select
 End Function
 
 ' An anchor key as Anchor's h and v (0 left or top, 1 right or bottom, 2 both).
@@ -2020,6 +2279,12 @@ Private Function KindHint(ByVal kind As String) As String
         Case "stat": KindHint = "The value is a number here; in the app it is usually a field or a count."
         Case "empty": KindHint = "Leave the button empty for none."
         Case "progress": KindHint = "A whole number."
+        Case "table": KindHint = "Up to 8 columns, sharing the width; empty, the source's first four fields. The form's code " & _
+            "gives it its rows on load, and GridClick hears a row's click."
+        Case "chips": KindHint = "2 to 8 chips. The form's code turns one on (ChipOn) and filters by it."
+        Case "tabs": KindHint = "2 to 8 tabs; one tab strip to a form. The form's code shows the open tab (SelectTab)."
+        Case "breadcrumb": KindHint = "2 to 12 crumbs, top page first; one breadcrumb to a form. The app sets the path at run time (SetBreadcrumb)."
+        Case "accordion": KindHint = "1 to 6 sections, each body 40 to 600 px tall; the first starts open. The bodies are empty subforms for the app to fill."
         Case Else: KindHint = ""
     End Select
 End Function
@@ -2101,7 +2366,82 @@ Private Function PropsProblem(ByVal kind As String, ByVal t1 As String, ByVal t2
             If Not IsNumberText(t2) Then PropsProblem = "The value is a number."
         Case "empty"
             If Len(t1) = 0 Then PropsProblem = "An empty state needs a title."
+        Case "chips", "tabs"
+            n = PartCount(t1)
+            If n < 2 Or n > 8 Then PropsProblem = IIf(kind = "chips", "Chips take", "A tab strip takes") & _
+                " 2 to 8 captions, separated by ;."
+        Case "breadcrumb"
+            n = PartCount(t1)
+            If n < 2 Or n > 12 Then PropsProblem = "A breadcrumb takes 2 to 12 crumbs, separated by ;."
+        Case "accordion"
+            n = PartCount(t1)
+            If n < 1 Or n > 6 Then
+                PropsProblem = "An accordion takes 1 to 6 sections, each with a title, separated by ;."
+            ElseIf Not IsWholeNumber(t2) Then
+                PropsProblem = "The body height is a whole number of px from 40 to 600."
+            ElseIf Val(t2) < 40 Or Val(t2) > 600 Then
+                PropsProblem = "The body height is a whole number of px from 40 to 600."
+            ElseIf InStr(";" & ChoiceList(kind) & ";", ";" & choice & ";") = 0 Then
+                PropsProblem = "Pick how many sections open at a time from the list."
+            End If
     End Select
+End Function
+
+' What is wrong with the size settings give a kind on this form ("" when it
+' fits): an element as wide or tall as its settings make it must fit inside.
+Private Function SizeProblem(ByVal kind As String, ByVal t1 As String, ByVal t2 As String, ByVal choice As String) As String
+    Dim w As Long, h As Long
+    Select Case kind
+        Case "chips": w = ChipsW(t1)
+        Case "tabs": w = TabsW(t1)
+        Case "segmented": w = 6 + 40 * PartCount(t1)
+        Case "stepper": w = 64 * PartCount(t1)
+        Case "table": w = 16 + 40 * PartCount(t1)
+        Case "accordion": h = AccH(t1, t2, choice)
+    End Select
+    If w > m_fw Then
+        SizeProblem = "That makes the " & LCase$(KindCaption(kind)) & " " & w & " px wide, wider than the form (" & m_fw & " px)."
+    ElseIf h > m_fh Then
+        SizeProblem = "That makes the " & LCase$(KindCaption(kind)) & " " & h & " px tall, taller than the form (" & m_fh & " px)."
+    End If
+End Function
+
+' What is wrong with a table listing src with columns t1 and captions t2
+' ("" when nothing is): src a table or query here with an id (BuildGrid
+' selects rows by it), 1 to 8 of its fields, and a caption for each or none.
+Private Function TableProblem(ByVal src As String, ByVal t1 As String, ByVal t2 As String) As String
+    Dim cols As Variant, i As Long, n As Long
+    n = PartCount(t1)
+    If Len(src) = 0 Then
+        TableProblem = "Pick the table or query it lists."
+    ElseIf Not SourceExists(src) Then
+        TableProblem = "There is no table or query called """ & src & """ here."
+    ElseIf Not FieldExists(src, "id") Then
+        TableProblem = """" & src & """ has no id field, which a table selects its rows by."
+    ElseIf n < 1 Or n > 8 Then
+        TableProblem = "A table takes 1 to 8 columns: fields of """ & src & """, separated by ;."
+    ElseIf Len(t2) > 0 And PartCount(t2) <> n Then
+        TableProblem = "Give each column a caption, or none for the field names."
+    Else
+        cols = TrimParts(t1)
+        For i = 0 To n - 1
+            If Not FieldExists(src, CStr(cols(i))) Then
+                TableProblem = """" & src & """ has no field """ & cols(i) & """."
+                Exit For
+            End If
+        Next
+    End If
+End Function
+
+' A table's columns when none are given: src's first four fields after id.
+Private Function DefaultColumns(ByVal src As String) As String
+    Dim f As Variant, n As Long
+    For Each f In SourceFields(src)
+        If StrComp(CStr(f), "id", vbTextCompare) <> 0 And n < 4 Then
+            DefaultColumns = DefaultColumns & IIf(n > 0, ";", "") & f
+            n = n + 1
+        End If
+    Next
 End Function
 
 ' Sizes (px) a new element gets.
@@ -2116,9 +2456,10 @@ Private Function DefaultW(ByVal kind As String) As Long
         Case "toggle": DefaultW = 44
         Case "segmented", "slider", "search", "stat": DefaultW = 240
         Case "rating": DefaultW = 5 * 24
-        Case "stepper", "alert": DefaultW = 360
+        Case "stepper", "alert", "table", "tabs", "accordion": DefaultW = 360
         Case "avatar": DefaultW = 32
-        Case Else: DefaultW = 320
+        Case "chips": DefaultW = ChipsW(KindDefault(kind, 1))
+        Case Else: DefaultW = 320                    ' an empty state, a breadcrumb
     End Select
 End Function
 
@@ -2133,7 +2474,11 @@ Private Function DefaultH(ByVal kind As String) As Long
         Case "stepper": DefaultH = 56
         Case "stat": DefaultH = 112
         Case "alert": DefaultH = 64
-        Case Else: DefaultH = 180
+        Case "chips": DefaultH = 26
+        Case "tabs": DefaultH = 32
+        Case "breadcrumb": DefaultH = 20
+        Case "accordion": DefaultH = AccH(KindDefault(kind, 1), KindDefault(kind, 2), KindDefault(kind, 4))
+        Case Else: DefaultH = 180                    ' an empty state, a table
     End Select
 End Function
 
@@ -2148,10 +2493,15 @@ Private Function MinW(ByVal i As Long) As Long
         Case "date", "toggle", "rating": MinW = DefaultW(m_kind(i))
         Case "segmented": MinW = 6 + 40 * PartCount(m_text(i))
         Case "stepper": MinW = 64 * PartCount(m_text(i))
-        Case "stat", "alert": MinW = 160
+        Case "stat", "alert", "accordion": MinW = 160
         Case "avatar": MinW = 24
+        Case "table": MinW = 16 + 40 * PartCount(m_text(i))
+        Case "chips": MinW = ChipsW(m_text(i))
+        Case "tabs": MinW = TabsW(m_text(i))
+        Case "breadcrumb": MinW = 120
         Case Else: MinW = 240
     End Select
+    If MinW < 120 And m_kind(i) = "table" Then MinW = 120
     If m_kind(i) = "rating" Then MinW = 24 * CLng(Val(m_text(i)))
 End Function
 
@@ -2160,6 +2510,7 @@ Private Function MaxW(ByVal i As Long) As Long
         Case "date", "toggle": MaxW = DefaultW(m_kind(i))
         Case "rating": MaxW = 24 * CLng(Val(m_text(i)))
         Case "avatar": MaxW = 64
+        Case "chips": MaxW = ChipsW(m_text(i))
         Case Else: MaxW = m_fw
     End Select
 End Function
@@ -2172,13 +2523,16 @@ Private Function MinH(ByVal i As Long) As Long
         Case "progress": MinH = 4
         Case "search": MinH = 28
         Case "alert": MinH = 40
+        Case "table": MinH = 80
+        Case "accordion": MinH = AccH(m_text(i), m_text2(i), m_choice(i))
         Case Else: MinH = DefaultH(m_kind(i))
     End Select
 End Function
 
 Private Function MaxH(ByVal i As Long) As Long
     Select Case m_kind(i)
-        Case "card", "label": MaxH = m_fh
+        Case "card", "label", "table": MaxH = m_fh
+        Case "accordion": MaxH = AccH(m_text(i), m_text2(i), m_choice(i))
         Case "button", "segmented": MaxH = 48
         Case "progress": MaxH = 16
         Case "text": MaxH = 120
@@ -2202,6 +2556,114 @@ Private Function Clamp(ByVal v As Long, ByVal lo As Long, ByVal hi As Long) As L
     If v < lo Then v = lo
     If v > hi Then v = hi
     Clamp = v
+End Function
+
+' The ;-separated parts of s, each trimmed (an empty array for "").
+Private Function TrimParts(ByVal s As String) As Variant
+    Dim parts() As String, i As Long
+    parts = Split(s, ";")
+    For i = 0 To UBound(parts)
+        parts(i) = Trim$(parts(i))
+    Next
+    TrimParts = parts
+End Function
+
+' Items as more arguments of a builder call: , "a", "b".
+Private Function VbList(ByVal items As Variant) As String
+    Dim i As Long
+    For i = LBound(items) To UBound(items)
+        VbList = VbList & ", " & VbText(CStr(items(i)))
+    Next
+End Function
+
+' Items as a VBA Array(...) expression.
+Private Function VbArray(ByVal items As Variant) As String
+    VbArray = "Array(" & Mid$(VbList(items), 3) & ")"
+End Function
+
+' The first key a tab strip's captions give (SegmentItems).
+Private Function FirstKey(ByVal options As String) As String
+    FirstKey = Split(Split(SegmentItems(options), ";")(0), "|")(0)
+End Function
+
+' A table's columns, as BuildGrid and GridHeaders take them: "field|caption|
+' width px" for each of t1's fields, with t2's captions (the fields' names
+' when t2 doesn't give one each), sharing w px less BuildGrid's 8px a side.
+Private Function GridCols(ByVal t1 As String, ByVal t2 As String, ByVal w As Long) As Variant
+    Dim f As Variant, c As Variant, out() As String, i As Long, n As Long
+    f = TrimParts(t1)
+    n = UBound(f) + 1
+    If n = 0 Then GridCols = Array(): Exit Function
+    If PartCount(t2) = n Then c = TrimParts(t2) Else c = f
+    ReDim out(0 To n - 1)
+    For i = 0 To n - 1
+        out(i) = FieldRef(CStr(f(i))) & "|" & Replace(CStr(c(i)), "|", "/") & "|" & (w - 16) \ n
+    Next
+    GridCols = out
+End Function
+
+' A field as a control source: its name, in brackets when it isn't letters,
+' digits and _.
+Private Function FieldRef(ByVal fld As String) As String
+    Dim i As Long, ch As Long
+    For i = 1 To Len(fld)
+        ch = AscW(Mid$(fld, i, 1))
+        If Not ((ch >= 48 And ch <= 57) Or (ch >= 65 And ch <= 90) Or (ch >= 97 And ch <= 122) Or ch = 95) Then
+            FieldRef = "[" & fld & "]"
+            Exit Function
+        End If
+    Next
+    FieldRef = fld
+End Function
+
+' The form a table's rows are on form formName: sub<FormName>_<table>.
+Private Function GridFormName(ByVal formName As String, ByVal item As String) As String
+    GridFormName = Left$("sub" & UCase$(Left$(formName, 1)) & Mid$(formName, 2) & "_" & item, 64)
+End Function
+
+' A table's rows' record source: all of src.
+Private Function GridSource(ByVal src As String) As String
+    GridSource = "SELECT * FROM [" & src & "]"
+End Function
+
+' An accordion's sections, as Accordion takes them: "Title||body px", the
+' first "|open"; no body form yet.
+Private Function AccSections(ByVal t1 As String, ByVal t2 As String) As Variant
+    Dim p As Variant, out() As String, i As Long
+    p = TrimParts(t1)
+    If UBound(p) < 0 Then AccSections = Array(): Exit Function
+    ReDim out(0 To UBound(p))
+    For i = 0 To UBound(p)
+        out(i) = Replace(CStr(p(i)), "|", "/") & "||" & CLng(Val(t2)) & IIf(i = 0, "|open", "")
+    Next
+    AccSections = out
+End Function
+
+' A chip row's width in px for captions t1, as ChipRow lays it out.
+Private Function ChipsW(ByVal t1 As String) As Long
+    Dim p As Variant, i As Long
+    p = TrimParts(t1)
+    For i = 0 To UBound(p)
+        ChipsW = ChipsW + ChipWidth(CStr(p(i))) \ 15 + IIf(i > 0, 6, 0)
+    Next
+End Function
+
+' The width in px a tab strip's tabs t1 take, as TabStrip lays them out.
+Private Function TabsW(ByVal t1 As String) As Long
+    Dim p As Variant, i As Long, tw As Long
+    p = TrimParts(t1)
+    For i = 0 To UBound(p)
+        tw = tw + px(Len(CStr(p(i))) * 7.5 + 28) + IIf(i > 0, Sp(SP_ITEM_GAP), 0)
+    Next
+    TabsW = (tw + 14) \ 15
+End Function
+
+' An accordion's height in px: its headers with one body open (one at a
+' time) or every body (any number), as Accordion makes room for them.
+Private Function AccH(ByVal t1 As String, ByVal t2 As String, ByVal choice As String) As Long
+    Dim n As Long
+    n = PartCount(t1)
+    If choice = "any number" Then AccH = n * (41 + 15 + CLng(Val(t2))) Else AccH = n * 41 + 15 + CLng(Val(t2))
 End Function
 
 ' How many ;-separated parts s has, 0 when any is empty.
