@@ -202,7 +202,8 @@ Public Function KitPurgeData(ByVal probeTable As String, ByVal tables As Variant
         busy = True
         peBackup = TryBackup(pePath, DefaultBackupFolder(pePath))
         If Len(peBackup) > 0 Then peBackup = WithKeyCopy(pePath, peBackup)
-        KitBusyEnd: busy = False
+        KitBusyEnd
+        busy = False
         If Len(peBackup) = 0 Then
             KitMsgBox "Nothing was deleted: the backup copy of the Personnel file couldn't be saved in the " & _
                 BACKUP_FOLDER & " folder beside it.", vbExclamation
@@ -214,7 +215,8 @@ Public Function KitPurgeData(ByVal probeTable As String, ByVal tables As Variant
     KitBusy "Saving a backup copy of the data file..."
     busy = True
     backup = TryBackup(bePath, folder)
-    KitBusyEnd: busy = False
+    KitBusyEnd
+    busy = False
     If Len(backup) = 0 Then
         KitMsgBox "The backup copy couldn't be saved in the Backups folder beside the data file." & vbCrLf & vbCrLf & _
             "Pick another folder for it in the next window, or Cancel to stop. Nothing has been deleted.", vbExclamation
@@ -226,7 +228,8 @@ Public Function KitPurgeData(ByVal probeTable As String, ByVal tables As Variant
         KitBusy "Saving a backup copy of the data file..."
         busy = True
         backup = TryBackup(bePath, folder)
-        KitBusyEnd: busy = False
+        KitBusyEnd
+        busy = False
         If Len(backup) = 0 Then
             KitMsgBox "Nothing was deleted: the backup copy couldn't be saved in that folder either.", vbExclamation
             Exit Function
@@ -251,7 +254,8 @@ Public Function KitPurgeData(ByVal probeTable As String, ByVal tables As Variant
     KitBusy "Deleting the data..."
     busy = True
     rows = KitPurgeTables(bePath, tables, ConnectPassword(probeTable))
-    KitBusyEnd: busy = False
+    KitBusyEnd
+    busy = False
     ' Committed: from here on an error must not say nothing was deleted.
     stage = "deleted"
     KitPurgeData = True
@@ -263,7 +267,8 @@ Public Function KitPurgeData(ByVal probeTable As String, ByVal tables As Variant
         KitBusy "Deleting the people in the Personnel directory..."
         busy = True
         peRows = KitPurgeTables(pePath, Array(PERSON_APP_TABLE, PERSON_TABLE), PersonnelKey())
-        KitBusyEnd: busy = False
+        KitBusyEnd
+        busy = False
         m_purgedPersonnel = True
         stage = "deleted"
         PersonnelSignOut
