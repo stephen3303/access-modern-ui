@@ -546,9 +546,9 @@ End Sub
 ' confirms. Build it with the app's other dialogs.
 Public Sub BuildConfirmDialog()
     Dim c As Control, w As Long, detH As Long, y As Long, ac As Variant
-    w = px(460)
+    w = px(540)
     ac = AlertColors("destructive")
-    detH = 12 * CLng(10 * 20 * 1.36)                ' 12 lines of 10pt text
+    detH = 20 * CLng(10 * 20 * 1.36)                ' 20 lines of 10pt text: KitPurgeData's whole warning
     y = px(56) + px(16) + detH + px(16)            ' the option row
     NewDialog "Confirm", w, y + px(54) + px(12) + px(22) + px(8) + px(30) + px(20) + px(30) + px(16)
     F.CloseButton = False                           ' Cancel or Esc closes it
