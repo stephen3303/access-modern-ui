@@ -10,7 +10,7 @@ test changes to it. It has one local table of fictional items and six pages:
 | Steps and sections | A `Stepper` in a card with Back and Next (click a check mark to go back) and a one-open `Accordion` of three sections, the first holding the items table and the last Preferences: a `Slider` (rows per page, with a `KitPopover` help mark) and a `Rating` |
 | Dashboard | Four `StatTile`s (open, past due with down as good, complete, average done) with change badges, and the flagged items in a card with an `EmptyState` when none are flagged |
 | List and detail | The list/detail pattern (`SelectFirstRow`, `ShowDetail`, `ClearDetail`), click-to-sort captions, `PrintGrid` and `ExportGrid` in the list's sort; the Due field is a `DateBox` whose date picker marks federal holidays and every item's due date (`MarkDate`); a compact `Toggle` switch (Flagged for review) on the detail panel's Save row; a `SecretBox` (the item's access code); an `Avatar` with the owner's initials beside the Owner field; Save confirms with a toast; a compact warning `Alert` in the header row counts open items past their due date (its close mark hides it); a `Breadcrumb` below the title (All items > status > item) whose crumbs pick the chip; the list's `SearchBox` (magnifier and clear mark, as on Tables) and its `EmptyState` when nothing matches; the detail card's More button (⋯) opens a `KitMenu` dropdown (Mark complete, Flag, Delete) |
-| Form designer | The kit's form designer (`BuildDesigner`, modKitDesigner), drag any of 17 kit elements (card, button, label, progress, text, date, secret, toggle, segmented, slider, rating, stepper, search, stat tile, alert, avatar, empty state) from Elements onto the canvas (or click it, then the canvas), drag to move, drag the corner handle to resize, all on an 8px grid; double-click an element, or Edit under Selected, for its settings in a dialog (`dlgDzProps`) that checks them against the kit builder's rules; Delete removes it; a layout saves under a name to `kit_layout` and `kit_layout_item` and opens again from the list; Generate builds it as a real form with the kit's builders, shows it (`dzPreview`), and writes the same calls as `designer\Build_pg<Name>.txt` with a `pg<Name>.vba` code-behind stub |
+| Form designer | The kit's form designer (`BuildDesigner`, modKitDesigner), drag any of 17 kit elements (card, button, label, progress, text, date, secret, toggle, segmented, slider, rating, stepper, search, stat tile, alert, avatar, empty state) from Elements onto the canvas (or click it, then the canvas), drag to move, drag the corner handle to resize, all on an 8px grid; double-click an element, or Edit under Selected, for its settings in a dialog (`dlgDzProps`) that checks them against the kit builder's rules; Delete removes it; a layout saves under a name to `kit_layout` and `kit_layout_item` and opens again from the list; Form sets page or dialog, size and record source, elements bind to its fields and anchor to the window's edges, Tab order (`dlgDzTabs`) sets the Tab key's order; Generate builds it as a real form with the kit's builders, shows it (`dzPreview`), and writes the same calls as `designer\Build_pg<Name>.txt` with a `pg<Name>.vba` code-behind stub |
 
 Help in the sidebar, or F1, opens the kit's help window (`KitHelp`) on the page's topic, with a search box over the topic list; the topics are in `src\help\help.txt`. Ctrl+F goes to a page's search box, Ctrl+S saves a changed record, and Ctrl+K opens the command palette over the pages and the items opened lately (`BuildShortcutKeys`, `KitPalette`). The sidebar collapses to icons, and a right-click on a list row opens its actions. Appearance in the sidebar switches palettes. The demo opens on the kit's splash screen
 (`BuildSplash`), which opens the main window and closes; `HideAccessSplash` replaces
@@ -135,6 +135,18 @@ watching for Visual Basic error dialogs as well as the error log:
   More segmented options or more stars widen the element. Generate with one of each shows
   them all as real kit controls in the preview (they work there but call no code), and
   pg<Name>.vba has a handler for each.
+- Form designer data and behaviour: Form opens "Form settings" with title, width, height,
+  page or dialog and record source (demo_item is in the list). A size smaller than the
+  elements reach, or past the canvas, is refused; a smaller size shrinks the outlined area
+  and elements can't be dragged past it; Dialog paints it in the dialog colour. With
+  demo_item as the record source, a text box's settings list its fields under Field (bind it
+  to name), and a toggle's (flagged); Generate shows the first item's name and flag, and the
+  preview can't change them. On a page, anchor a button Top right and a card Stretches across
+  and down: resizing the preview window keeps the button at the right edge and grows the
+  card. Tab order lists the focusable elements in reading order; Move up and OK, then
+  Generate: Tab in the preview follows the new order. Saved, New and reopened, all of it
+  comes back. A dialog layout generates dlg<Name>, titled with its title. Check it in Navy
+  and Midnight.
 - Dialogs: Appearance in the sidebar and the buttons on Cards and progress dim the whole
   Access window behind their dialog; the dim goes when the dialog closes, and the dialog
   itself is not dimmed.

@@ -120,6 +120,22 @@ Err_Handler:
     HandleError "pgDesigner.txtDzName_AfterUpdate"
 End Sub
 
+Private Sub btnDzForm_Click()
+    On Error GoTo Err_Handler
+    DesignerForm Me
+    Exit Sub
+Err_Handler:
+    HandleError "pgDesigner.btnDzForm_Click"
+End Sub
+
+Private Sub btnDzTabs_Click()
+    On Error GoTo Err_Handler
+    DesignerTabs Me
+    Exit Sub
+Err_Handler:
+    HandleError "pgDesigner.btnDzTabs_Click"
+End Sub
+
 Private Sub btnDzNew_Click()
     On Error GoTo Err_Handler
     DesignerNew Me

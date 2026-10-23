@@ -50,6 +50,7 @@ Copy-Item (Join-Path $repo 'kit/forms/dlgPalette.vba') $formDir
  Copy-Item (Join-Path $repo 'kit/forms/dlgPerson.vba') $formDir
  Copy-Item (Join-Path $repo 'kit/forms/pgDesigner.vba') $formDir
  Copy-Item (Join-Path $repo 'kit/forms/dlgDzProps.vba') $formDir
+ Copy-Item (Join-Path $repo 'kit/forms/dlgDzTabs.vba') $formDir
  Copy-Item (Join-Path $PSScriptRoot 'testHost.vba') $formDir
  Copy-Item (Join-Path $PSScriptRoot 'testRefuse.vba') $formDir
  Copy-Item (Join-Path $PSScriptRoot 'testConflict.vba') $formDir
