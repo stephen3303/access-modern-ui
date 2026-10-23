@@ -998,7 +998,7 @@ Public Function DesignerCode(ByVal id As Long) As String
     If isPage Then
         body = body & "    NewForm " & VbText(src) & ", 0, px(" & Nz(rs!form_width, 0) & "), px(" & Nz(rs!form_height, 0) & ")" & vbCrLf
     Else
-        body = "    NewDialog " & VbText(DialogTitle(rs)) & ", px(" & Nz(rs!form_width, 0) & "), px(" & Nz(rs!form_height, 0) & ")" & vbCrLf
+        body = body & "    NewDialog " & VbText(DialogTitle(rs)) & ", px(" & Nz(rs!form_width, 0) & "), px(" & Nz(rs!form_height, 0) & ")" & vbCrLf
         If Len(src) > 0 Then body = body & "    F.RecordSource = " & VbText(src) & vbCrLf
     End If
     ' Tab past the last control stays on the record, not on to the next one.
@@ -2623,9 +2623,10 @@ Private Function FieldRef(ByVal fld As String) As String
     FieldRef = fld
 End Function
 
-' The form a table's rows are on form formName: sub<FormName>_<table>.
+' The form a table's rows are on form formName: sub<FormName>_<table>, the
+' form's part cut short to keep within 64 characters, never the table's.
 Private Function GridFormName(ByVal formName As String, ByVal item As String) As String
-    GridFormName = Left$("sub" & UCase$(Left$(formName, 1)) & Mid$(formName, 2) & "_" & item, 64)
+    GridFormName = Left$("sub" & UCase$(Left$(formName, 1)) & Mid$(formName, 2), 64 - Len(item) - 1) & "_" & item
 End Function
 
 ' A table's rows' record source: all of src.

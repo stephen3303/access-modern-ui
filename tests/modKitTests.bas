@@ -1954,6 +1954,11 @@ Private Sub TestDesignerMore()
             "Designer preview chip or tab click didn't light it"
     End With
     DoCmd.Close acForm, "dzPreview", acSaveNo
+    ' A dialog builds its table's rows first too.
+    Check DesignerSetForm("", "776", "408", "dialog", "") = "" And DesignerSave(frm), "Designer new kinds dialog not saved"
+    code = DesignerCode(id)
+    Check InStr(code, "BuildGrid ""subDlgDzMore_tbl1""") > 0 And InStr(code, "BuildGrid ") < InStr(code, "NewDialog ") _
+        And InStr(code, "SubF ""tbl1"", ""subDlgDzMore_tbl1""") > 0, "Designer dialog lost its table's rows: " & code
     DoCmd.DeleteObject acForm, "dzPreview"
     DoCmd.DeleteObject acForm, "dzPreview_tbl1"
     DoCmd.Close acForm, DZ_FORM, acSaveNo
