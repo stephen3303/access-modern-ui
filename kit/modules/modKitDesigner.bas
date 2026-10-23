@@ -642,6 +642,7 @@ Public Function DesignerCode(ByVal id As Long) As String
         "Private Sub Build_" & nm & "()" & vbCrLf & _
         "    NewForm """", 0, px(" & Nz(rs!form_width, 0) & "), px(" & Nz(rs!form_height, 0) & ")" & vbCrLf
     rs.Close
+    If Len(StepperNames(id)) > 0 Then s = s & "    Ev F, ""OnLoad""" & vbCrLf     ' Form_Load paints the steppers (DesignerStub)
     Set rs = db.OpenRecordset(ItemsSql(id), dbOpenSnapshot)
     Do Until rs.EOF
         ln = ItemCall(rs)
@@ -657,13 +658,22 @@ End Function
 ' each segmented control, toggle, slider, rating, stepper and search box
 ' that DesignerCode names, for the app to fill in.
 Public Function DesignerStub(ByVal id As Long) As String
-    Dim db As DAO.Database, rs As DAO.Recordset, nm As String, s As String, title As String, b As String
+    Dim db As DAO.Database, rs As DAO.Recordset, nm As String, s As String, title As String, b As Variant
     Dim sig As String, proc As String, what As String
     Set db = CurrentDb
     title = OneLine(Nz(DLookup("layout_name", "kit_layout", "id=" & id), ""))
     nm = DesignerFormName(title)
     s = "Option Compare Database" & vbCrLf & "Option Explicit" & vbCrLf & vbCrLf & _
         "' " & nm & " (Build_" & nm & ", from the form designer layout """ & title & """)." & vbCrLf
+    If Len(StepperNames(id)) > 0 Then
+        s = s & vbCrLf & "' A stepper is built in the build's palette: SetStep paints it in the user's." & vbCrLf & _
+            "Private Sub Form_Load()" & vbCrLf & "    On Error GoTo Err_Handler" & vbCrLf
+        For Each b In Split(StepperNames(id), ";")
+            s = s & "    SetStep Me, " & VbText(CStr(b)) & ", CurrentStep(Me, " & VbText(CStr(b)) & ")" & vbCrLf
+        Next
+        s = s & "    Exit Sub" & vbCrLf & "Err_Handler:" & vbCrLf & "    HandleError """ & nm & ".Form_Load""" & vbCrLf & _
+            "End Sub" & vbCrLf
+    End If
     Set rs = db.OpenRecordset(ItemsSql(id), dbOpenSnapshot)
     Do Until rs.EOF
         b = ItemName(rs)
@@ -730,6 +740,7 @@ Public Sub DesignerPreview(ByVal id As Long)
         rs.MoveNext
     Loop
     rs.Close
+    If Len(StepperNames(id)) > 0 Then F.OnLoad = "=DesignerPreviewLoad([Form]," & VbText(StepperNames(id)) & ")"
     SaveForm DZ_PREVIEW
     On Error GoTo 0
     DoCmd.OpenForm DZ_PREVIEW
@@ -743,6 +754,33 @@ Fail:
     On Error GoTo 0
     Err.Raise errNo, errSrc, errDesc
 End Sub
+
+' dzPreview's Form_Load (its OnLoad expression; the preview has no code):
+' paint each stepper (names, ;-separated) in the current palette, as an
+' app's Form_Load does with SetStep. The builder painted them in the
+' palette it ran under, which leaves dark text on a dark palette.
+Public Function DesignerPreviewLoad(frm As Form, ByVal names As String)
+    Dim nm As Variant
+    On Error GoTo Fail
+    For Each nm In Split(names, ";")
+        SetStep frm, CStr(nm), CurrentStep(frm, CStr(nm))
+    Next
+    Exit Function
+Fail:
+    HandleError "modKitDesigner.DesignerPreviewLoad", names
+End Function
+
+' Layout id's steppers' control names, ;-separated ("" for none).
+Private Function StepperNames(ByVal id As Long) As String
+    Dim rs As DAO.Recordset, out As String
+    Set rs = CurrentDb.OpenRecordset(ItemsSql(id), dbOpenSnapshot)
+    Do Until rs.EOF
+        If rs!kind = "stepper" Then out = out & IIf(Len(out) > 0, ";", "") & ItemName(rs)
+        rs.MoveNext
+    Loop
+    rs.Close
+    StepperNames = out
+End Function
 
 Private Function ItemsSql(ByVal id As Long) As String
     ItemsSql = "SELECT item_name, kind, item_text, item_text2, item_text3, item_choice, x, y, w, h " & _
@@ -1197,6 +1235,7 @@ Private Function DescText(ByVal i As Long) As String
         Case "alert": DescText = AlertVariant(m_choice(i)) & ": " & m_text(i)
         Case "avatar": DescText = AvatarInitials(m_text(i))
         Case "empty": DescText = m_text(i)
+        Case "toggle": DescText = "On"           ' "Toggle" doesn't fit its 44px
         Case Else: DescText = KindCaption(m_kind(i))
     End Select
 End Function

@@ -1732,16 +1732,19 @@ Private Sub TestDesignerKinds()
         And InStr(code, "Slider ""sld1"", """", px(184), px(192), px(240), 0, 100, 10, ""sld1Changed""") > 0 _
         And InStr(code, "Stepper ""step1"", px(") > 0 And InStr(code, ", 1, ""step1Step"", ""Details"", ""Owner"", ""Review""") > 0 _
         And InStr(code, "Alert ""alert1"", px(") > 0 And InStr(code, """success"", ""Saved"", ""All changes are saved.""") > 0 _
-        And InStr(code, "Avatar ""av1"", ""=""""Jane Doe"""""", px(288)") > 0, "Designer kinds build code wrong: " & code
+        And InStr(code, "Avatar ""av1"", ""=""""Jane Doe"""""", px(288)") > 0 _
+        And InStr(code, "Ev F, ""OnLoad""") > 0, "Designer kinds build code wrong: " & code
     code = DesignerStub(id)
     Check InStr(code, "Public Sub seg1Changed()") > 0 And InStr(code, "Public Sub step1Step(ByVal stepNo As Long)") > 0 _
         And InStr(code, "Public Sub search1Search(ByVal text As String)") > 0 And InStr(code, "Private Sub empty1_b_Click()") > 0 _
-        And InStr(code, "tgl1Changed") > 0 And InStr(code, "rate1Changed") > 0, "Designer kinds stub wrong: " & code
+        And InStr(code, "tgl1Changed") > 0 And InStr(code, "rate1Changed") > 0 _
+        And InStr(code, "SetStep Me, ""step1"", CurrentStep(Me, ""step1"")") > 0, "Designer kinds stub wrong: " & code
     DesignerPreview id
     Check IsFormOpen("dzPreview"), "Designer kinds preview not open"
     With Forms("dzPreview")
         Check .Controls("seg1_bg").Left = px(184) And .Controls("step1").Width = px(360) And .Controls("empty1_b").OnClick = "" _
-            And .Controls("av1_bg").Width = px(32), "Designer kinds preview doesn't match the layout"
+            And .Controls("av1_bg").Width = px(32) And .OnLoad = "=DesignerPreviewLoad([Form],""step1"")" _
+            And .Controls("step1_l1").FontWeight = 600, "Designer kinds preview doesn't match the layout"
     End With
     DoCmd.Close acForm, "dzPreview", acSaveNo
     DoCmd.DeleteObject acForm, "dzPreview"
