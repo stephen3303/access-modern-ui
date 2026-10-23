@@ -1717,8 +1717,8 @@ End Sub
 ' ---------------------------------------------------------------------------
 
 ' New item of kind centred on (x, y) px, snapped and kept on the canvas, then
-' selected. 0 (with a toast) when that kind's pool is full, or for a second
-' tab strip or breadcrumb.
+' selected. 0 (with a toast) when that kind's pool is full, it can't be made
+' small enough for the form, or for a second tab strip or breadcrumb.
 Private Function Place(frm As Form, ByVal kind As String, ByVal x As Long, ByVal y As Long) As Long
     Dim i As Long, lx As Long, ly As Long
     m_mode = MODE_IDLE
@@ -1738,6 +1738,12 @@ Private Function Place(frm As Form, ByVal kind As String, ByVal x As Long, ByVal
         KindDefault(kind, 3), KindDefault(kind, 4), "", "", 0)
     If i = 0 Then
         KitToast "The canvas has room for " & PoolSize(KindPool(kind)) & " " & PoolCaption(KindPool(kind)) & ".", "warning"
+        ShowSelection frm
+        Exit Function
+    End If
+    If m_w(i) > m_fw Or m_h(i) > m_fh Then      ' its smallest size is past the form's edge
+        KitToast "A " & LCase$(KindCaption(kind)) & " needs " & m_w(i) & " x " & m_h(i) & " px. Make the form bigger under Form first.", "warning"
+        m_n = m_n - 1
         ShowSelection frm
         Exit Function
     End If
@@ -2396,6 +2402,7 @@ Private Function SizeProblem(ByVal kind As String, ByVal t1 As String, ByVal t2 
         Case "tabs": w = TabsW(t1)
         Case "segmented": w = 6 + 40 * PartCount(t1)
         Case "stepper": w = 64 * PartCount(t1)
+        Case "rating": w = 24 * CLng(Val(t1))
         Case "table": w = 16 + 40 * PartCount(t1)
         Case "accordion": h = AccH(t1, t2, choice)
     End Select

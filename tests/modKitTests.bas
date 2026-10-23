@@ -1872,6 +1872,12 @@ Private Sub TestDesignerMore()
     BuildDesigner DZ_FORM, px(32), px(1056), px(560)
     DoCmd.OpenForm DZ_FORM, WindowMode:=acHidden
     Set frm = Forms(DZ_FORM)
+    ' An element that can't be made small enough for the form is refused.
+    Check DesignerSetForm("", "200", "120", "page", "") = "" And DesignerPlace(frm, "empty", 50, 50) = 0 _
+        And DesignerCount() = 0, "Designer placed an element bigger than the form"
+    Check DesignerPlace(frm, "rating", 50, 50) = 1 And DesignerSetProps(1, "10", "", "", "") <> "", "Designer took a rating wider than the form"
+    DesignerDelete frm
+    Check DesignerSetForm("", "776", "408", "page", "") = "", "Designer form not set back to the canvas's size"
     Check DesignerPlace(frm, "tabs", 200, 16) = 1 And DesignerPlace(frm, "chips", 150, 60) = 2 _
         And DesignerPlace(frm, "breadcrumb", 600, 16) = 3 And DesignerPlace(frm, "table", 200, 200) = 4 _
         And DesignerPlace(frm, "accordion", 600, 250) = 5, "Designer tables, chips, tabs, breadcrumb or accordion not placed"
