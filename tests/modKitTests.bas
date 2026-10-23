@@ -1597,6 +1597,7 @@ Private Sub TestMore()
     TestEventLog
     TestDesigner
     TestDesignerKinds
+    TestDesignerData
 End Sub
 
 ' Form designer (BuildDesigner, modKitDesigner): elements dropped from the
@@ -1751,6 +1752,107 @@ Private Sub TestDesignerKinds()
     DoCmd.Close acForm, DZ_FORM, acSaveNo
     DoCmd.DeleteObject acForm, DZ_FORM
     CurrentDb.TableDefs.Delete "kit_layout_item": CurrentDb.TableDefs.Delete "kit_layout"
+End Sub
+
+' Form designer data and behaviour: the form's settings (page or dialog,
+' size, record source) are checked and kept, elements bind to its fields
+' and anchor on a page, the tab order is the reading order until moved, and
+' Generate writes and builds all of it; a layout reopens with all of it.
+Private Sub TestDesignerData()
+    Const DZ_FORM As String = "pgDesignerData"
+    Dim frm As Form, dlg As Form, id As Long, code As String
+    CurrentDb.Execute "CREATE TABLE dz_item (id COUNTER PRIMARY KEY, item_name TEXT(60), done YESNO, pct LONG)", dbFailOnError
+    CurrentDb.Execute "INSERT INTO dz_item (item_name, done, pct) VALUES ('Pump', True, 40)", dbFailOnError
+    BuildDesigner DZ_FORM, px(32), px(1056), px(560)
+    DoCmd.OpenForm DZ_FORM, WindowMode:=acHidden
+    Set frm = Forms(DZ_FORM)
+    Check DesignerFormData() = "page 776x408 |", "Designer form didn't start as a page the canvas's size: " & DesignerFormData()
+    ' Placed out of reading order: a button, a text box above it, a toggle left of the text box, a card.
+    Check DesignerPlace(frm, "button", 400, 300) = 1 And DesignerPlace(frm, "text", 400, 100) = 2 _
+        And DesignerPlace(frm, "toggle", 100, 100) = 3 And DesignerPlace(frm, "card", 600, 100) = 4, "Designer data elements not placed"
+    Check DesignerItem(2) = "text 304,88 200x30 " And DesignerItem(3) = "toggle 80,88 44x24 ", "Designer data elements landed at " & _
+        DesignerItem(2) & " and " & DesignerItem(3)
+    ' The form's settings: refused with the reason, nothing changed.
+    Check DesignerSetForm("", "100", "300", "page", "") <> "" And DesignerSetForm("", "400", "300", "page", "") <> "" _
+        And DesignerSetForm("", "776", "408", "page", "dz_missing") <> "" And DesignerSetForm("", "776", "408", "sheet", "") <> "" _
+        And DesignerSetForm("", "800", "408", "page", "") <> "", "Designer form took bad settings"
+    Check DesignerFormData() = "page 776x408 |", "Designer refused form settings still changed " & DesignerFormData()
+    Check DesignerSetForm("", "776", "408", "page", "dz_item") = "", "Designer record source refused"
+    ' Fields: only from the record source, only on a kind that holds a value.
+    Check DesignerSetProps(2, "", "", "", "", "no_such_field") <> "" And DesignerSetProps(4, "Card title", "", "", "", "item_name") <> "", _
+        "Designer bound a missing field or a card"
+    Check DesignerSetProps(2, "", "", "", "", "item_name") = "" And DesignerSetProps(3, "", "", "", "", "done") = "", _
+        "Designer field binding refused"
+    Check DesignerSetForm("", "776", "408", "page", "") <> "", "Designer dropped the record source of bound elements"
+    ' Anchors: any element moves with an edge; only one control or a card stretches.
+    Check DesignerSetProps(1, "Button", "", "", "primary", , "tr") = "" And DesignerSetProps(4, "Card title", "", "", "", , "both") = "", _
+        "Designer anchor refused"
+    Check DesignerSetProps(3, "", "", "", "", , "both") <> "" And DesignerSetProps(3, "", "", "", "", , "nowhere") <> "", _
+        "Designer stretched a toggle, or took an unknown anchor"
+    Check DesignerItemData(1) = "|tr|0" And DesignerItemData(2) = "item_name||0" And DesignerItemData(3) = "done||0" _
+        And DesignerItemData(4) = "|both|0", "Designer settings kept as " & DesignerItemData(1) & ", " & DesignerItemData(2)
+    ' Tab order: the reading order (toggle, text box, button); Move up puts the button second.
+    DoCmd.OpenForm "dlgDzTabs"
+    Set dlg = Forms("dlgDzTabs")
+    Check dlg("lstTabs").ListCount = 3 And InStr(dlg("lstTabs").Column(1, 0), "Toggle") > 0 _
+        And InStr(dlg("lstTabs").Column(1, 2), "Button") > 0 And Not dlg("btnReading").Enabled, "Designer tab order isn't the reading order"
+    dlg("lstTabs").Value = "2"
+    DesignerTabsMove dlg, -1
+    Check InStr(dlg("lstTabs").Column(1, 1), "Button") > 0 And dlg("lstTabs").Value = "1" And dlg("btnReading").Enabled, _
+        "Designer tab order didn't move the button up"
+    DesignerTabsSave dlg
+    DoCmd.Close acForm, "dlgDzTabs", acSaveNo
+    Check DesignerItemData(1) = "|tr|2" And DesignerItemData(2) = "item_name||3" And DesignerItemData(3) = "done||1", _
+        "Designer tab order not kept: " & DesignerItemData(1) & ", " & DesignerItemData(2) & ", " & DesignerItemData(3)
+    ' Generate: bound builders, anchors, the tab order, and the same in the preview.
+    frm("txtDzName").Value = "Dz data"
+    Check DesignerSave(frm), "Designer data layout not saved"
+    id = Nz(DLookup("id", "kit_layout", "layout_name='Dz data'"), 0)
+    code = DesignerCode(id)
+    Check InStr(code, "NewForm ""dz_item"", 0, px(776), px(408)") > 0 _
+        And InStr(code, "Txt ""txt1"", ""[item_name]"", px(304), px(88), px(200), px(30)") > 0 _
+        And InStr(code, "Toggle ""tgl1"", ""[done]"", px(80), px(88)") > 0 _
+        And InStr(code, "Card ""card1"", ""Card title"", px(480), px(32), px(240), px(136), """", 2, 2") > 0 _
+        And InStr(code, "    Dim k As String") > 0 _
+        And InStr(code, "k = BuiltNames()" & vbCrLf & "    Btn ""btn1""") > 0 And InStr(code, "AnchorBuilt k, 1, 0") > 0 _
+        And InStr(code, "TabOrder Array(""tgl1"", ""btn1"", ""txt1"")") > 0, "Designer data build code wrong: " & code
+    DesignerPreview id
+    Check IsFormOpen("dzPreview"), "Designer data preview not open"
+    With Forms("dzPreview")
+        Check .RecordSource = "dz_item" And Not .AllowEdits And .txt1.Value = "Pump" And .tgl1_val.Value = True, _
+            "Designer preview not bound to the record source, read-only"
+        Check .btn1.HorizontalAnchor = 1 And .btn1.VerticalAnchor = 0 And .boxcard1.HorizontalAnchor = 2 _
+            And .boxcard1.VerticalAnchor = 2 And .txt1.HorizontalAnchor = 0, "Designer preview not anchored"
+        Check .tgl1.TabIndex < .btn1.TabIndex And .btn1.TabIndex < .txt1.TabIndex And .txtFocusSink.TabIndex = 0, _
+            "Designer preview tab order wrong"
+    End With
+    DoCmd.Close acForm, "dzPreview", acSaveNo
+    ' A dialog: no anchors, its title on the title bar, and a stub that says how to report OK.
+    DesignerSelect frm, 4
+    DesignerDelete frm
+    Check DesignerSetForm("Edit item", "520", "336", "dialog", "dz_item") = "", "Designer dialog settings refused"
+    Check DesignerFormData() = "dialog 520x336 dz_item|Edit item", "Designer dialog settings kept as " & DesignerFormData()
+    Check DesignerSave(frm), "Designer dialog layout not saved"
+    code = DesignerCode(id)
+    Check InStr(code, "Private Sub Build_dlgDzData()") > 0 And InStr(code, "NewDialog ""Edit item"", px(520), px(336)") > 0 _
+        And InStr(code, "F.RecordSource = ""dz_item""") > 0 And InStr(code, "AnchorBuilt") = 0, "Designer dialog build code wrong: " & code
+    Check InStr(DesignerStub(id), "RunDialog") > 0, "Designer dialog stub doesn't say how to report OK"
+    DesignerPreview id
+    Check Forms("dzPreview").Caption = "Preview: Edit item" And Forms("dzPreview").btn1.HorizontalAnchor = 0, _
+        "Designer dialog preview wrong"
+    DoCmd.Close acForm, "dzPreview", acSaveNo
+    DoCmd.DeleteObject acForm, "dzPreview"
+    ' Reopened: the form's settings, bindings, anchors and tab places come back.
+    DesignerNew frm
+    Check DesignerFormData() = "page 776x408 |", "Designer New kept the form's settings"
+    frm("cboDzOpen").Value = id
+    DesignerOpen frm
+    Check DesignerFormData() = "dialog 520x336 dz_item|Edit item" And DesignerItemData(1) = "item_name||3" _
+        And DesignerItemData(2) = "done||1" And DesignerItemData(3) = "|tr|2", "Designer layout didn't reopen its data settings: " & _
+        DesignerFormData() & ", " & DesignerItemData(1) & ", " & DesignerItemData(3)
+    DoCmd.Close acForm, DZ_FORM, acSaveNo
+    DoCmd.DeleteObject acForm, DZ_FORM
+    CurrentDb.TableDefs.Delete "kit_layout_item": CurrentDb.TableDefs.Delete "kit_layout": CurrentDb.TableDefs.Delete "dz_item"
 End Sub
 
 Private Sub TestEventLog()

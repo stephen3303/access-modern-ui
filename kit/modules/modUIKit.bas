@@ -1821,6 +1821,67 @@ Public Sub Anchor(c As Control, ByVal h As Integer, ByVal v As Integer)
     c.VerticalAnchor = v
 End Sub
 
+' The names of the controls on the form under construction so far, for
+' AnchorBuilt: take them before building an element, anchor after it.
+Public Function BuiltNames() As String
+    Dim c As Control, s As String
+    s = ";"
+    For Each c In F.Controls
+        s = s & c.Name & ";"
+    Next
+    BuiltNames = s
+End Function
+
+' Anchor (see Anchor) every control made since BuiltNames gave before, so an
+' element built of several parts (a search box, a stepper) moves as one:
+'   k = BuiltNames(): SearchBox "search1", ...: AnchorBuilt k, 1, 0
+' Stretch (2) only an element of one control; a card anchors with its own
+' hAnchor and vAnchor.
+Public Sub AnchorBuilt(ByVal before As String, ByVal h As Integer, ByVal v As Integer)
+    Dim c As Control
+    For Each c In F.Controls
+        If InStr(1, before, ";" & c.Name & ";", vbTextCompare) = 0 Then Anchor c, h, v
+    Next
+End Sub
+
+' Tab order of the form under construction. names is an array of elements,
+' each a control or one built of parts named <name>_... (a segmented
+' control's option buttons, a search box's clear mark): their controls take
+' the tab positions after the focus sink in turn, an element's parts in the
+' order they were made. Controls not named keep their order after them.
+'   TabOrder Array("txtName", "seg1", "btnSave")
+Public Sub TabOrder(ByVal names As Variant)
+    Dim c As Control, i As Long, j As Long, n As Long, first As Long, idx As Long, nm As String
+    Dim order() As String, rank() As Long
+    ReDim order(F.Controls.Count): ReDim rank(F.Controls.Count)
+    For i = LBound(names) To UBound(names)
+        nm = CStr(names(i))
+        first = n
+        For Each c In F.Controls
+            If StrComp(c.Name, nm, vbTextCompare) = 0 Or StrComp(Left$(c.Name, Len(nm) + 1), nm & "_", vbTextCompare) = 0 Then
+                idx = -1
+                On Error Resume Next                ' labels, boxes and images take no tab position
+                idx = c.TabIndex
+                On Error GoTo 0
+                If idx >= 0 Then
+                    ' Into this element's run, by the position it was made with.
+                    j = n
+                    Do While j > first
+                        If rank(j - 1) <= idx Then Exit Do
+                        order(j) = order(j - 1): rank(j) = rank(j - 1)
+                        j = j - 1
+                    Loop
+                    order(j) = c.Name: rank(j) = idx
+                    n = n + 1
+                End If
+            End If
+        Next
+    Next
+    For j = 0 To n - 1
+        F.Controls(order(j)).TabIndex = j + 1
+    Next
+End Sub
+
 ' Add an expression-based conditional format. back / fore = -1 keep the
 ' control's own color.
 Public Function CF(c As Control, ByVal expr As String, ByVal back As Long, ByVal fore As Long, _

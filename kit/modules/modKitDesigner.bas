@@ -26,12 +26,20 @@ Option Explicit
 ' MouseMove until the mouse is released, wherever the pointer goes.
 '
 ' Build the page with BuildDesigner (it attaches kit\forms\pgDesigner.vba
-' and builds the settings dialog dlgDzProps, kit\forms\dlgDzProps.vba);
-' their code-behind hands every event to the Designer* routines here.
-' Positions and sizes are in px from the canvas's top-left corner, on an
-' 8px grid (DZ_GRID). Double-click an element, or Edit, for its settings;
-' Esc cancels a palette click; Delete removes the selected element; the
-' arrow keys move it 8px (1px with Shift).
+' and builds the settings dialog dlgDzProps, kit\forms\dlgDzProps.vba, and
+' the tab order dialog dlgDzTabs, kit\forms\dlgDzTabs.vba); their
+' code-behind hands every event to the Designer* routines here. Positions
+' and sizes are in px from the canvas's top-left corner, on an 8px grid
+' (DZ_GRID). Double-click an element, or Edit, for its settings; Esc cancels
+' a palette click; Delete removes the selected element; the arrow keys move
+' it 8px (1px with Shift).
+'
+' Form (the same settings dialog) sets what the layout builds: a page or a
+' dialog, its size (the outlined area of the canvas) and its record source,
+' a table or query whose fields the elements that hold a value can be bound
+' to. On a page each element can be anchored to the right or bottom edge, or
+' stretch with the window. Tab order lists the elements that take the focus:
+' in reading order (top to bottom, then left to right) until moved.
 
 Private Const DZ_GRID As Long = 8               ' snap, px
 Private Const DZ_GRIP As Long = 8               ' resize handle, px
@@ -49,7 +57,11 @@ Private Const DZ_TILE_H As Long = 26
 Private Const DZ_TILE_STEP As Long = 30         ' tile to tile, down
 Private Const DZ_PREVIEW As String = "dzPreview"   ' the form Generate builds to show a layout
 Private Const DZ_PROPS As String = "dlgDzProps"    ' the settings dialog
+Private Const DZ_TABS As String = "dlgDzTabs"      ' the tab order dialog
 Private Const DZ_EMPTY_GLYPH As String = "E7C1"    ' an empty state's icon
+Private Const DZ_ROWS As Long = 6               ' settings dialog rows: 3 text, then 3 lists
+Private Const DZ_MIN_FW As Long = 160           ' smallest form, px
+Private Const DZ_MIN_FH As Long = 120
 
 Private Const MODE_IDLE As Integer = 0
 Private Const MODE_MOVE As Integer = 1
@@ -59,7 +71,9 @@ Private Const MODE_ARMED As Integer = 4         ' palette element clicked; the n
 
 ' The layout being edited: items 1..m_n, each in slot m_slot of its kind's
 ' pool. m_text, m_text2 and m_text3 are the settings in the dialog's first
-' three rows, m_choice the fourth (a pick from a list).
+' three rows, m_choice the fourth (a pick from a list), m_field the field
+' it is bound to ("" for none), m_anchor its anchor (AnchorOf; "" stays
+' top left) and m_tab its place in the tab order (0 for reading order).
 Private m_kind(1 To DZ_MAX) As String
 Private m_slot(1 To DZ_MAX) As Long
 Private m_x(1 To DZ_MAX) As Long
@@ -70,7 +84,21 @@ Private m_text(1 To DZ_MAX) As String
 Private m_text2(1 To DZ_MAX) As String
 Private m_text3(1 To DZ_MAX) As String
 Private m_choice(1 To DZ_MAX) As String
+Private m_field(1 To DZ_MAX) As String
+Private m_anchor(1 To DZ_MAX) As String
+Private m_tab(1 To DZ_MAX) As Long
 Private m_n As Long
+' The form the layout builds: "page" or "dialog", its size in px (inside the
+' canvas), record source ("" for none) and a dialog's title ("" for the
+' layout's name).
+Private m_formKind As String
+Private m_fw As Long
+Private m_fh As Long
+Private m_recSrc As String
+Private m_title As String
+Private m_propsForm As Boolean                  ' the settings dialog is showing Form, not an element
+Private m_tabSeq() As Long                      ' the tab order dialog's list: item numbers in order
+Private m_tabReading As Boolean                 ' ... and whether it is the reading order
 Private m_sel As Long                           ' selected item, 0 for none
 Private m_mode As Integer
 Private m_tool As String                        ' kind being dragged in or armed
@@ -91,19 +119,21 @@ Private m_dirty As Boolean
 
 ' The designer page, w x h twips with x twips of padding on each side:
 ' Elements (the palette) and Selected (the selected element, Edit and
-' Delete) on the left, the layout list, name, New, Generate and Save above
-' the canvas on the right. Saved as formName with pgDesigner.vba's code.
-' Builds its settings dialog dlgDzProps first.
+' Delete) on the left, the layout list, name, Form, Tab order, New, Generate
+' and Save above the canvas on the right. Saved as formName with
+' pgDesigner.vba's code. Builds its dialogs dlgDzProps and dlgDzTabs first.
 Public Sub BuildDesigner(ByVal formName As String, ByVal x As Long, ByVal w As Long, ByVal h As Long)
     Dim c As Control, i As Long, ty As Long, py As Long, lw As Long, cx As Long, cy As Long, cw As Long, ch As Long
     Dim kinds() As String, rows As Long
     BuildDesignerDialog
+    BuildDesignerTabsDialog
     NewForm "", 0, w, h
     F.KeyPreview = True                          ' Delete, Esc and the arrow keys (Form_KeyDown)
     Ev F, "OnLoad", "OnKeyDown"
     PageHeader "Form designer", "Drag an element from Elements onto the canvas, or click one and then click the canvas. " & _
         "Drag an element to move it, and its corner handle to resize it. Everything snaps to an 8px grid. " & _
-        "Double-click an element for its settings. Save keeps the layout under its name; Generate builds it as a real form.", x
+        "Double-click an element for its settings, and click Form for the form's: page or dialog, size and record source. " & _
+        "Save keeps the layout under its name; Generate builds it as a real form.", x
     lw = px(200)
     cx = x + lw + px(16)
     cw = w - x - cx
@@ -137,16 +167,19 @@ Public Sub BuildDesigner(ByVal formName As String, ByVal x As Long, ByVal w As L
     Set c = Btn("btnDzDelete", "Delete", x + px(108), py + px(90), px(76), px(28), "outline")
     c.Enabled = False
 
-    ' Layout list, name, New, Generate and Save.
-    Lbl "lblDzOpen", "OPEN A LAYOUT", cx, px(76), px(220), px(16), 8, True, CLR_MUTED_FG
-    Set c = Cbo("cboDzOpen", "", "", cx, px(94), px(220), px(30), 2, "0;" & px(220))
+    ' Layout list, name, Form, Tab order, New, Generate and Save.
+    Lbl "lblDzOpen", "OPEN A LAYOUT", cx, px(76), px(168), px(16), 8, True, CLR_MUTED_FG
+    Set c = Cbo("cboDzOpen", "", "", cx, px(94), px(168), px(30), 2, "0;" & px(168))
     Ev c, "AfterUpdate"
-    Lbl "lblDzName", "LAYOUT NAME", cx + px(232), px(76), px(220), px(16), 8, True, CLR_MUTED_FG
-    Set c = Txt("txtDzName", "", cx + px(232), px(94), px(220), px(30))
+    Lbl "lblDzName", "LAYOUT NAME", cx + px(180), px(76), px(168), px(16), 8, True, CLR_MUTED_FG
+    Set c = Txt("txtDzName", "", cx + px(180), px(94), px(168), px(30))
     Ev c, "AfterUpdate"
-    Btn "btnDzNew", "New", cx + cw - px(268), px(95), px(84), px(28), "outline"
-    Btn "btnDzGenerate", "Generate", cx + cw - px(176), px(95), px(84), px(28), "outline"
-    Btn "btnDzSave", "Save", cx + cw - px(84), px(95), px(84), px(28)
+    Set c = Btn("btnDzForm", "Form" & ChrW(8230), cx + cw - px(416), px(95), px(72), px(28), "outline")
+    c.ControlTipText = "Page or dialog, size and record source"
+    Btn "btnDzTabs", "Tab order" & ChrW(8230), cx + cw - px(336), px(95), px(92), px(28), "outline"
+    Btn "btnDzNew", "New", cx + cw - px(236), px(95), px(64), px(28), "outline"
+    Btn "btnDzGenerate", "Generate", cx + cw - px(164), px(95), px(84), px(28), "outline"
+    Btn "btnDzSave", "Save", cx + cw - px(72), px(95), px(72), px(28)
 
     ' Canvas, its empty-state hint, then the pools back to front.
     Box "dzCanvas", cx, cy, cw, ch, CLR_BG, CLR_BORDER
@@ -186,32 +219,62 @@ Public Sub BuildDesigner(ByVal formName As String, ByVal x As Long, ByVal w As L
     SaveForm formName, "pgDesigner"
 End Sub
 
-' The settings dialog dlgDzProps: a title and four rows (three text boxes
-' and a list), each with its caption; dlgDzProps.vba shows the rows the
-' selected kind uses (DesignerPropsLoad) and checks them on OK
-' (DesignerPropsSave).
+' The settings dialog dlgDzProps: a title and DZ_ROWS rows (three text
+' boxes, then three lists), each with its caption; dlgDzProps.vba shows the
+' rows the selected element's kind uses, or Form's (DesignerPropsLoad), and
+' checks them on OK (DesignerPropsSave). The last list's first column is
+' the setting, its second what the list shows.
 Public Sub BuildDesignerDialog()
     Dim c As Control, r As Long, y As Long
-    NewDialog "Element settings", px(400), px(56 + 4 * 64 + 48 + 30 + 20)
+    y = px(56 + DZ_ROWS * 64 + 60)
+    NewDialog "Element settings", px(400), y + px(30 + 20)
     Ev F, "OnLoad"
     Lbl "lblPTitle", "", px(20), px(18), px(360), px(26), 12, True
-    For r = 1 To 4
-        y = px(56 + (r - 1) * 64)
-        Lbl "lblP" & r, "", px(20), y, px(360), px(16), 8, True, CLR_MUTED_FG
-        If r < 4 Then
-            Txt "txtP" & r, "", px(20), y + px(18), px(360), px(30)
+    For r = 1 To DZ_ROWS
+        Lbl "lblP" & r, "", px(20), px(56 + (r - 1) * 64), px(360), px(16), 8, True, CLR_MUTED_FG
+        If r <= 3 Then
+            Txt "txtP" & r, "", px(20), px(56 + (r - 1) * 64 + 18), px(360), px(30)
+        ElseIf r < DZ_ROWS Then
+            Set c = Cbo("cboP" & r, "", "", px(20), px(56 + (r - 1) * 64 + 18), px(360), px(30))
+            c.RowSourceType = "Value List"
         Else
-            Set c = Cbo("cboP4", "", "", px(20), y + px(18), px(360), px(30))
+            Set c = Cbo("cboP" & r, "", "", px(20), px(56 + (r - 1) * 64 + 18), px(360), px(30), 2, "0;" & px(340))
             c.RowSourceType = "Value List"
         End If
     Next
-    Lbl "lblPHint", "", px(20), px(56 + 4 * 64), px(360), px(40), 9, False, CLR_MUTED_FG
-    y = px(56 + 4 * 64 + 48)
+    Lbl "lblPHint", "", px(20), px(56 + DZ_ROWS * 64), px(360), px(52), 9, False, CLR_MUTED_FG
     Set c = Btn("btnOK", "OK", px(400) - px(20) - 2 * px(88) - px(8), y, px(88), px(30))
     c.Default = True
     Set c = Btn("btnCancel", "Cancel", px(400) - px(20) - px(88), y, px(88), px(30), "outline")
     c.Cancel = True
     SaveForm DZ_PROPS
+End Sub
+
+' The tab order dialog dlgDzTabs: the elements that take the focus, in tab
+' order (DesignerTabsLoad), with Move up, Move down and Reading order beside
+' them, and OK and Cancel; dlgDzTabs.vba hands its events to DesignerTabs*.
+Public Sub BuildDesignerTabsDialog()
+    Dim c As Control, listY As Long, listH As Long, sideX As Long, btnY As Long
+    listY = px(64): listH = px(260)
+    sideX = px(SP_DIALOG) + px(300) + px(12)
+    btnY = listY + listH + px(20)
+    NewDialog "Tab order", px(460), btnY + px(30) + px(SP_DIALOG)
+    Ev F, "OnLoad"
+    Lbl "lblHint", "The order the Tab key moves through the form. Until you move one, it is the reading order: " & _
+        "top to bottom, then left to right.", px(SP_DIALOG), px(18), px(412), px(36), 9, False, CLR_MUTED_FG
+    ' Hidden position, then what the element is: 20px left for the scroll bar.
+    Set c = Lst("lstTabs", "", px(SP_DIALOG), listY, px(300), listH, 2, "0;" & px(280))
+    c.RowSourceType = "Value List"
+    c.ColumnHeads = False
+    Ev c, "AfterUpdate"
+    Btn "btnUp", "Move up", sideX, listY, px(100), px(30), "outline"
+    Btn "btnDown", "Move down", sideX, listY + px(38), px(100), px(30), "outline"
+    Btn "btnReading", "Reading order", sideX, listY + px(88), px(100), px(30), "ghost"
+    Set c = Btn("btnOK", "OK", px(460) - px(SP_DIALOG) - 2 * px(88) - px(8), btnY, px(88), px(30))
+    c.Default = True
+    Set c = Btn("btnCancel", "Cancel", px(460) - px(SP_DIALOG) - px(88), btnY, px(88), px(30), "outline")
+    c.Cancel = True
+    SaveForm DZ_TABS
 End Sub
 
 ' A transparent button that takes the mouse for what is drawn under it.
@@ -248,7 +311,7 @@ Public Sub DesignerMouse(frm As Form, ByVal phase As Integer, ByVal btn As Integ
         Case 1
             If btn <> acLeftButton Then Exit Sub
             If m_mode = MODE_ARMED Then
-                Place frm, m_tool, p, q
+                If p < m_fw And q < m_fh Then Place frm, m_tool, p, q     ' past the form's edge: still armed
                 Exit Sub
             End If
             m_mode = MODE_IDLE
@@ -302,7 +365,7 @@ Public Sub DesignerToolMouse(frm As Form, ByVal phase As Integer, ByVal btn As I
             m_gOn = False
         Case 2
             If m_mode <> MODE_DRAG Or (btn And acLeftButton) = 0 Then Exit Sub
-            If p >= 0 And q >= 0 And p < m_cw And q < m_ch Then
+            If p >= 0 And q >= 0 And p < m_fw And q < m_fh Then
                 Landing m_tool, p, q, m_gx, m_gy
                 m_gOn = True
                 Outline frm, m_gx, m_gy, DefaultW(m_tool), DefaultH(m_tool), False
@@ -366,15 +429,41 @@ End Function
 ' btnDzEdit, a double-click on an element, and Enter on the canvas: the
 ' selected element's settings (dlgDzProps), redrawn when they change.
 Public Sub DesignerEdit(frm As Form)
+    Dim r As Long, used As Boolean
     If m_sel = 0 Then Exit Sub
-    If Len(RowCaption(m_kind(m_sel), 1)) = 0 And Len(RowCaption(m_kind(m_sel), 4)) = 0 Then
-        KitToast "A " & LCase$(KindCaption(m_kind(m_sel))) & " has no settings yet: size it on the canvas.", "info"
+    For r = 1 To DZ_ROWS
+        If Len(RowCaption(m_kind(m_sel), r)) > 0 Then used = True
+    Next
+    If Not used Then
+        KitToast "A " & LCase$(KindCaption(m_kind(m_sel))) & " has no settings on a dialog: size it on the canvas.", "info"
         Exit Sub
     End If
+    m_propsForm = False
     If RunDialog(DZ_PROPS) Then
         Render frm, m_sel
         ShowSelection frm
     End If
+End Sub
+
+' btnDzForm: the form's settings (page or dialog, size, record source) in
+' dlgDzProps; the canvas shows the new size.
+Public Sub DesignerForm(frm As Form)
+    m_propsForm = True
+    If RunDialog(DZ_PROPS) Then
+        ShowCanvas frm
+        ShowSelection frm
+    End If
+    m_propsForm = False
+End Sub
+
+' btnDzTabs: the tab order of the elements that take the focus (dlgDzTabs).
+Public Sub DesignerTabs(frm As Form)
+    Dim seq() As Long
+    If TabSequence(seq) = 0 Then
+        KitToast "Nothing on the canvas takes the focus yet: add a text box, a button or another control first.", "info"
+        Exit Sub
+    End If
+    RunDialog DZ_TABS
 End Sub
 
 ' txtDzName's AfterUpdate: a new name is a change to save.
@@ -392,6 +481,7 @@ Public Sub DesignerDelete(frm As Form)
         m_kind(j) = m_kind(j + 1): m_slot(j) = m_slot(j + 1)
         m_x(j) = m_x(j + 1): m_y(j) = m_y(j + 1): m_w(j) = m_w(j + 1): m_h(j) = m_h(j + 1)
         m_text(j) = m_text(j + 1): m_text2(j) = m_text2(j + 1): m_text3(j) = m_text3(j + 1): m_choice(j) = m_choice(j + 1)
+        m_field(j) = m_field(j + 1): m_anchor(j) = m_anchor(j + 1): m_tab(j) = m_tab(j + 1)
     Next
     m_n = m_n - 1
     m_sel = 0
@@ -447,8 +537,11 @@ Public Function DesignerSave(frm As Form) As Boolean
     Set rs = db.OpenRecordset("SELECT * FROM kit_layout WHERE id=" & m_layoutId, dbOpenDynaset)
     If rs.EOF Then rs.AddNew Else rs.Edit
     rs!layout_name = nm
-    rs!form_width = m_cw
-    rs!form_height = m_ch
+    rs!form_width = m_fw
+    rs!form_height = m_fh
+    rs!form_kind = m_formKind
+    rs!record_source = IIf(Len(m_recSrc) = 0, Null, m_recSrc)
+    rs!form_title = IIf(Len(m_title) = 0, Null, m_title)
     rs!saved_at = Now()
     rs!saved_by = KitUser()
     rs.Update
@@ -474,6 +567,9 @@ Public Function DesignerSave(frm As Form) As Boolean
                 rs!item_text2 = m_text2(i)
                 rs!item_text3 = m_text3(i)
                 rs!item_choice = m_choice(i)
+                rs!item_field = IIf(Len(m_field(i)) = 0, Null, m_field(i))
+                rs!item_anchor = IIf(Len(m_anchor(i)) = 0, Null, m_anchor(i))
+                rs!item_tab = m_tab(i)
                 rs!x = m_x(i): rs!y = m_y(i): rs!w = m_w(i): rs!h = m_h(i)
                 rs.Update
             End If
@@ -509,18 +605,23 @@ End Function
 ' Settings dialog (dlgDzProps's code-behind)
 ' ---------------------------------------------------------------------------
 
-' Form_Load: the selected element's kind as the title, the rows it uses
-' (moved up under each other, the dialog shrunk to fit) with its settings,
-' and what the rows take.
+' Form_Load: the selected element's kind as the title (or "Form settings"),
+' the rows it uses (moved up under each other, the dialog shrunk to fit)
+' with its settings, and what the rows take.
 Public Sub DesignerPropsLoad(dlg As Form)
-    Dim i As Long, r As Long, y As Long, cap As String, inp As Control, dy As Long
+    Dim i As Long, r As Long, y As Long, cap As String, inp As Control, dy As Long, first As String
     i = m_sel
-    If i = 0 Then Exit Sub
-    dlg("lblPTitle").Caption = KindCaption(m_kind(i)) & " settings"
+    If i = 0 And Not m_propsForm Then Exit Sub
+    If m_propsForm Then
+        dlg.Caption = "Form settings"
+        dlg("lblPTitle").Caption = "Form settings"
+    Else
+        dlg("lblPTitle").Caption = KindCaption(m_kind(i)) & " settings"
+    End If
     y = dlg("lblP1").Top
-    For r = 1 To 4
-        cap = RowCaption(m_kind(i), r)
-        If r < 4 Then Set inp = dlg("txtP" & r) Else Set inp = dlg("cboP4")
+    For r = 1 To DZ_ROWS
+        cap = PropsCaption(r)
+        If r <= 3 Then Set inp = dlg("txtP" & r) Else Set inp = dlg("cboP" & r)
         SetVisible dlg("lblP" & r), Len(cap) > 0
         SetVisible inp, Len(cap) > 0
         If Len(cap) > 0 Then
@@ -528,16 +629,33 @@ Public Sub DesignerPropsLoad(dlg As Form)
             dlg("lblP" & r).Top = y
             inp.Top = y + px(18)
             y = y + px(64)
+            If Len(first) = 0 Then first = inp.Name
         End If
     Next
-    dlg("txtP1").Value = m_text(i)
-    dlg("txtP2").Value = m_text2(i)
-    dlg("txtP3").Value = m_text3(i)
-    dlg("cboP4").RowSource = ChoiceList(m_kind(i))
-    dlg("cboP4").Value = IIf(Len(m_choice(i)) = 0, Null, m_choice(i))
-    dlg("lblPHint").Caption = KindHint(m_kind(i))
+    If m_propsForm Then
+        dlg("txtP1").Value = m_title
+        dlg("txtP2").Value = m_fw
+        dlg("txtP3").Value = m_fh
+        dlg("cboP4").RowSource = "page;dialog"
+        dlg("cboP4").Value = m_formKind
+        dlg("cboP5").RowSource = SourceList()
+        dlg("cboP5").Value = IIf(Len(m_recSrc) = 0, Null, m_recSrc)
+        dlg("lblPHint").Caption = "A page fills the app's window; a dialog opens over it. The form shows the first record " & _
+            "of its record source: one with no records shows nothing. Elements' fields come from it."
+    Else
+        dlg("txtP1").Value = m_text(i)
+        dlg("txtP2").Value = m_text2(i)
+        dlg("txtP3").Value = m_text3(i)
+        dlg("cboP4").RowSource = ChoiceList(m_kind(i))
+        dlg("cboP4").Value = IIf(Len(m_choice(i)) = 0, Null, m_choice(i))
+        dlg("cboP5").RowSource = """""" & FieldList(m_recSrc)  ' an empty first row unbinds
+        dlg("cboP5").Value = IIf(Len(m_field(i)) = 0, Null, m_field(i))
+        dlg("cboP6").RowSource = AnchorList(m_kind(i))
+        dlg("cboP6").Value = IIf(Len(m_anchor(i)) = 0, "tl", m_anchor(i))
+        dlg("lblPHint").Caption = Trim$(KindHint(m_kind(i)) & " " & FieldHint(m_kind(i)))
+    End If
     dlg("lblPHint").Top = y
-    dy = dlg("btnOK").Top - (y + px(48))
+    dy = dlg("btnOK").Top - (y + px(60))
     If dy > 0 Then
         dlg("btnOK").Top = dlg("btnOK").Top - dy
         dlg("btnCancel").Top = dlg("btnOK").Top
@@ -545,16 +663,24 @@ Public Sub DesignerPropsLoad(dlg As Form)
         dlg.InsideHeight = dlg.Section(acDetail).Height
     End If
     CenterOnApp dlg
-    If Len(RowCaption(m_kind(i), 1)) > 0 Then dlg("txtP1").SetFocus Else dlg("cboP4").SetFocus
+    dlg(first).SetFocus
 End Sub
 
-' OK: apply the dialog's settings to the selected element (DesignerSetProps).
-' False, after saying what is wrong, when they don't fit its kind.
+' OK: apply the dialog's settings to the selected element (DesignerSetProps)
+' or the form (DesignerSetForm). False, after saying what is wrong, when they
+' don't fit.
 Public Function DesignerPropsSave(dlg As Form) As Boolean
     Dim msg As String
-    If m_sel = 0 Then DesignerPropsSave = True: Exit Function
-    msg = DesignerSetProps(m_sel, Nz(dlg("txtP1").Value, ""), Nz(dlg("txtP2").Value, ""), Nz(dlg("txtP3").Value, ""), _
-        Nz(dlg("cboP4").Value, ""))
+    If m_propsForm Then
+        msg = DesignerSetForm(Nz(dlg("txtP1").Value, ""), Nz(dlg("txtP2").Value, ""), Nz(dlg("txtP3").Value, ""), _
+            Nz(dlg("cboP4").Value, ""), Nz(dlg("cboP5").Value, ""))
+    ElseIf m_sel = 0 Then
+        DesignerPropsSave = True
+        Exit Function
+    Else
+        msg = DesignerSetProps(m_sel, Nz(dlg("txtP1").Value, ""), Nz(dlg("txtP2").Value, ""), Nz(dlg("txtP3").Value, ""), _
+            Nz(dlg("cboP4").Value, ""), Nz(dlg("cboP5").Value, ""), Nz(dlg("cboP6").Value, ""))
+    End If
     If Len(msg) > 0 Then
         KitMsgBox msg, vbExclamation, "Form designer"
         Exit Function
@@ -562,20 +688,217 @@ Public Function DesignerPropsSave(dlg As Form) As Boolean
     DesignerPropsSave = True
 End Function
 
-' Give item i these settings (the dialog's four rows), then keep it inside
-' the sizes they allow (a segmented control's options, a rating's stars).
-' Returns what is wrong with them instead, changing nothing; "" when applied.
-' The caller redraws the item (DesignerRedraw).
+' Give item i these settings (the dialog's rows: three texts, a choice, the
+' field it is bound to and its anchor; a field or anchor left out stays as
+' it is), then keep it inside the sizes they allow (a segmented control's
+' options, a rating's stars). Returns what is wrong with them instead,
+' changing nothing; "" when applied. The caller redraws the item
+' (DesignerRedraw).
 Public Function DesignerSetProps(ByVal i As Long, ByVal t1 As String, ByVal t2 As String, ByVal t3 As String, _
-        ByVal choice As String) As String
+        ByVal choice As String, Optional ByVal fld As Variant, Optional ByVal anc As Variant) As String
     Dim msg As String
     t1 = Left$(Trim$(t1), 255): t2 = Left$(Trim$(t2), 255): t3 = Left$(Trim$(t3), 255): choice = Trim$(choice)
+    If IsMissing(fld) Then fld = m_field(i) Else fld = Trim$(Nz(fld, ""))
+    If IsMissing(anc) Then anc = m_anchor(i) Else anc = Trim$(Nz(anc, ""))
+    If anc = "tl" Then anc = ""
     msg = PropsProblem(m_kind(i), t1, t2, t3, choice)
+    If Len(msg) = 0 Then msg = FieldProblem(m_kind(i), CStr(fld))
+    If Len(msg) = 0 And Len(anc) > 0 And InStr(";" & AnchorList(m_kind(i)) & ";", ";" & anc & ";") = 0 Then _
+        msg = "Pick an anchor from the list."
     If Len(msg) > 0 Then DesignerSetProps = msg: Exit Function
     m_text(i) = t1: m_text2(i) = t2: m_text3(i) = t3: m_choice(i) = choice
+    m_field(i) = fld: m_anchor(i) = anc
     FitRect i, m_x(i), m_y(i), m_w(i), m_h(i)
     m_dirty = True
 End Function
+
+' Give the form these settings: a dialog's title ("" for the layout's name),
+' its width and height in px, "page" or "dialog", and its record source (a
+' table or query, "" for none). Returns what is wrong with them instead,
+' changing nothing: a size outside DZ_MIN_FW x DZ_MIN_FH to the canvas, or
+' smaller than the elements reach; a record source that isn't here, or
+' lacks a field an element is bound to. "" when applied; the caller redraws
+' the canvas (ShowCanvas).
+Public Function DesignerSetForm(ByVal title As String, ByVal w As String, ByVal h As String, ByVal kind As String, _
+        ByVal src As String) As String
+    Dim i As Long, reachX As Long, reachY As Long, msg As String
+    title = Left$(Trim$(title), 255): w = Trim$(w): h = Trim$(h): kind = Trim$(kind): src = Trim$(src)
+    For i = 1 To m_n
+        If m_x(i) + m_w(i) > reachX Then reachX = m_x(i) + m_w(i)
+        If m_y(i) + m_h(i) > reachY Then reachY = m_y(i) + m_h(i)
+    Next
+    If kind <> "page" And kind <> "dialog" Then
+        msg = "Pick page or dialog."
+    ElseIf Not IsWholeNumber(w) Or Not IsWholeNumber(h) Then
+        msg = "The width and height are whole numbers of px."
+    ElseIf Val(w) < DZ_MIN_FW Or Val(h) < DZ_MIN_FH Or Val(w) > m_cw Or Val(h) > m_ch Then
+        msg = "The form can be " & DZ_MIN_FW & " x " & DZ_MIN_FH & " px to " & m_cw & " x " & m_ch & " px, the canvas."
+    ElseIf Val(w) < reachX Or Val(h) < reachY Then
+        msg = "The elements reach " & reachX & " px across and " & reachY & " px down. Make the form at least that big, " & _
+            "or move them first."
+    ElseIf Len(src) > 0 And Not SourceExists(src) Then
+        msg = "There is no table or query called """ & src & """ here."
+    Else
+        For i = 1 To m_n
+            If Len(m_field(i)) > 0 Then
+                If Not FieldExists(src, m_field(i)) Then
+                    msg = IIf(Len(src) = 0, "Without a record source", """" & src & """ has no field """ & m_field(i) & """, and") & _
+                        " a " & LCase$(KindCaption(m_kind(i))) & " is bound to """ & m_field(i) & """. " & _
+                        "Change the field it is bound to first."
+                    Exit For
+                End If
+            End If
+        Next
+    End If
+    If Len(msg) > 0 Then DesignerSetForm = msg: Exit Function
+    m_title = title: m_fw = CLng(w): m_fh = CLng(h): m_formKind = kind: m_recSrc = src
+    m_dirty = True
+End Function
+
+' The caption of the settings dialog's row r for what it is showing (Form,
+' or the selected element's kind), "" when it doesn't use that row.
+Private Function PropsCaption(ByVal r As Long) As String
+    If m_propsForm Then
+        PropsCaption = Choose(r, "TITLE (A DIALOG'S TITLE BAR; EMPTY FOR THE LAYOUT'S NAME)", "WIDTH (PX)", "HEIGHT (PX)", _
+            "PAGE OR DIALOG", "RECORD SOURCE (EMPTY FOR NONE)", "")
+    ElseIf m_sel > 0 Then
+        PropsCaption = RowCaption(m_kind(m_sel), r)
+    End If
+End Function
+
+' ---------------------------------------------------------------------------
+' Tab order dialog (dlgDzTabs's code-behind)
+' ---------------------------------------------------------------------------
+
+' Form_Load: the elements that take the focus, in their tab order.
+Public Sub DesignerTabsLoad(dlg As Form)
+    Dim k As Long
+    TabSequence m_tabSeq
+    m_tabReading = True
+    For k = 0 To UBound(m_tabSeq)
+        If m_tab(m_tabSeq(k)) > 0 Then m_tabReading = False
+    Next
+    ShowTabs dlg, 0
+    CenterOnApp dlg
+    dlg("lstTabs").SetFocus
+End Sub
+
+' lstTabs's AfterUpdate: the buttons that fit the row picked.
+Public Sub DesignerTabsPicked(dlg As Form)
+    TabButtons dlg
+End Sub
+
+' Move up (delta -1) and Move down (1): swap the picked element with its
+' neighbour. The order is no longer the reading order.
+Public Sub DesignerTabsMove(dlg As Form, ByVal delta As Long)
+    Dim k As Long, i As Long
+    k = TabPicked(dlg)
+    If k < 0 Or k + delta < 0 Or k + delta > UBound(m_tabSeq) Then Exit Sub
+    i = m_tabSeq(k): m_tabSeq(k) = m_tabSeq(k + delta): m_tabSeq(k + delta) = i
+    m_tabReading = False
+    ShowTabs dlg, k + delta
+End Sub
+
+' Reading order: top to bottom, then left to right, as new elements follow.
+Public Sub DesignerTabsReading(dlg As Form)
+    TabSequence m_tabSeq, True
+    m_tabReading = True
+    ShowTabs dlg, 0
+End Sub
+
+' OK: give each element its place in the list (0, the reading order, when
+' it is the reading order, so elements placed later fall into it too).
+Public Sub DesignerTabsSave(dlg As Form)
+    Dim k As Long
+    For k = 0 To UBound(m_tabSeq)
+        m_tab(m_tabSeq(k)) = IIf(m_tabReading, 0, k + 1)
+    Next
+    m_dirty = True
+End Sub
+
+' Fill the list from m_tabSeq and pick the row at position k.
+Private Sub ShowTabs(dlg As Form, ByVal k As Long)
+    Dim i As Long, rows As String
+    For i = 0 To UBound(m_tabSeq)
+        rows = rows & IIf(i > 0, ";", "") & i & ";" & ValueItem((i + 1) & ".  " & TabCaption(m_tabSeq(i)))
+    Next
+    dlg("lstTabs").RowSource = rows
+    dlg("lstTabs").Value = CStr(k)                 ' the bound column is the position
+    TabButtons dlg
+End Sub
+
+Private Sub TabButtons(dlg As Form)
+    Dim k As Long
+    k = TabPicked(dlg)
+    SetEnabled dlg("btnUp"), k > 0
+    SetEnabled dlg("btnDown"), k >= 0 And k < UBound(m_tabSeq)
+    SetEnabled dlg("btnReading"), Not m_tabReading
+End Sub
+
+' The position of the row picked in the tab order list, -1 for none.
+Private Function TabPicked(dlg As Form) As Long
+    TabPicked = -1
+    If Not IsNull(dlg("lstTabs").Value) Then TabPicked = CLng(dlg("lstTabs").Value)
+End Function
+
+' Item i in the tab order list: its kind, what it says or is bound to, and where it is.
+Private Function TabCaption(ByVal i As Long) As String
+    Dim what As String
+    what = m_field(i)
+    If Len(what) = 0 Then
+        Select Case m_kind(i)
+            Case "empty": what = m_text3(i)
+            Case "button", "segmented", "stepper", "search": what = m_text(i)
+        End Select
+    End If
+    TabCaption = KindCaption(m_kind(i)) & IIf(Len(what) > 0, ": " & OneLine(what), "") & "   (" & m_x(i) & ", " & m_y(i) & ")"
+End Function
+
+' Item numbers of the elements that take the focus, in tab order (TabRank),
+' into seq; returns how many. reading = True ignores the places given.
+Private Function TabSequence(seq() As Long, Optional ByVal reading As Boolean = False) As Long
+    Dim i As Long, n As Long, keys() As Double, idx() As Long, items() As Long
+    ReDim keys(0 To DZ_MAX): ReDim idx(0 To DZ_MAX): ReDim items(0 To DZ_MAX)
+    For i = 1 To m_n
+        If Focusable(m_kind(i), m_text3(i)) Then
+            items(n) = i
+            keys(n) = TabRank(IIf(reading, 0, m_tab(i)), m_x(i), m_y(i))
+            idx(n) = n
+            n = n + 1
+        End If
+    Next
+    SortByKey idx, keys, n
+    If n > 0 Then
+        ReDim seq(0 To n - 1)
+        For i = 0 To n - 1
+            seq(i) = items(idx(i))
+        Next
+    Else
+        Erase seq
+    End If
+    TabSequence = n
+End Function
+
+' Where an element falls in the tab order: by the place it was given
+' (tabNo > 0), then by reading order, top to bottom, then left to right.
+Private Function TabRank(ByVal tabNo As Long, ByVal x As Long, ByVal y As Long) As Double
+    If tabNo > 0 Then TabRank = tabNo Else TabRank = 1000000# + y * 100000# + x
+End Function
+
+' Sort idx(0..n-1) by keys(idx(i)), keeping equal keys in their order.
+Private Sub SortByKey(idx() As Long, keys() As Double, ByVal n As Long)
+    Dim i As Long, j As Long, t As Long
+    For i = 1 To n - 1
+        t = idx(i)
+        j = i
+        Do While j > 0
+            If keys(idx(j - 1)) <= keys(t) Then Exit Do
+            idx(j) = idx(j - 1)
+            j = j - 1
+        Loop
+        idx(j) = t
+    Next
+End Sub
 
 ' ---------------------------------------------------------------------------
 ' Generate
@@ -583,9 +906,10 @@ End Function
 
 ' btnDzGenerate: save the layout if it has changes, build it as a real form
 ' and show it (dzPreview), and write its build procedure and code-behind stub
-' to <database folder>\designer as Build_<form>.txt and <form>.vba.
+' to <database folder>\designer as Build_<form>.txt and <form>.vba. Refused,
+' with the reason, when its record source or a bound field is gone.
 Public Sub DesignerGenerate(frm As Form)
-    Dim nm As String, folder As String, id As Long
+    Dim nm As String, folder As String, id As Long, msg As String
     If m_n = 0 Then
         KitMsgBox "Place at least one element on the canvas first.", vbExclamation, "Form designer"
         Exit Sub
@@ -599,7 +923,12 @@ Public Sub DesignerGenerate(frm As Form)
         If Not DesignerSave(frm) Then Exit Sub
     End If
     id = m_layoutId
-    nm = DesignerFormName(Nz(DLookup("layout_name", "kit_layout", "id=" & id), ""))
+    msg = LayoutProblem(id)
+    If Len(msg) > 0 Then
+        KitMsgBox msg, vbExclamation, "Form designer"
+        Exit Sub
+    End If
+    nm = LayoutFormName(id)
     folder = CurrentProject.Path & "\designer"
     EnsureFolder folder
     WriteTextFile folder & "\Build_" & nm & ".txt", DesignerCode(id)
@@ -608,9 +937,10 @@ Public Sub DesignerGenerate(frm As Form)
     KitToast "Preview built. Its code is in the designer folder: Build_" & nm & ".txt and " & nm & ".vba.", "success", 6000
 End Sub
 
-' The form a layout generates: "pg" and the name's letters and digits, each
-' word capitalised ("review navy 2" gives pgReviewNavy2; no letters, pgLayout).
-Public Function DesignerFormName(ByVal layoutName As String) As String
+' The form a layout generates: "pg" (or "dlg" for a dialog) and the name's
+' letters and digits, each word capitalised ("review navy 2" gives
+' pgReviewNavy2; no letters, pgLayout).
+Public Function DesignerFormName(ByVal layoutName As String, Optional ByVal kind As String = "page") As String
     Dim i As Long, ch As Long, out As String, up As Boolean
     up = True
     For i = 1 To Len(layoutName)
@@ -623,34 +953,57 @@ Public Function DesignerFormName(ByVal layoutName As String) As String
         End If
     Next
     If Len(out) = 0 Then out = "Layout"
-    DesignerFormName = Left$("pg" & out, 64)
+    DesignerFormName = Left$(IIf(kind = "dialog", "dlg", "pg") & out, 64)
 End Function
 
 ' Layout id as a Build_<form> procedure for an app's build module: NewForm
-' at the canvas's size, one kit builder call per element back to front,
-' SaveForm. The elements that call the form's code name a handler after
-' themselves (seg1Changed, step1Step, search1Search: see DesignerStub).
+' (a page) or NewDialog at the form's size, with its record source; one kit
+' builder call per element back to front, each anchored on a page; the tab
+' order; SaveForm. The elements that call the form's code name a handler
+' after themselves (seg1Changed, step1Step, search1Search: see
+' DesignerStub). Bound elements take their field as "[field]".
 Public Function DesignerCode(ByVal id As Long) As String
-    Dim db As DAO.Database, rs As DAO.Recordset, nm As String, ln As String, s As String, title As String
+    Dim db As DAO.Database, rs As DAO.Recordset, nm As String, ln As String, s As String, body As String, title As String
+    Dim isPage As Boolean, src As String, anc As String, h As Integer, v As Integer, anchored As Boolean
     Set db = CurrentDb
-    Set rs = db.OpenRecordset("SELECT layout_name, form_width, form_height FROM kit_layout WHERE id=" & id, dbOpenSnapshot)
+    Set rs = db.OpenRecordset("SELECT * FROM kit_layout WHERE id=" & id, dbOpenSnapshot)
     If rs.EOF Then Err.Raise 5, , "No form designer layout " & id
     title = OneLine(rs!layout_name)
-    nm = DesignerFormName(title)
+    isPage = (Nz(rs!form_kind, "page") <> "dialog")
+    nm = DesignerFormName(title, IIf(isPage, "page", "dialog"))
+    src = Nz(rs!record_source, "")
     s = "' " & nm & ", built from the form designer layout """ & title & """ (" & Format$(Now(), "yyyy-mm-dd hh:nn") & ")." & vbCrLf & _
         "' Call it from the app's build, and keep " & nm & ".vba, its code-behind, in src\forms." & vbCrLf & _
-        "Private Sub Build_" & nm & "()" & vbCrLf & _
-        "    NewForm """", 0, px(" & Nz(rs!form_width, 0) & "), px(" & Nz(rs!form_height, 0) & ")" & vbCrLf
+        "Private Sub Build_" & nm & "()" & vbCrLf
+    If isPage Then
+        body = "    NewForm " & VbText(src) & ", 0, px(" & Nz(rs!form_width, 0) & "), px(" & Nz(rs!form_height, 0) & ")" & vbCrLf
+    Else
+        body = "    NewDialog " & VbText(DialogTitle(rs)) & ", px(" & Nz(rs!form_width, 0) & "), px(" & Nz(rs!form_height, 0) & ")" & vbCrLf
+        If Len(src) > 0 Then body = body & "    F.RecordSource = " & VbText(src) & vbCrLf
+    End If
     rs.Close
-    If Len(StepperNames(id)) > 0 Then s = s & "    Ev F, ""OnLoad""" & vbCrLf     ' Form_Load paints the steppers (DesignerStub)
+    If Len(StepperNames(id)) > 0 Then body = body & "    Ev F, ""OnLoad""" & vbCrLf     ' Form_Load paints the steppers (DesignerStub)
     Set rs = db.OpenRecordset(ItemsSql(id), dbOpenSnapshot)
     Do Until rs.EOF
-        ln = ItemCall(rs)
-        If Len(ln) > 0 Then s = s & "    " & ln & vbCrLf
+        anc = IIf(isPage, Nz(rs!item_anchor, ""), "")
+        ln = ItemCall(rs, anc)
+        If Len(ln) > 0 Then
+            If Len(anc) > 0 And rs!kind <> "card" Then
+                ' Every part of the element moves (or stretches) with the window.
+                AnchorOf anc, h, v
+                body = body & "    k = BuiltNames()" & vbCrLf & "    " & ln & vbCrLf & "    AnchorBuilt k, " & h & ", " & v & vbCrLf
+                anchored = True
+            Else
+                body = body & "    " & ln & vbCrLf
+            End If
+        End If
         rs.MoveNext
     Loop
     rs.Close
-    DesignerCode = s & "    SaveForm """ & nm & """" & vbCrLf & "End Sub" & vbCrLf
+    ln = TabOrderCall(id)
+    If Len(ln) > 0 Then body = body & "    " & ln & vbCrLf
+    If anchored Then s = s & "    Dim k As String" & vbCrLf
+    DesignerCode = s & body & "    SaveForm """ & nm & """" & vbCrLf & "End Sub" & vbCrLf
 End Function
 
 ' Layout id's code-behind to start from: an empty handler, with the kit's
@@ -659,12 +1012,17 @@ End Function
 ' that DesignerCode names, for the app to fill in.
 Public Function DesignerStub(ByVal id As Long) As String
     Dim db As DAO.Database, rs As DAO.Recordset, nm As String, s As String, title As String, b As Variant
-    Dim sig As String, proc As String, what As String
+    Dim sig As String, proc As String, what As String, isDialog As Boolean
     Set db = CurrentDb
     title = OneLine(Nz(DLookup("layout_name", "kit_layout", "id=" & id), ""))
-    nm = DesignerFormName(title)
+    isDialog = (Nz(DLookup("form_kind", "kit_layout", "id=" & id), "page") = "dialog")
+    nm = LayoutFormName(id)
     s = "Option Compare Database" & vbCrLf & "Option Explicit" & vbCrLf & vbCrLf & _
         "' " & nm & " (Build_" & nm & ", from the form designer layout """ & title & """)." & vbCrLf
+    If isDialog Then
+        s = s & "' A dialog: open it with RunDialog, which is True when the dialog sets" & vbCrLf & _
+            "' TempVars(""DialogResult"") = ""ok"" before it closes." & vbCrLf
+    End If
     If Len(StepperNames(id)) > 0 Then
         s = s & vbCrLf & "' A stepper is built in the build's palette: SetStep paints it in the user's." & vbCrLf & _
             "Private Sub Form_Load()" & vbCrLf & "    On Error GoTo Err_Handler" & vbCrLf
@@ -714,32 +1072,41 @@ End Function
 
 ' Build layout id as the pop-up form dzPreview, with the builder calls
 ' DesignerCode writes but no handlers, and open it. Its controls work (a
-' toggle switches, a slider slides) but call no code.
+' toggle switches, a slider slides) but call no code. A page's preview can
+' be resized, to try its anchors; a dialog's can't. A bound preview shows
+' the first record read-only, so trying it never changes the data.
 Public Sub DesignerPreview(ByVal id As Long)
-    Dim db As DAO.Database, rs As DAO.Recordset, title As String, fw As Long, fh As Long
+    Dim db As DAO.Database, rs As DAO.Recordset, title As String, fw As Long, fh As Long, isPage As Boolean, src As String
+    Dim names As String
     If IsFormOpen(DZ_PREVIEW) Then DoCmd.Close acForm, DZ_PREVIEW, acSaveNo
     Set db = CurrentDb
-    Set rs = db.OpenRecordset("SELECT layout_name, form_width, form_height FROM kit_layout WHERE id=" & id, dbOpenSnapshot)
+    Set rs = db.OpenRecordset("SELECT * FROM kit_layout WHERE id=" & id, dbOpenSnapshot)
     If rs.EOF Then Err.Raise 5, , "No form designer layout " & id
-    title = OneLine(rs!layout_name): fw = Nz(rs!form_width, 0): fh = Nz(rs!form_height, 0)
+    isPage = (Nz(rs!form_kind, "page") <> "dialog")
+    title = IIf(isPage, OneLine(rs!layout_name), DialogTitle(rs))
+    fw = Nz(rs!form_width, 0): fh = Nz(rs!form_height, 0): src = Nz(rs!record_source, "")
     rs.Close
     On Error GoTo Fail
-    NewForm "", 0, px(fw), px(fh)
+    If isPage Then NewForm src, 0, px(fw), px(fh) Else NewDialog title, px(fw), px(fh)
+    F.RecordSource = src
     F.Caption = "Preview: " & title
     F.PopUp = True
     F.Modal = False
     F.AutoCenter = True
     F.AutoResize = True
-    F.BorderStyle = 3
+    F.BorderStyle = IIf(isPage, 2, 3)          ' a page's preview resizes, to try its anchors
     F.MinMaxButtons = 0
     F.ControlBox = True
     F.CloseButton = True
+    If Len(src) > 0 Then F.AllowEdits = False
     Set rs = db.OpenRecordset(ItemsSql(id), dbOpenSnapshot)
     Do Until rs.EOF
-        BuildItem rs
+        BuildItem rs, IIf(isPage, Nz(rs!item_anchor, ""), "")
         rs.MoveNext
     Loop
     rs.Close
+    names = TabNames(id)
+    If Len(names) > 0 Then TabOrder Split(names, ";")
     If Len(StepperNames(id)) > 0 Then F.OnLoad = "=DesignerPreviewLoad([Form]," & VbText(StepperNames(id)) & ")"
     SaveForm DZ_PREVIEW
     On Error GoTo 0
@@ -770,6 +1137,41 @@ Fail:
     HandleError "modKitDesigner.DesignerPreviewLoad", names
 End Function
 
+' What stops layout id generating: its record source gone, or a field an
+' element is bound to gone from it ("" when nothing does).
+Private Function LayoutProblem(ByVal id As Long) As String
+    Dim rs As DAO.Recordset, src As String
+    src = Nz(DLookup("record_source", "kit_layout", "id=" & id), "")
+    If Len(src) > 0 And Not SourceExists(src) Then
+        LayoutProblem = "The record source """ & src & """ isn't here any more. Pick another under Form."
+        Exit Function
+    End If
+    Set rs = CurrentDb.OpenRecordset(ItemsSql(id), dbOpenSnapshot)
+    Do Until rs.EOF
+        If Len(Nz(rs!item_field, "")) > 0 Then
+            If Not FieldExists(src, rs!item_field) Then
+                LayoutProblem = "A " & LCase$(KindCaption(rs!kind)) & " is bound to """ & rs!item_field & """, which " & _
+                    IIf(Len(src) = 0, "needs a record source.", """" & src & """ doesn't have. Bind it to another field.")
+                Exit Do
+            End If
+        End If
+        rs.MoveNext
+    Loop
+    rs.Close
+End Function
+
+' The form layout id generates (DesignerFormName of its name and kind).
+Private Function LayoutFormName(ByVal id As Long) As String
+    LayoutFormName = DesignerFormName(OneLine(Nz(DLookup("layout_name", "kit_layout", "id=" & id), "")), _
+        Nz(DLookup("form_kind", "kit_layout", "id=" & id), "page"))
+End Function
+
+' A dialog layout's title bar: its title, or else its name.
+Private Function DialogTitle(rs As DAO.Recordset) As String
+    DialogTitle = OneLine(Nz(rs!form_title, ""))
+    If Len(DialogTitle) = 0 Then DialogTitle = OneLine(rs!layout_name)
+End Function
+
 ' Layout id's steppers' control names, ;-separated ("" for none).
 Private Function StepperNames(ByVal id As Long) As String
     Dim rs As DAO.Recordset, out As String
@@ -782,36 +1184,83 @@ Private Function StepperNames(ByVal id As Long) As String
     StepperNames = out
 End Function
 
+' Layout id's elements that take the focus, in tab order (TabRank), as
+' control names ;-separated ("" for none).
+Private Function TabNames(ByVal id As Long) As String
+    Dim rs As DAO.Recordset, nms() As String, keys() As Double, idx() As Long, n As Long, i As Long, out As String
+    Set rs = CurrentDb.OpenRecordset(ItemsSql(id), dbOpenSnapshot)
+    ReDim nms(0 To DZ_MAX): ReDim keys(0 To DZ_MAX): ReDim idx(0 To DZ_MAX)
+    Do Until rs.EOF
+        If Focusable(Nz(rs!kind, ""), Nz(rs!item_text3, "")) And n <= DZ_MAX Then
+            nms(n) = ItemName(rs)
+            keys(n) = TabRank(Nz(rs!item_tab, 0), Nz(rs!x, 0), Nz(rs!y, 0))
+            idx(n) = n
+            n = n + 1
+        End If
+        rs.MoveNext
+    Loop
+    rs.Close
+    SortByKey idx, keys, n
+    For i = 0 To n - 1
+        out = out & IIf(i > 0, ";", "") & nms(idx(i))
+    Next
+    TabNames = out
+End Function
+
+' The TabOrder call for layout id, 8 names to a line ("" when nothing takes
+' the focus).
+Private Function TabOrderCall(ByVal id As Long) As String
+    Dim names() As String, i As Long, s As String
+    If Len(TabNames(id)) = 0 Then Exit Function
+    names = Split(TabNames(id), ";")
+    s = "TabOrder Array("
+    For i = 0 To UBound(names)
+        If i > 0 Then s = s & IIf(i Mod 8 = 0, ", _" & vbCrLf & "        ", ", ")
+        s = s & VbText(names(i))
+    Next
+    TabOrderCall = s & ")"
+End Function
+
 Private Function ItemsSql(ByVal id As Long) As String
-    ItemsSql = "SELECT item_name, kind, item_text, item_text2, item_text3, item_choice, x, y, w, h " & _
-        "FROM kit_layout_item WHERE layout_id=" & id & " ORDER BY item_order"
+    ItemsSql = "SELECT item_name, kind, item_text, item_text2, item_text3, item_choice, item_field, item_anchor, item_tab, " & _
+        "x, y, w, h FROM kit_layout_item WHERE layout_id=" & id & " ORDER BY item_order"
 End Function
 
 ' The row's element as a kit builder call (DesignerCode); "" for a kind the
-' designer doesn't know. BuildItem makes the same call.
-Private Function ItemCall(rs As DAO.Recordset) As String
-    Dim nm As String, t1 As String, t2 As String, t3 As String, ch As String, n As String
+' designer doesn't know. A card takes anc (AnchorOf, "" for none) itself.
+' BuildItem makes the same call.
+Private Function ItemCall(rs As DAO.Recordset, ByVal anc As String) As String
+    Dim nm As String, t1 As String, t2 As String, t3 As String, ch As String, n As String, src As String
     Dim x As String, y As String, w As String, h As String, at As String, parts() As String, i As Long
+    Dim ah As Integer, av As Integer
     nm = ItemName(rs): n = VbText(nm)
     t1 = Nz(rs!item_text, ""): t2 = Nz(rs!item_text2, ""): t3 = Nz(rs!item_text3, ""): ch = Nz(rs!item_choice, "")
+    src = FieldSource(rs)
     x = "px(" & Nz(rs!x, 0) & ")": y = "px(" & Nz(rs!y, 0) & ")": w = "px(" & Nz(rs!w, 0) & ")": h = "px(" & Nz(rs!h, 0) & ")"
     at = ", " & x & ", " & y & ", " & w & ", " & h
     Select Case Nz(rs!kind, "")
-        Case "card": ItemCall = "Card " & n & ", " & VbText(t1) & at
+        Case "card"
+            ItemCall = "Card " & n & ", " & VbText(t1) & at
+            If Len(anc) > 0 Then
+                AnchorOf anc, ah, av
+                ItemCall = ItemCall & ", """", " & ah & ", " & av
+            End If
         Case "button": ItemCall = "Btn " & n & ", " & VbText(t1) & at & ", " & VbText(ButtonStyle(ch))
         Case "label": ItemCall = "Lbl " & n & ", " & VbText(t1) & at
-        Case "progress": ItemCall = "Progress " & n & ", " & VbText(PercentText(t1)) & at
-        Case "text": ItemCall = "Txt " & n & ", """"" & at
-        Case "date": ItemCall = "DateBox " & n & ", """", " & x & ", " & y & ", " & h
-        Case "secret": ItemCall = "SecretBox " & n & ", """"" & at
-        Case "toggle": ItemCall = "Toggle " & n & ", """"" & at & ", " & VbText(nm & "Changed")
+        Case "progress": ItemCall = "Progress " & n & ", " & VbText(IIf(Len(src) > 0, src, PercentText(t1))) & at
+        Case "text": ItemCall = "Txt " & n & ", " & VbText(src) & at
+        Case "date": ItemCall = "DateBox " & n & ", " & VbText(src) & ", " & x & ", " & y & ", " & h
+        Case "secret": ItemCall = "SecretBox " & n & ", " & VbText(src) & at
+        Case "toggle": ItemCall = "Toggle " & n & ", " & VbText(src) & at & ", " & VbText(nm & "Changed")
         Case "segmented"
-            ItemCall = "Segmented " & n & ", """", " & x & ", " & y & ", " & w & ", " & VbText(SegmentItems(t1)) & ", " & h & ", " & _
-                VbText(nm & "Changed")
+            ItemCall = "Segmented " & n & ", " & VbText(src) & ", " & x & ", " & y & ", " & w & ", " & VbText(SegmentItems(t1)) & _
+                ", " & h & ", " & VbText(nm & "Changed")
         Case "slider"
-            ItemCall = "Slider " & n & ", """", " & x & ", " & y & ", " & w & ", " & NumText(t1) & ", " & NumText(t2) & ", " & _
-                NumText(t3) & ", " & VbText(nm & "Changed")
-        Case "rating": ItemCall = "Rating " & n & ", """", " & x & ", " & y & ", " & CLng(Val(t1)) & ", px(24), False, " & VbText(nm & "Changed")
+            ItemCall = "Slider " & n & ", " & VbText(src) & ", " & x & ", " & y & ", " & w & ", " & NumText(t1) & ", " & _
+                NumText(t2) & ", " & NumText(t3) & ", " & VbText(nm & "Changed")
+        Case "rating"
+            ItemCall = "Rating " & n & ", " & VbText(src) & ", " & x & ", " & y & ", " & CLng(Val(t1)) & ", px(24), False, " & _
+                VbText(nm & "Changed")
         Case "stepper"
             ItemCall = "Stepper " & n & ", " & x & ", " & y & ", " & w & ", " & CLng(Val(t2)) & ", " & VbText(nm & "Step")
             parts = Split(t1, ";")
@@ -820,10 +1269,10 @@ Private Function ItemCall(rs As DAO.Recordset) As String
             Next
         Case "search": ItemCall = "SearchBox " & n & ", " & x & ", " & y & ", " & w & ", " & VbText(nm & "Search") & ", " & VbText(t1) & ", " & h
         Case "stat"
-            ItemCall = "StatTile " & n & ", " & VbText(t1) & ", " & VbText("=" & NumText(t2)) & ", " & x & ", " & y & ", " & w & ", " & h & _
-                ", """", " & VbText(t3)
+            ItemCall = "StatTile " & n & ", " & VbText(t1) & ", " & VbText(IIf(Len(src) > 0, src, "=" & NumText(t2))) & ", " & _
+                x & ", " & y & ", " & w & ", " & h & ", """", " & VbText(t3)
         Case "alert": ItemCall = "Alert " & n & at & ", " & VbText(AlertVariant(ch)) & ", " & VbText(t1) & ", " & VbText(t2)
-        Case "avatar": ItemCall = "Avatar " & n & ", " & VbText(AvatarSource(t1)) & ", " & x & ", " & y & ", " & w
+        Case "avatar": ItemCall = "Avatar " & n & ", " & VbText(IIf(Len(src) > 0, src, AvatarSource(t1))) & ", " & x & ", " & y & ", " & w
         Case "empty"
             ItemCall = "EmptyState " & n & ", " & x & ", " & y & ", " & w & ", " & VbText(DZ_EMPTY_GLYPH) & ", " & VbText(t1) & ", " & _
                 VbText(t2) & ", " & VbText(t3) & ", """", True"
@@ -831,41 +1280,51 @@ Private Function ItemCall(rs As DAO.Recordset) As String
 End Function
 
 ' The row's element built on the form under construction (DesignerPreview):
-' the call ItemCall writes, with no handlers, and buttons that call no code.
-Private Sub BuildItem(rs As DAO.Recordset)
-    Dim nm As String, t1 As String, t2 As String, t3 As String, ch As String, c As Control, parts() As String
-    Dim x As Long, y As Long, w As Long, h As Long
+' the call ItemCall writes, with no handlers, buttons that call no code, and
+' anchored by anc (AnchorOf, "" for none) as DesignerCode anchors it.
+Private Sub BuildItem(rs As DAO.Recordset, ByVal anc As String)
+    Dim nm As String, t1 As String, t2 As String, t3 As String, ch As String, c As Control, parts() As String, src As String
+    Dim x As Long, y As Long, w As Long, h As Long, ah As Integer, av As Integer, before As String
     nm = ItemName(rs)
     t1 = Nz(rs!item_text, ""): t2 = Nz(rs!item_text2, ""): t3 = Nz(rs!item_text3, ""): ch = Nz(rs!item_choice, "")
+    src = FieldSource(rs)
     x = px(Nz(rs!x, 0)): y = px(Nz(rs!y, 0)): w = px(Nz(rs!w, 0)): h = px(Nz(rs!h, 0))
+    If Len(anc) > 0 Then AnchorOf anc, ah, av
+    If Len(anc) > 0 And rs!kind <> "card" Then before = BuiltNames()
     Select Case Nz(rs!kind, "")
-        Case "card": Card nm, t1, x, y, w, h
+        Case "card": Card nm, t1, x, y, w, h, "", ah, av
         Case "button"
             Set c = Btn(nm, t1, x, y, w, h, ButtonStyle(ch))
             c.OnClick = ""
         Case "label": Lbl nm, t1, x, y, w, h
-        Case "progress": Progress nm, PercentText(t1), x, y, w, h
-        Case "text": Txt nm, "", x, y, w, h
-        Case "date": DateBox nm, "", x, y, h
-        Case "secret": SecretBox nm, "", x, y, w, h
-        Case "toggle": Toggle nm, "", x, y, w, h
-        Case "segmented": Segmented nm, "", x, y, w, SegmentItems(t1), h
-        Case "slider": Slider nm, "", x, y, w, Val(t1), Val(t2), Val(t3)
-        Case "rating": Rating nm, "", x, y, CLng(Val(t1)), px(24)
+        Case "progress": Progress nm, IIf(Len(src) > 0, src, PercentText(t1)), x, y, w, h
+        Case "text": Txt nm, src, x, y, w, h
+        Case "date": DateBox nm, src, x, y, h
+        Case "secret": SecretBox nm, src, x, y, w, h
+        Case "toggle": Toggle nm, src, x, y, w, h
+        Case "segmented": Segmented nm, src, x, y, w, SegmentItems(t1), h
+        Case "slider": Slider nm, src, x, y, w, Val(t1), Val(t2), Val(t3)
+        Case "rating": Rating nm, src, x, y, CLng(Val(t1)), px(24)
         Case "stepper"
             parts = Split(t1, ";")
             StepperFrom nm, x, y, w, CLng(Val(t2)), parts
         Case "search": SearchBox nm, x, y, w, "", t1, h
-        Case "stat": StatTile nm, t1, "=" & NumText(t2), x, y, w, h, "", t3
+        Case "stat": StatTile nm, t1, IIf(Len(src) > 0, src, "=" & NumText(t2)), x, y, w, h, "", t3
         Case "alert": Alert nm, x, y, w, h, AlertVariant(ch), t1, t2
-        Case "avatar": Avatar nm, AvatarSource(t1), x, y, w
+        Case "avatar": Avatar nm, IIf(Len(src) > 0, src, AvatarSource(t1)), x, y, w
         Case "empty"
             EmptyState nm, x, y, w, DZ_EMPTY_GLYPH, t1, t2, t3, "", True
             On Error Resume Next                 ' no button without a caption
             F.Controls(nm & "_b").OnClick = ""
             On Error GoTo 0
     End Select
+    If Len(before) > 0 Then AnchorBuilt before, ah, av
 End Sub
+
+' The row's bound field as a control source, "[field]" ("" when unbound).
+Private Function FieldSource(rs As DAO.Recordset) As String
+    If Len(Nz(rs!item_field, "")) > 0 Then FieldSource = "[" & rs!item_field & "]"
+End Function
 
 ' Stepper takes its captions as a ParamArray: pass up to 8 of them.
 Private Sub StepperFrom(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal current As Long, parts() As String)
@@ -972,7 +1431,7 @@ End Function
 
 ' Make kit_layout (one row per saved layout) and kit_layout_item (its
 ' elements, px from the canvas corner) when they are missing, and add the
-' settings columns a table from the first version lacks.
+' settings, form and binding columns a table from an earlier version lacks.
 Public Sub DesignerTables()
     Dim db As DAO.Database
     Set db = CurrentDb
@@ -990,6 +1449,12 @@ Public Sub DesignerTables()
     AddColumn db, "kit_layout_item", "item_text2", "TEXT(255)"
     AddColumn db, "kit_layout_item", "item_text3", "TEXT(255)"
     AddColumn db, "kit_layout_item", "item_choice", "TEXT(30)"
+    AddColumn db, "kit_layout_item", "item_field", "TEXT(64)"
+    AddColumn db, "kit_layout_item", "item_anchor", "TEXT(10)"
+    AddColumn db, "kit_layout_item", "item_tab", "LONG"
+    AddColumn db, "kit_layout", "form_kind", "TEXT(10)"
+    AddColumn db, "kit_layout", "record_source", "TEXT(64)"
+    AddColumn db, "kit_layout", "form_title", "TEXT(255)"
 End Sub
 
 ' Place a new kind element centred on (x, y) px, as dropping it there does.
@@ -1005,6 +1470,16 @@ End Function
 
 Public Function DesignerItem(ByVal i As Long) As String
     DesignerItem = m_kind(i) & " " & m_x(i) & "," & m_y(i) & " " & m_w(i) & "x" & m_h(i) & " " & m_text(i)
+End Function
+
+' Item i's binding, anchor and tab place as "field|anchor|tab", and the
+' form as "kind wxh source|title" (smoke tests).
+Public Function DesignerItemData(ByVal i As Long) As String
+    DesignerItemData = m_field(i) & "|" & m_anchor(i) & "|" & m_tab(i)
+End Function
+
+Public Function DesignerFormData() As String
+    DesignerFormData = m_formKind & " " & m_fw & "x" & m_fh & " " & m_recSrc & "|" & m_title
 End Function
 
 ' Select item i (0 for none), as clicking it does.
@@ -1035,7 +1510,7 @@ Private Function Place(frm As Form, ByVal kind As String, ByVal x As Long, ByVal
     Status frm, ""
     Landing kind, x, y, lx, ly
     i = AddItem(kind, lx, ly, DefaultW(kind), DefaultH(kind), KindDefault(kind, 1), KindDefault(kind, 2), _
-        KindDefault(kind, 3), KindDefault(kind, 4))
+        KindDefault(kind, 3), KindDefault(kind, 4), "", "", 0)
     If i = 0 Then
         KitToast "The canvas has room for " & PoolSize(KindPool(kind)) & " " & PoolCaption(KindPool(kind)) & ".", "warning"
         ShowSelection frm
@@ -1048,16 +1523,17 @@ Private Function Place(frm As Form, ByVal kind As String, ByVal x As Long, ByVal
     Place = i
 End Function
 
-' Where a kind element centred on (x, y) px lands: snapped, on the canvas.
+' Where a kind element centred on (x, y) px lands: snapped, on the form.
 Private Sub Landing(ByVal kind As String, ByVal x As Long, ByVal y As Long, ByRef lx As Long, ByRef ly As Long)
-    lx = Clamp(Snap(x - DefaultW(kind) \ 2), 0, m_cw - DefaultW(kind))
-    ly = Clamp(Snap(y - DefaultH(kind) \ 2), 0, m_ch - DefaultH(kind))
+    lx = Clamp(Snap(x - DefaultW(kind) \ 2), 0, m_fw - DefaultW(kind))
+    ly = Clamp(Snap(y - DefaultH(kind) \ 2), 0, m_fh - DefaultH(kind))
 End Sub
 
 ' Append an item in the first free slot of its pool; 0 when the pool is full.
-' The rectangle is kept to the sizes its kind and settings allow, inside the canvas.
+' The rectangle is kept to the sizes its kind and settings allow, inside the form.
 Private Function AddItem(ByVal kind As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long, _
-        ByVal t1 As String, ByVal t2 As String, ByVal t3 As String, ByVal choice As String) As Long
+        ByVal t1 As String, ByVal t2 As String, ByVal t3 As String, ByVal choice As String, ByVal fld As String, _
+        ByVal anc As String, ByVal tabNo As Long) As Long
     Dim s As Long, i As Long, used As Boolean, pool As String
     pool = KindPool(kind)
     For s = 1 To PoolSize(pool)
@@ -1072,11 +1548,12 @@ Private Function AddItem(ByVal kind As String, ByVal x As Long, ByVal y As Long,
     m_kind(m_n) = kind
     m_slot(m_n) = s
     m_text(m_n) = t1: m_text2(m_n) = t2: m_text3(m_n) = t3: m_choice(m_n) = choice
+    m_field(m_n) = fld: m_anchor(m_n) = anc: m_tab(m_n) = tabNo
     FitRect m_n, x, y, w, h
     AddItem = m_n
 End Function
 
-' Move or resize item i, keeping it on the canvas, and redraw it.
+' Move or resize item i, keeping it on the form, and redraw it.
 Private Sub SetRect(frm As Form, ByVal i As Long, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long)
     FitRect i, x, y, w, h
     Render frm, i
@@ -1085,14 +1562,14 @@ Private Sub SetRect(frm As Form, ByVal i As Long, ByVal x As Long, ByVal y As Lo
 End Sub
 
 ' Item i's rectangle: within the sizes its kind and settings allow (an avatar
-' stays round), and inside the canvas.
+' stays round), and inside the form.
 Private Sub FitRect(ByVal i As Long, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long)
     w = Clamp(w, MinW(i), MaxW(i))
     If m_kind(i) = "avatar" Then h = w Else h = Clamp(h, MinH(i), MaxH(i))
     m_w(i) = w
     m_h(i) = h
-    m_x(i) = Clamp(x, 0, m_cw - w)
-    m_y(i) = Clamp(y, 0, m_ch - h)
+    m_x(i) = Clamp(x, 0, m_fw - w)
+    m_y(i) = Clamp(y, 0, m_fh - h)
 End Sub
 
 ' The topmost item under (x, y) px: the pools draw back to front (KindLayer),
@@ -1134,8 +1611,12 @@ Private Sub ClearLayout(frm As Form)
     m_tool = ""
     m_layoutId = 0
     m_dirty = False
+    m_formKind = "page"
+    m_fw = m_cw: m_fh = m_ch
+    m_recSrc = "": m_title = ""
     frm("cboDzOpen").Value = Null
     frm("txtDzName").Value = Null
+    ShowCanvas frm
     ShowSelection frm
 End Sub
 
@@ -1144,23 +1625,31 @@ End Sub
 Private Sub LoadLayout(frm As Form, ByVal id As Long)
     Dim db As DAO.Database, rs As DAO.Recordset, nm As String, skipped As Long, i As Long
     Set db = CurrentDb
-    Set rs = db.OpenRecordset("SELECT layout_name FROM kit_layout WHERE id=" & id, dbOpenSnapshot)
+    Set rs = db.OpenRecordset("SELECT * FROM kit_layout WHERE id=" & id, dbOpenSnapshot)
     If rs.EOF Then
         rs.Close
         ClearLayout frm
         Exit Sub
     End If
     nm = rs!layout_name
-    rs.Close
     ClearLayout frm
-    Set rs = db.OpenRecordset("SELECT kind, item_text, item_text2, item_text3, item_choice, x, y, w, h " & _
-        "FROM kit_layout_item WHERE layout_id=" & id & " ORDER BY item_order", dbOpenSnapshot)
+    ' A layout saved before the form settings is a page the canvas's size.
+    m_formKind = IIf(Nz(rs!form_kind, "page") = "dialog", "dialog", "page")
+    m_fw = Clamp(Nz(rs!form_width, m_cw), DZ_MIN_FW, m_cw)
+    m_fh = Clamp(Nz(rs!form_height, m_ch), DZ_MIN_FH, m_ch)
+    m_recSrc = Nz(rs!record_source, "")
+    m_title = Nz(rs!form_title, "")
+    rs.Close
+    ShowCanvas frm
+    Set rs = db.OpenRecordset("SELECT kind, item_text, item_text2, item_text3, item_choice, item_field, item_anchor, item_tab, " & _
+        "x, y, w, h FROM kit_layout_item WHERE layout_id=" & id & " ORDER BY item_order", dbOpenSnapshot)
     Do Until rs.EOF
         If Len(KindPool(Nz(rs!kind, ""))) = 0 Then
             skipped = skipped + 1
         Else
             i = AddItem(rs!kind, Nz(rs!x, 0), Nz(rs!y, 0), Nz(rs!w, 0), Nz(rs!h, 0), Nz(rs!item_text, ""), _
-                Nz(rs!item_text2, ""), Nz(rs!item_text3, ""), Nz(rs!item_choice, ""))
+                Nz(rs!item_text2, ""), Nz(rs!item_text3, ""), Nz(rs!item_choice, ""), Nz(rs!item_field, ""), _
+                Nz(rs!item_anchor, ""), Nz(rs!item_tab, 0))
             If i = 0 Then skipped = skipped + 1 Else Render frm, i
         End If
         rs.MoveNext
@@ -1223,7 +1712,7 @@ Private Sub Render(frm As Form, ByVal i As Long)
     End Select
 End Sub
 
-' What an outlined box on the canvas says it will be.
+' What an outlined box on the canvas says it will be (a bound box, its field).
 Private Function DescText(ByVal i As Long) As String
     Select Case m_kind(i)
         Case "segmented": DescText = Replace(m_text(i), ";", "  |  ")
@@ -1236,6 +1725,8 @@ Private Function DescText(ByVal i As Long) As String
         Case "avatar": DescText = AvatarInitials(m_text(i))
         Case "empty": DescText = m_text(i)
         Case "toggle": DescText = "On"           ' "Toggle" doesn't fit its 44px
+        Case "text", "date", "secret"
+            If Len(m_field(i)) > 0 Then DescText = "[" & m_field(i) & "]" Else DescText = KindCaption(m_kind(i))
         Case Else: DescText = KindCaption(m_kind(i))
     End Select
 End Function
@@ -1295,6 +1786,14 @@ Private Sub Outline(frm As Form, ByVal x As Long, ByVal y As Long, ByVal w As Lo
         MoveCtl frm("dzGrip"), l + px(x + w - DZ_GRIP \ 2), t + px(y + h - DZ_GRIP \ 2), px(DZ_GRIP), px(DZ_GRIP)
     End If
     frm("dzGrip").Visible = withGrip
+End Sub
+
+' The form's outline on the canvas: its size, in a dialog's colour or a page's.
+Private Sub ShowCanvas(frm As Form)
+    Dim g As Control
+    Set g = frm("dzGlass")
+    MoveCtl frm("dzCanvas"), g.Left, g.Top, px(m_fw), px(m_fh)
+    frm("dzCanvas").BackColor = Th(IIf(m_formKind = "dialog", CLR_DIALOG, CLR_BG))
 End Sub
 
 ' The page subtitle: what to do next, or the default how-to.
@@ -1404,10 +1903,18 @@ Private Function KindPrefix(ByVal kind As String) As String
     End Select
 End Function
 
-' The caption of the settings dialog's row r (1-3 text, 4 a list) for a
-' kind, "" when it doesn't use that row.
+' The caption of the settings dialog's row r (1-3 text, 4 a list, 5 the
+' field, 6 the anchor) for a kind, "" when it doesn't use that row. Anchors
+' are for a page: a dialog doesn't resize.
 Private Function RowCaption(ByVal kind As String, ByVal r As Long) As String
     Dim caps As Variant
+    If r = 5 Then
+        If BindKind(kind) Then RowCaption = "FIELD (EMPTY FOR NONE)"
+        Exit Function
+    ElseIf r = 6 Then
+        If m_formKind <> "dialog" And Len(KindPool(kind)) > 0 Then RowCaption = "ANCHOR (AS THE WINDOW RESIZES)"
+        Exit Function
+    End If
     Select Case kind
         Case "card": caps = Array("TITLE", "", "", "")
         Case "button": caps = Array("CAPTION", "", "", "STYLE")
@@ -1457,6 +1964,48 @@ Private Function ChoiceList(ByVal kind As String) As String
     End Select
 End Function
 
+' True for a kind that shows or takes a value, so it can be bound to a field.
+Private Function BindKind(ByVal kind As String) As Boolean
+    Select Case kind
+        Case "progress", "text", "date", "secret", "toggle", "segmented", "slider", "rating", "stat", "avatar": BindKind = True
+    End Select
+End Function
+
+' True for a kind that can stretch with the window: one control, or a card
+' (which anchors its own parts).
+Private Function StretchKind(ByVal kind As String) As Boolean
+    Select Case kind
+        Case "card", "label", "text", "button": StretchKind = True
+    End Select
+End Function
+
+' True for an element that takes the focus (an empty state only with its
+' button, text3).
+Private Function Focusable(ByVal kind As String, ByVal text3 As String) As Boolean
+    Select Case kind
+        Case "button", "text", "date", "secret", "toggle", "segmented", "slider", "rating", "stepper", "search": Focusable = True
+        Case "empty": Focusable = (Len(text3) > 0)
+    End Select
+End Function
+
+' The anchors a kind can take, as row 6's list: the key, then what it shows.
+Private Function AnchorList(ByVal kind As String) As String
+    AnchorList = "tl;Top left (stays put);tr;Top right;bl;Bottom left;br;Bottom right"
+    If StretchKind(kind) Then AnchorList = AnchorList & ";across;Top - stretches across;both;Stretches across and down"
+End Function
+
+' An anchor key as Anchor's h and v (0 left or top, 1 right or bottom, 2 both).
+Private Sub AnchorOf(ByVal key As String, ByRef h As Integer, ByRef v As Integer)
+    Select Case key
+        Case "tr": h = 1: v = 0
+        Case "bl": h = 0: v = 1
+        Case "br": h = 1: v = 1
+        Case "across": h = 2: v = 0
+        Case "both": h = 2: v = 2
+        Case Else: h = 0: v = 0
+    End Select
+End Sub
+
 ' What the settings take, under the rows.
 Private Function KindHint(ByVal kind As String) As String
     Select Case kind
@@ -1468,6 +2017,36 @@ Private Function KindHint(ByVal kind As String) As String
         Case "progress": KindHint = "A whole number."
         Case Else: KindHint = ""
     End Select
+End Function
+
+' What binding a kind to a field does, under KindHint ("" for a kind that
+' can't be bound).
+Private Function FieldHint(ByVal kind As String) As String
+    If Not BindKind(kind) Then Exit Function
+    If Len(m_recSrc) = 0 Then
+        FieldHint = "To bind a field, pick the form's record source under Form first."
+        Exit Function
+    End If
+    Select Case kind
+        Case "segmented": FieldHint = "Bound, the field holds the option's key: its caption's letters and digits, in lower case."
+        Case "progress": FieldHint = "Bound, the field gives the percent."
+        Case "stat": FieldHint = "Bound, the field gives the value."
+        Case "avatar": FieldHint = "Bound, the initials come from the field."
+        Case Else: FieldHint = "Bound, it shows the field and saves what is entered."
+    End Select
+End Function
+
+' What is wrong with binding a kind to field fld ("" for none) on this
+' form, "" when nothing is.
+Private Function FieldProblem(ByVal kind As String, ByVal fld As String) As String
+    If Len(fld) = 0 Then Exit Function
+    If Not BindKind(kind) Then
+        FieldProblem = "A " & LCase$(KindCaption(kind)) & " can't be bound to a field."
+    ElseIf Len(m_recSrc) = 0 Then
+        FieldProblem = "Pick the form's record source under Form first."
+    ElseIf Not FieldExists(m_recSrc, fld) Then
+        FieldProblem = """" & m_recSrc & """ has no field """ & fld & """."
+    End If
 End Function
 
 ' What is wrong with these settings for a kind, "" when nothing is.
@@ -1576,7 +2155,7 @@ Private Function MaxW(ByVal i As Long) As Long
         Case "date", "toggle": MaxW = DefaultW(m_kind(i))
         Case "rating": MaxW = 24 * CLng(Val(m_text(i)))
         Case "avatar": MaxW = 64
-        Case Else: MaxW = m_cw
+        Case Else: MaxW = m_fw
     End Select
 End Function
 
@@ -1594,7 +2173,7 @@ End Function
 
 Private Function MaxH(ByVal i As Long) As Long
     Select Case m_kind(i)
-        Case "card", "label": MaxH = m_ch
+        Case "card", "label": MaxH = m_fh
         Case "button", "segmented": MaxH = 48
         Case "progress": MaxH = 16
         Case "text": MaxH = 120
@@ -1664,6 +2243,82 @@ Private Function IsNumberText(ByVal s As String) As Boolean
         End If
     Next
     IsNumberText = (dots <= 1 And digits > 0)
+End Function
+
+' A value-list item: quoted, so it may hold ; , or ".
+Private Function ValueItem(ByVal s As String) As String
+    ValueItem = """" & Replace(s, """", """""") & """"
+End Function
+
+' The tables and queries a form can take as its record source, as a value
+' list: not the system's, temporary ones, action queries or the designer's
+' own tables.
+Private Function SourceList() As String
+    Dim db As DAO.Database, td As DAO.TableDef, qd As DAO.QueryDef, out As String
+    Set db = CurrentDb
+    For Each td In db.TableDefs
+        If SourceShown(td.Name) And (td.Attributes And dbSystemObject) = 0 Then out = out & ";" & ValueItem(td.Name)
+    Next
+    For Each qd In db.QueryDefs
+        If SourceShown(qd.Name) And (qd.Type = dbQSelect Or qd.Type = dbQSetOperation) Then out = out & ";" & ValueItem(qd.Name)
+    Next
+    SourceList = Mid$(out, 2)
+End Function
+
+Private Function SourceShown(ByVal nm As String) As Boolean
+    SourceShown = Not (nm Like "MSys*" Or nm Like "USys*" Or nm Like "~*" Or nm Like "kit_layout*")
+End Function
+
+' True when src is a table or query SourceList offers.
+Private Function SourceExists(ByVal src As String) As Boolean
+    Dim db As DAO.Database, td As DAO.TableDef, qd As DAO.QueryDef
+    If Len(src) = 0 Or Not SourceShown(src) Then Exit Function
+    Set db = CurrentDb
+    For Each td In db.TableDefs
+        If StrComp(td.Name, src, vbTextCompare) = 0 Then SourceExists = ((td.Attributes And dbSystemObject) = 0): Exit Function
+    Next
+    For Each qd In db.QueryDefs
+        If StrComp(qd.Name, src, vbTextCompare) = 0 Then SourceExists = (qd.Type = dbQSelect Or qd.Type = dbQSetOperation): Exit Function
+    Next
+End Function
+
+' The fields of table or query src, ;-separated after a ; each, as items of
+' a value list ("" when it isn't here).
+Private Function FieldList(ByVal src As String) As String
+    Dim f As Variant
+    For Each f In SourceFields(src)
+        FieldList = FieldList & ";" & ValueItem(CStr(f))
+    Next
+End Function
+
+Private Function FieldExists(ByVal src As String, ByVal fld As String) As Boolean
+    Dim f As Variant
+    For Each f In SourceFields(src)
+        If StrComp(CStr(f), fld, vbTextCompare) = 0 Then FieldExists = True: Exit Function
+    Next
+End Function
+
+' The names of table or query src's fields (none when it isn't here, or a
+' query can't be read).
+Private Function SourceFields(ByVal src As String) As Variant
+    Dim db As DAO.Database, td As DAO.TableDef, qd As DAO.QueryDef, f As DAO.Field, out As String
+    SourceFields = Array()
+    If Not SourceExists(src) Then Exit Function
+    Set db = CurrentDb
+    On Error GoTo Done                          ' a query whose table is gone has no fields to read
+    If TableExists(db, src) Then
+        Set td = db.TableDefs(src)
+        For Each f In td.Fields
+            out = out & vbNullChar & f.Name
+        Next
+    Else
+        Set qd = db.QueryDefs(src)
+        For Each f In qd.Fields
+            out = out & vbNullChar & f.Name
+        Next
+    End If
+    If Len(out) > 0 Then SourceFields = Split(Mid$(out, 2), vbNullChar)
+Done:
 End Function
 
 Private Function SqlText(ByVal s As String) As String
