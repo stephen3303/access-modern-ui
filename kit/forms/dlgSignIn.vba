@@ -13,7 +13,7 @@ Option Explicit
 Private Sub Form_Load()
     On Error GoTo Err_Handler
     Me.txtAccount = WinAccount()
-    If PersonnelUiSignInWhy() = "signout" Then CollapseRow "why" Else FitWhy PersonnelSignInWhyText()
+    If Len(PersonnelSignInWhyText()) = 0 Then CollapseRow "why" Else FitWhy PersonnelSignInWhyText()
     If WindowsAccountKnown() Or Len(WinAccount()) = 0 Then CollapseRow "win"
     CenterOnApp Me
     Me.txtUser.SetFocus
