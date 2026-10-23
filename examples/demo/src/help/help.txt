@@ -57,7 +57,7 @@ This page shows a step indicator and a set of sections that open and close.
 - Click a section's title to open it. Opening one closes the others.
 
 === design | Form designer
-This page lays out a form by dragging. It is an early version: it places cards, buttons, labels and progress bars, and saves the layout. Building a real form from a layout comes later.
+This page lays out a form by dragging. It is an early version: it places cards, buttons, labels and progress bars, saves the layout, and builds a real form from it.
 
 # Try it
 - Drag an element from **Elements** onto the canvas. Or click it, then click the canvas where it should go. **Esc** cancels.
@@ -67,3 +67,6 @@ This page lays out a form by dragging. It is an early version: it places cards, 
 
 # Saving
 Type a name under **Layout name** and click **Save**. Pick a saved layout from **Open a layout** to show it again, and click **New** for an empty canvas. If you leave with changes that aren't saved, you are asked whether to save them first.
+
+# Generate
+Click **Generate** to build the layout as a real form and show it in a window of its own. It saves the layout first if it has changes. It also writes the form's build code to the **designer** folder beside the database: **Build_pg<Name>.txt** holds the calls that build the form, ready to add to an app's build, and **pg<Name>.vba** is its code, with an empty handler for each button. Generate needs the editable .accdb in full Access: a locked copy can't build forms.

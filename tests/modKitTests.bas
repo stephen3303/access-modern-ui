@@ -1601,10 +1601,11 @@ End Sub
 ' Form designer (BuildDesigner, modKitDesigner): elements dropped from the
 ' palette land snapped on the canvas, the canvas's mouse selects the topmost
 ' one, drags it and resizes it from its corner, and a layout saves, clears
-' and reopens the same.
+' and reopens the same. Generate writes the layout's build code and stub and
+' builds the same form as a preview.
 Private Sub TestDesigner()
     Const DZ_FORM As String = "pgDesignerTest"
-    Dim frm As Form, g As Control, k As Long, id As Long
+    Dim frm As Form, g As Control, k As Long, id As Long, code As String
     BuildDesigner DZ_FORM, px(32), px(1056), px(560)
     DoCmd.OpenForm DZ_FORM, WindowMode:=acHidden
     Set frm = Forms(DZ_FORM)
@@ -1650,6 +1651,30 @@ Private Sub TestDesigner()
     DesignerOpen frm
     Check DesignerCount() = 2 And DesignerItem(1) = "card 0,32 240x136 Readiness" _
         And DesignerItem(2) = "button 376,328 128x48 Button" And frm("txtDzName").Value = "Test layout", "Designer layout didn't reopen the same"
+    ' Generate: the build procedure and stub, then the preview built from the same calls.
+    Check DesignerFormName("  review   navy 2!") = "pgReviewNavy2" And DesignerFormName("--") = "pgLayout", "Designer form name wrong"
+    code = DesignerCode(id)
+    Check InStr(code, "Private Sub Build_pgTestLayout()") > 0 And InStr(code, "NewForm """", 0, px(776), px(408)") > 0 _
+        And InStr(code, "Card ""card1"", ""Readiness"", px(0), px(32), px(240), px(136)") > 0 _
+        And InStr(code, "Btn ""btn1"", ""Button"", px(376), px(328), px(128), px(48)") > 0 _
+        And InStr(code, "SaveForm ""pgTestLayout""") > 0, "Designer build code wrong: " & code
+    Check InStr(code, "Card ""card1""") < InStr(code, "Btn ""btn1"""), "Designer build code not back to front"
+    code = DesignerStub(id)
+    Check InStr(code, "Private Sub btn1_Click()") > 0 And InStr(code, "HandleError ""pgTestLayout.btn1_Click""") > 0, _
+        "Designer code-behind stub wrong: " & code
+    DesignerGenerate frm
+    Check FileExists(CurrentProject.Path & "\designer\Build_pgTestLayout.txt") _
+        And FileExists(CurrentProject.Path & "\designer\pgTestLayout.vba"), "Designer Generate didn't write its files"
+    Check IsFormOpen("dzPreview"), "Designer preview not open"
+    With Forms("dzPreview")
+        Check .Controls("boxcard1").Left = 0 And .Controls("boxcard1").Top = px(32) And .Controls("lblcard1Hdr").Caption = "Readiness" _
+            And .Controls("btn1").Left = px(376) And .Controls("btn1").Width = px(128) And .Controls("btn1").Caption = "Button", _
+            "Designer preview doesn't match the layout"
+    End With
+    DoCmd.Close acForm, "dzPreview", acSaveNo
+    DoCmd.DeleteObject acForm, "dzPreview"
+    Kill CurrentProject.Path & "\designer\*.*"
+    RmDir CurrentProject.Path & "\designer"
     ' Delete, and a full pool refuses another element.
     DesignerSelect frm, 2
     DesignerDelete frm

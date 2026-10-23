@@ -159,3 +159,11 @@ Private Sub btnDzSave_Click()
 Err_Handler:
     HandleError "pgDesigner.btnDzSave_Click"
 End Sub
+
+Private Sub btnDzGenerate_Click()
+    On Error GoTo Err_Handler
+    DesignerGenerate Me
+    Exit Sub
+Err_Handler:
+    HandleError "pgDesigner.btnDzGenerate_Click"
+End Sub
