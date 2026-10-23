@@ -9,8 +9,9 @@ Option Explicit
 '       "Settings, user accounts ...") Then  ' reseed the essentials, sign out, restart
 ' PurgeTables() is the app's own list of tables to empty, children before
 ' parents. KitPurgeData:
-'   1. refuses when the tables aren't linked to a data file, or when another
-'      computer has the data file open (KitDataFileUsers);
+'   1. refuses when another computer has the data file open
+'      (KitDataFileUsers). A single-file copy, whose tables are its own, is
+'      its own data file;
 '   2. shows dlgConfirm (KitConfirmTyped): a red warning that says what will be
 '      deleted, what is kept and where the backup goes, and a box where the
 '      Delete button stays disabled until PURGE_WORD is typed exactly, as
@@ -161,9 +162,13 @@ Public Function KitPurgeData(ByVal probeTable As String, ByVal tables As Variant
     m_purgedPersonnel = False
     bePath = KitBackendPath(probeTable)
     If Len(bePath) = 0 Then
-        KitMsgBox "This copy of " & APP_NAME & " isn't linked to a shared data file, so there is nothing to purge.", _
-            vbInformation
-        Exit Function
+        ' A single-file copy keeps its tables itself: it is its own data file.
+        If Not IsLocalTable(probeTable) Then
+            KitMsgBox "This copy of " & APP_NAME & " has no " & probeTable & " table, so there is nothing to purge.", _
+                vbInformation
+            Exit Function
+        End If
+        bePath = CurrentDb.Name
     End If
     others = KitDataFileUsers(bePath)
     If Len(others) > 0 Then
@@ -393,6 +398,15 @@ End Function
 ' ---------------------------------------------------------------------------
 ' Helpers
 ' ---------------------------------------------------------------------------
+
+' True when the current database has probeTable as a table of its own (not linked).
+Private Function IsLocalTable(ByVal probeTable As String) As Boolean
+    Dim cn As String
+    On Error GoTo Missing
+    cn = CurrentDb.TableDefs(probeTable).Connect
+    IsLocalTable = (Len(cn) = 0)
+Missing:
+End Function
 
 ' The Backups folder beside the data file.
 Private Function DefaultBackupFolder(ByVal bePath As String) As String
