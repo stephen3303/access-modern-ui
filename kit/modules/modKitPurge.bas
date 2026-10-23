@@ -22,9 +22,12 @@ Option Explicit
 '      none;
 '   5. writes a warning event to the Windows Event Log (EVENT_ID_PURGE), which
 '      the purge can't delete: who, which file, how many rows, the backup.
+'   6. tells the user what was deleted, where the backup is, and that the app
+'      closes now.
 ' It returns True only when the tables were emptied. The app then puts back
-' the rows it needs to open (its own first-run settings) and signs the admin
-' out.
+' any rows it needs to open (its own first-run settings) and quits
+' (DoCmd.Quit), so the next start opens cleanly: signed in again, or at the
+' Personnel setup screen after a Personnel wipe.
 '
 ' The shared Personnel file is a separate file that every app shares, and its
 ' tables are never in an app's list. The dialog offers deleting its people
@@ -260,6 +263,10 @@ Public Function KitPurgeData(ByVal probeTable As String, ByVal tables As Variant
             "directory " & pePath & ": " & peRows & " rows." & vbCrLf & "Backup copy: " & peBackup, _
             EVENT_TYPE_WARNING, EVENT_ID_PURGE
     End If
+    KitMsgBox "All " & APP_NAME & " data was deleted" & IIf(people, ", and everyone in the Personnel directory", "") & _
+        "." & vbCrLf & vbCrLf & "The backup copy is in the " & BACKUP_FOLDER & " folder beside the data file." & _
+        vbCrLf & vbCrLf & APP_NAME & " closes now. Open it again to carry on" & _
+        IIf(people, ": the first person to open an app creates the first admin.", "."), vbInformation
     Exit Function
 Fail:
     If busy Then KitBusyEnd
