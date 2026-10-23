@@ -442,7 +442,7 @@ Public Sub DesignerEdit(frm As Form)
         If Len(RowCaption(m_kind(m_sel), r)) > 0 Then used = True
     Next
     If Not used Then
-        KitToast "A " & LCase$(KindCaption(m_kind(m_sel))) & " has no settings on a dialog: size it on the canvas.", "info"
+        KitToast AKind(m_kind(m_sel), True) & " has no settings on a dialog: size it on the canvas.", "info"
         Exit Sub
     End If
     m_propsForm = False
@@ -760,7 +760,7 @@ Public Function DesignerSetForm(ByVal title As String, ByVal w As String, ByVal 
             If Len(m_field(i)) > 0 And m_kind(i) <> "table" Then
                 If Not FieldExists(src, m_field(i)) Then
                     msg = IIf(Len(src) = 0, "Without a record source", """" & src & """ has no field """ & m_field(i) & """, and") & _
-                        " a " & LCase$(KindCaption(m_kind(i))) & " is bound to """ & m_field(i) & """. " & _
+                        " " & AKind(m_kind(i)) & " is bound to """ & m_field(i) & """. " & _
                         "Change the field it is bound to first."
                     Exit For
                 End If
@@ -1182,11 +1182,12 @@ End Sub
 ' dzPreview's Form_Load (its OnLoad expression; the preview has no code):
 ' paint each stepper (names, ;-separated) in the current palette, as an
 ' app's Form_Load does with SetStep, turn on the first chip of each chip
-' row (chips) and show tab tabKey open. The builders painted them in the
-' palette they ran under, which leaves dark text on a dark palette.
+' row (chips), show tab tabKey open and repaint breadcrumb crumb. The
+' builders painted them in the palette they ran under, which leaves dark
+' text on a dark palette.
 Public Function DesignerPreviewLoad(frm As Form, ByVal names As String, Optional ByVal chips As String = "", _
-        Optional ByVal tabKey As String = "")
-    Dim nm As Variant
+        Optional ByVal tabKey As String = "", Optional ByVal crumb As String = "")
+    Dim nm As Variant, n As Long, i As Long
     On Error GoTo Fail
     For Each nm In Split(names, ";")
         SetStep frm, CStr(nm), CurrentStep(frm, CStr(nm))
@@ -1195,6 +1196,14 @@ Public Function DesignerPreviewLoad(frm As Form, ByVal names As String, Optional
         ChipOn frm, CStr(nm), 0
     Next
     If Len(tabKey) > 0 Then SelectTab frm, tabKey
+    If Len(crumb) > 0 Then
+        ' As LayoutCrumbs paints them: the current page CLR_FG, the rest and the chevrons muted.
+        n = CLng(Split(frm.Controls(crumb).Tag, "|")(1))
+        For i = 0 To n - 1
+            frm.Controls(crumb & i).ForeColor = Th(IIf(i = n - 1, CLR_FG, CLR_MUTED_FG))
+            If i > 0 Then frm.Controls(crumb & "_s" & i).ForeColor = Th(CLR_MUTED_FG)
+        Next
+    End If
     Exit Function
 Fail:
     HandleError "modKitDesigner.DesignerPreviewLoad", names
@@ -1220,22 +1229,25 @@ Fail:
 End Function
 
 ' The preview's OnLoad expression for layout id ("" when nothing needs
-' painting): its steppers, chip rows and first tab, for DesignerPreviewLoad.
+' painting): its steppers, chip rows, first tab and breadcrumb, for
+' DesignerPreviewLoad.
 Private Function PreviewLoad(ByVal id As Long) As String
-    Dim rs As DAO.Recordset, steps As String, chips As String, tabKey As String
+    Dim rs As DAO.Recordset, steps As String, chips As String, tabKey As String, crumb As String
     Set rs = CurrentDb.OpenRecordset(ItemsSql(id), dbOpenSnapshot)
     Do Until rs.EOF
         Select Case rs!kind
             Case "stepper": steps = steps & IIf(Len(steps) > 0, ";", "") & ItemName(rs)
             Case "chips": chips = chips & IIf(Len(chips) > 0, ";", "") & ItemName(rs)
             Case "tabs": tabKey = FirstKey(Nz(rs!item_text, ""))
+            Case "breadcrumb": crumb = ItemName(rs)
         End Select
         rs.MoveNext
     Loop
     rs.Close
-    If Len(steps) + Len(chips) + Len(tabKey) = 0 Then Exit Function
+    If Len(steps) + Len(chips) + Len(tabKey) + Len(crumb) = 0 Then Exit Function
     PreviewLoad = "=DesignerPreviewLoad([Form]," & VbText(steps)
-    If Len(chips) + Len(tabKey) > 0 Then PreviewLoad = PreviewLoad & "," & VbText(chips) & "," & VbText(tabKey)
+    If Len(chips) + Len(tabKey) + Len(crumb) > 0 Then PreviewLoad = PreviewLoad & "," & VbText(chips) & "," & VbText(tabKey)
+    If Len(crumb) > 0 Then PreviewLoad = PreviewLoad & "," & VbText(crumb)
     PreviewLoad = PreviewLoad & ")"
 End Function
 
@@ -1277,7 +1289,7 @@ Private Function LayoutProblem(ByVal id As Long) As String
             End If
         ElseIf Len(Nz(rs!item_field, "")) > 0 Then
             If Not FieldExists(src, rs!item_field) Then
-                LayoutProblem = "A " & LCase$(KindCaption(rs!kind)) & " is bound to """ & rs!item_field & """, which " & _
+                LayoutProblem = AKind(rs!kind, True) & " is bound to """ & rs!item_field & """, which " & _
                     IIf(Len(src) = 0, "needs a record source.", """" & src & """ doesn't have. Bind it to another field.")
                 Exit Do
             End If
@@ -1301,7 +1313,8 @@ End Function
 
 ' The lines of layout id's Form_Load (DesignerStub; "" for none): SetStep
 ' for each stepper, ChipOn for each chip row's first chip, SelectTab for the
-' tab strip's first tab, and each table's rows from its source.
+' tab strip's first tab, SetBreadcrumb for the breadcrumb's path (each
+' paints in the user's palette), and each table's rows from its source.
 Private Function LoadLines(ByVal id As Long) As String
     Dim rs As DAO.Recordset, out As String, n As String
     Set rs = CurrentDb.OpenRecordset(ItemsSql(id), dbOpenSnapshot)
@@ -1311,6 +1324,8 @@ Private Function LoadLines(ByVal id As Long) As String
             Case "stepper": out = out & "    SetStep Me, " & n & ", CurrentStep(Me, " & n & ")" & vbCrLf
             Case "chips": out = out & "    ChipOn Me, " & n & ", 0" & vbCrLf
             Case "tabs": out = out & "    SelectTab Me, " & VbText(FirstKey(Nz(rs!item_text, ""))) & vbCrLf
+            Case "breadcrumb"
+                out = out & "    SetBreadcrumb Me, " & n & VbList(Split(SegmentItems(Nz(rs!item_text, "")), ";")) & vbCrLf
             Case "table": out = out & "    Me(" & n & ").Form.RecordSource = " & VbText(GridSource(Nz(rs!item_field, ""))) & vbCrLf
         End Select
         rs.MoveNext
@@ -1452,10 +1467,11 @@ Private Function ItemCall(rs As DAO.Recordset, ByVal anc As String, ByVal formNa
             ItemCall = "EmptyState " & n & ", " & x & ", " & y & ", " & w & ", " & VbText(DZ_EMPTY_GLYPH) & ", " & VbText(t1) & ", " & _
                 VbText(t2) & ", " & VbText(t3) & ", """", True"
         Case "table"
-            ln = "SubF " & n & ", " & VbText(GridFormName(formName, nm)) & ", " & x & ", px(" & (Nz(rs!y, 0) + 22) & "), " & w & _
-                ", px(" & (Nz(rs!h, 0) - 22) & ")"
+            ' No Tab stop: Tab would walk the rows and stay on the last one.
+            ln = "SubF(" & n & ", " & VbText(GridFormName(formName, nm)) & ", " & x & ", px(" & (Nz(rs!y, 0) + 22) & "), " & w & _
+                ", px(" & (Nz(rs!h, 0) - 22) & ")).TabStop = False"
             If Len(anc) > 0 Then AnchorOf anc, ah, av
-            If ah = 2 Then ln = "Anchor SubF(" & Mid$(ln, 6) & "), 2, " & av
+            If ah = 2 Then ln = ln & vbCrLf & "    Anchor F.Controls(" & n & "), 2, " & av
             ItemCall = "GridHeaders " & VbText(nm & "_h") & ", " & VbArray(GridCols(t1, t2, Nz(rs!w, 0))) & ", " & x & ", " & y & _
                 ", , , " & w & vbCrLf & "    " & ln
         Case "chips": ItemCall = "ChipRow " & n & ", " & x & ", " & y & ", " & VbText(nm & "Chip") & VbList(TrimParts(t1))
@@ -1514,6 +1530,7 @@ Private Sub BuildItem(rs As DAO.Recordset, ByVal anc As String)
             GridHeaders nm & "_h", GridCols(t1, t2, w \ 15), x, y, , , w
             Set c = SubF(nm, DZ_PREVIEW & "_" & nm, x, y + px(22), w, h - px(22))
             c.LinkMasterFields = "": c.LinkChildFields = ""   ' the rows list the whole source
+            c.TabStop = False                                  ' as ItemCall's
             If ah = 2 Then Anchor c, ah, av
         Case "chips"
             ChipRow nm, x, y, "", TrimParts(t1)
@@ -1742,7 +1759,7 @@ Private Function Place(frm As Form, ByVal kind As String, ByVal x As Long, ByVal
         Exit Function
     End If
     If m_w(i) > m_fw Or m_h(i) > m_fh Then      ' its smallest size is past the form's edge
-        KitToast "A " & LCase$(KindCaption(kind)) & " needs " & m_w(i) & " x " & m_h(i) & " px. Make the form bigger under Form first.", "warning"
+        KitToast AKind(kind, True) & " needs " & m_w(i) & " x " & m_h(i) & " px. Make the form bigger under Form first.", "warning"
         m_n = m_n - 1
         ShowSelection frm
         Exit Function
@@ -2242,10 +2259,10 @@ Private Function StretchKind(ByVal kind As String) As Boolean
 End Function
 
 ' True for an element that takes the focus (an empty state only with its
-' button, text3).
+' button, text3). A table's rows take clicks, not the Tab key.
 Private Function Focusable(ByVal kind As String, ByVal text3 As String) As Boolean
     Select Case kind
-        Case "button", "text", "date", "secret", "toggle", "segmented", "slider", "rating", "stepper", "search", "table", _
+        Case "button", "text", "date", "secret", "toggle", "segmented", "slider", "rating", "stepper", "search", _
             "breadcrumb", "accordion": Focusable = True
         Case "empty": Focusable = (Len(text3) > 0)
     End Select
@@ -2317,7 +2334,7 @@ End Function
 Private Function FieldProblem(ByVal kind As String, ByVal fld As String) As String
     If Len(fld) = 0 Then Exit Function
     If Not BindKind(kind) Then
-        FieldProblem = "A " & LCase$(KindCaption(kind)) & " can't be bound to a field."
+        FieldProblem = AKind(kind, True) & " can't be bound to a field."
     ElseIf Len(m_recSrc) = 0 Then
         FieldProblem = "Pick the form's record source under Form first."
     ElseIf Not FieldExists(m_recSrc, fld) Then
@@ -2563,6 +2580,14 @@ Private Function Clamp(ByVal v As Long, ByVal lo As Long, ByVal hi As Long) As L
     If v < lo Then v = lo
     If v > hi Then v = hi
     Clamp = v
+End Function
+
+' "a" or "an" and a kind's caption in lower case ("an empty state"),
+' capitalised to start a sentence.
+Private Function AKind(ByVal kind As String, Optional ByVal capital As Boolean = False) As String
+    AKind = LCase$(KindCaption(kind))
+    AKind = IIf(InStr("aeiou", Left$(AKind, 1)) > 0 And Len(AKind) > 0, "an ", "a ") & AKind
+    If capital Then AKind = UCase$(Left$(AKind, 1)) & Mid$(AKind, 2)
 End Function
 
 ' The ;-separated parts of s, each trimmed (an empty array for "").

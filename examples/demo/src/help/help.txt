@@ -70,7 +70,7 @@ This page lays out a form by dragging. It places the kit's elements (cards, butt
 - With a record source, an element that holds a value (a text, date or secret box, a toggle, segmented control, slider, rating, progress bar, stat tile or avatar) can be bound to one of its fields: pick it under **Field** in the element's settings. The form shows the first record.
 - On a page, **Anchor** in an element's settings keeps it at the window's right or bottom edge as the window resizes. A card, label, text box or button can also stretch across, or across and down.
 - Click **Tab order** for the order the **Tab** key moves through the form. It is the reading order (top to bottom, then left to right) until you move an element with **Move up** or **Move down**; **Reading order** puts it back.
-- A **table** lists a table or query of its own, picked under **Lists**: it needs an **id** field. Its **columns** are fields of it, separated by **;** (leave them empty for its first four fields), with optional captions. On a page it can stretch across, or across and down.
+- A **table** lists a table or query of its own, picked under **Lists**: it needs an **id** field. Its **columns** are fields of it, separated by **;** (leave them empty for its first four fields), with optional captions. On a page it can stretch across, or across and down. Its rows take clicks; the Tab key skips it.
 - **Chips**, a **tab strip** and a **breadcrumb** take their captions separated by **;**. A form takes one tab strip and one breadcrumb. An **accordion** takes its sections, a body height, and whether one or any number open at a time; its bodies are empty, for the app to fill.
 
 # Saving
