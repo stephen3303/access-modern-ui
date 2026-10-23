@@ -1567,7 +1567,8 @@ End Function
 ' CLR_DIALOG in a dialog), and the palette paints it, so an open section
 ' shows the page's color, not the white Access gives a subform with no
 ' source object. Saved as finalName. It builds a form of its own, so build
-' it before the form that shows it, as with BuildGrid.
+' it before the form that shows it, as with BuildGrid. It has nothing to
+' focus, so give the subform showing it TabStop = False, or Tab stays in it.
 Public Sub BuildBlank(ByVal finalName As String, ByVal w As Long, ByVal h As Long, Optional ByVal back As Long = CLR_BG)
     NewForm "", 0, w, h
     F.Section(acDetail).BackColor = back

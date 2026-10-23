@@ -1488,6 +1488,11 @@ Private Function ItemCall(rs As DAO.Recordset, ByVal anc As String, ByVal formNa
         Case "accordion"
             ItemCall = "Accordion " & n & ", " & x & ", " & y & ", " & w & ", " & IIf(ch = "any number", "False", "True") & _
                 VbList(AccSections(t1, t2, GridFormName(formName, nm)))
+            ' A blank body has nothing to focus: as a Tab stop, Tab would stay in it.
+            ItemCall = ItemCall & vbCrLf & "    ' No Tab stop in a blank body; set TabStop = True when a section gets its own form."
+            For i = 1 To PartCount(t1)
+                ItemCall = ItemCall & vbCrLf & "    F.Controls(" & VbText(nm & "_b" & i) & ").TabStop = False"
+            Next
     End Select
 End Function
 
@@ -1554,7 +1559,11 @@ Private Sub BuildItem(rs As DAO.Recordset, ByVal anc As String)
             For i = 0 To PartCount(t1) - 1
                 F.Controls(nm & i).OnClick = "": F.Controls(nm & i & "_k").OnClick = ""
             Next
-        Case "accordion": Accordion nm, x, y, w, (ch <> "any number"), AccSections(t1, t2, DZ_PREVIEW & "_" & nm)
+        Case "accordion"
+            Accordion nm, x, y, w, (ch <> "any number"), AccSections(t1, t2, DZ_PREVIEW & "_" & nm)
+            For i = 1 To PartCount(t1)
+                F.Controls(nm & "_b" & i).TabStop = False
+            Next
     End Select
     If Len(before) > 0 Then AnchorBuilt before, ah, av
 End Sub

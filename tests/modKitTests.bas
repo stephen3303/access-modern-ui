@@ -1925,6 +1925,7 @@ Private Sub TestDesignerMore()
         And InStr(code, "Breadcrumb ""crumb1"", px(440), px(8), px(320), 3, ""crumb1Crumb"", ""home|Home"", ""reports|Reports"", ""thisreport|This report""") > 0 _
         And InStr(code, "Accordion ""acc1"", px(416), px(120), px(360), False, ""General|subPgDzMore_acc1|80|open"", ""Notes|subPgDzMore_acc1|80""") > 0 _
         And InStr(code, "BuildBlank ""subPgDzMore_acc1"", px(360), px(80)" & vbCrLf) > 0 And InStr(code, "BuildBlank ") < InStr(code, "NewForm ") _
+        And InStr(code, "    F.Controls(""acc1_b1"").TabStop = False" & vbCrLf & "    F.Controls(""acc1_b2"").TabStop = False") > 0 _
         And InStr(code, "Ev F, ""OnLoad""") > 0 _
         And InStr(code, "TabOrder Array(""crumb10_k"", ""crumb11_k"", ""acc1_h1"", ""acc1_b1"", ""acc1_h2"", ""acc1_b2"")") > 0, _
         "Designer chips, tabs, breadcrumb or accordion build code wrong: " & code
@@ -1950,7 +1951,8 @@ Private Sub TestDesignerMore()
             And .acc1_b1.Visible And Not .acc1_b2.Visible, "Designer preview chips, tabs, breadcrumb or accordion wrong"
         ' An open body shows the blank form in the palette's page color, not Access's white.
         Check .acc1_b1.SourceObject = "dzPreview_acc1" And .acc1_b2.SourceObject = "dzPreview_acc1" _
-            And .acc1_b1.Form.Section(acDetail).BackColor = Th(CLR_BG), "Designer preview accordion body not the blank form"
+            And .acc1_b1.Form.Section(acDetail).BackColor = Th(CLR_BG) And Not .acc1_b1.TabStop And Not .acc1_b2.TabStop, _
+            "Designer preview accordion body not the blank form, or a Tab stop"
         Check .crumb10_k.TabIndex < .crumb11_k.TabIndex And .crumb11_k.TabIndex < .acc1_h1.TabIndex _
             And .acc1_h1.TabIndex < .acc1_b1.TabIndex And Not .tbl1.TabStop, _
             "Designer preview tab order wrong for the new kinds"
