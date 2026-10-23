@@ -550,7 +550,7 @@ Public Sub BuildConfirmDialog()
     ac = AlertColors("destructive")
     detH = 12 * CLng(10 * 20 * 1.36)                ' 12 lines of 10pt text
     y = px(56) + px(16) + detH + px(16)            ' the option row
-    NewDialog "Confirm", w, y + px(36) + px(12) + px(22) + px(8) + px(30) + px(20) + px(30) + px(16)
+    NewDialog "Confirm", w, y + px(54) + px(12) + px(22) + px(8) + px(30) + px(20) + px(30) + px(16)
     F.CloseButton = False                           ' Cancel or Esc closes it
     Ev F, "OnLoad"
     Box "boxWarn", 0, 0, w, px(56), ac(0)
@@ -563,9 +563,9 @@ Public Sub BuildConfirmDialog()
     c.ScrollBars = 2                                ' shows only while it has the focus
     c.BackColor = CLR_DIALOG                        ' painted while it has the focus
     Chk "chkAlso", "", px(20), y + px(2)
-    Set c = Lbl("lblAlso", "Also", px(44), y, w - px(64), px(36), 10, False, CLR_FG)
+    Set c = Lbl("lblAlso", "Also", px(44), y, w - px(64), px(54), 10, False, CLR_FG)   ' three lines
     Ev c, "OnClick"
-    y = y + px(36) + px(12)
+    y = y + px(54) + px(12)
     Lbl "lblAsk", "To confirm, type DELETE in the box below.", px(20), y, w - px(40), px(22), 10, True, CLR_FG
     y = y + px(22) + px(8)
     Set c = Txt("txtValue", "", px(20), y, w - px(40), px(30), 10)

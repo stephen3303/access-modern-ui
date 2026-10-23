@@ -1651,7 +1651,7 @@ Private Sub TestPurge()
     db.Close
     KitLinkTables be, Array("pg_parent", "pg_child")
     Check KitDataFileUsers(be) = "", "This computer listed as another user of the data file"
-    bak = KitBackupDataFile(be, root & "" & BACKUP_FOLDER)
+    bak = KitBackupDataFile(be, root & "\" & BACKUP_FOLDER)
     Check FileExists(bak) And InStr(bak, "\" & BACKUP_FOLDER & "\purge_be_backup_") > 0, "Backup copy not saved in the Backups folder"
     Set db = DBEngine.OpenDatabase(bak, False, True)
     n = db.OpenRecordset("SELECT COUNT(*) FROM pg_parent").Fields(0)

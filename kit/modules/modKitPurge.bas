@@ -252,10 +252,12 @@ Public Function KitPurgeData(ByVal probeTable As String, ByVal tables As Variant
     busy = True
     rows = KitPurgeTables(bePath, tables, ConnectPassword(probeTable))
     KitBusyEnd: busy = False
+    ' Committed: from here on an error must not say nothing was deleted.
+    stage = "deleted"
+    KitPurgeData = True
     KitEventLog APP_NAME & ": " & KitUser() & " (Windows " & WinAccount() & " on " & WinComputer() & _
         ") deleted all data in " & bePath & ": " & rows & " rows from " & (UBound(tables) - LBound(tables) + 1) & _
         " tables." & vbCrLf & "Backup copy: " & backup, EVENT_TYPE_WARNING, EVENT_ID_PURGE
-    KitPurgeData = True
     If people Then
         stage = "personnel"
         KitBusy "Deleting the people in the Personnel directory..."
@@ -263,6 +265,7 @@ Public Function KitPurgeData(ByVal probeTable As String, ByVal tables As Variant
         peRows = KitPurgeTables(pePath, Array(PERSON_APP_TABLE, PERSON_TABLE), PersonnelKey())
         KitBusyEnd: busy = False
         m_purgedPersonnel = True
+        stage = "deleted"
         PersonnelSignOut
         KitEventLog APP_NAME & ": " & WinAccount() & " on " & WinComputer() & " deleted everyone in the Personnel " & _
             "directory " & pePath & ": " & peRows & " rows." & vbCrLf & "Backup copy: " & peBackup, _
@@ -279,6 +282,10 @@ Fail:
         Case "personnel"
             HandleError "modKitPurge.KitPurgeData", pePath, "The " & APP_NAME & " data was deleted, but the Personnel " & _
                 "directory couldn't be emptied, so nobody was removed from it."
+        Case "deleted"
+            HandleError "modKitPurge.KitPurgeData", bePath, "The " & APP_NAME & " data was deleted" & _
+                IIf(m_purgedPersonnel, ", and everyone in the Personnel directory", _
+                IIf(people, ", but the Personnel directory wasn't emptied", "")) & ". The backup copy is in " & backup & "."
         Case "delete"
             HandleError "modKitPurge.KitPurgeData", bePath, "Nothing was deleted: the data couldn't be deleted, " & _
                 "so every table was left as it was. The backup copy is in " & backup & "."
