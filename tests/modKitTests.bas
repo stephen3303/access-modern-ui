@@ -1815,12 +1815,13 @@ Private Sub TestDesignerData()
         And InStr(code, "Card ""card1"", ""Card title"", px(480), px(32), px(240), px(136), """", 2, 2") > 0 _
         And InStr(code, "    Dim k As String") > 0 _
         And InStr(code, "k = BuiltNames()" & vbCrLf & "    Btn ""btn1""") > 0 And InStr(code, "AnchorBuilt k, 1, 0") > 0 _
-        And InStr(code, "TabOrder Array(""tgl1"", ""btn1"", ""txt1"")") > 0, "Designer data build code wrong: " & code
+        And InStr(code, "TabOrder Array(""tgl1"", ""btn1"", ""txt1"")") > 0 _
+        And InStr(code, "    F.Cycle = 1") > 0, "Designer data build code wrong: " & code
     DesignerPreview id
     Check IsFormOpen("dzPreview"), "Designer data preview not open"
     With Forms("dzPreview")
-        Check .RecordSource = "dz_item" And Not .AllowEdits And .txt1.Value = "Pump" And .tgl1_val.Value = True, _
-            "Designer preview not bound to the record source, read-only"
+        Check .RecordSource = "dz_item" And Not .AllowEdits And .txt1.Value = "Pump" And .tgl1_val.Value = True _
+            And .Cycle = 1, "Designer preview not bound to the record source, read-only, Tab staying on the record"
         Check .btn1.HorizontalAnchor = 1 And .btn1.VerticalAnchor = 0 And .boxcard1.HorizontalAnchor = 2 _
             And .boxcard1.VerticalAnchor = 2 And .txt1.HorizontalAnchor = 0, "Designer preview not anchored"
         Check .tgl1.TabIndex < .btn1.TabIndex And .btn1.TabIndex < .txt1.TabIndex And .txtFocusSink.TabIndex = 0, _
@@ -1835,7 +1836,8 @@ Private Sub TestDesignerData()
     Check DesignerSave(frm), "Designer dialog layout not saved"
     code = DesignerCode(id)
     Check InStr(code, "Private Sub Build_dlgDzData()") > 0 And InStr(code, "NewDialog ""Edit item"", px(520), px(336)") > 0 _
-        And InStr(code, "F.RecordSource = ""dz_item""") > 0 And InStr(code, "AnchorBuilt") = 0, "Designer dialog build code wrong: " & code
+        And InStr(code, "F.RecordSource = ""dz_item""") > 0 And InStr(code, "F.Cycle = 1") > 0 _
+        And InStr(code, "AnchorBuilt") = 0, "Designer dialog build code wrong: " & code
     Check InStr(DesignerStub(id), "RunDialog") > 0, "Designer dialog stub doesn't say how to report OK"
     DesignerPreview id
     Check Forms("dzPreview").Caption = "Preview: Edit item" And Forms("dzPreview").btn1.HorizontalAnchor = 0, _

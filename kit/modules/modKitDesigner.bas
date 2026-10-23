@@ -759,7 +759,7 @@ End Function
 ' or the selected element's kind), "" when it doesn't use that row.
 Private Function PropsCaption(ByVal r As Long) As String
     If m_propsForm Then
-        PropsCaption = Choose(r, "TITLE (A DIALOG'S TITLE BAR; EMPTY FOR THE LAYOUT'S NAME)", "WIDTH (PX)", "HEIGHT (PX)", _
+        PropsCaption = Choose(r, "DIALOG TITLE (EMPTY FOR THE LAYOUT'S NAME)", "WIDTH (PX)", "HEIGHT (PX)", _
             "PAGE OR DIALOG", "RECORD SOURCE (EMPTY FOR NONE)", "")
     ElseIf m_sel > 0 Then
         PropsCaption = RowCaption(m_kind(m_sel), r)
@@ -981,6 +981,8 @@ Public Function DesignerCode(ByVal id As Long) As String
         body = "    NewDialog " & VbText(DialogTitle(rs)) & ", px(" & Nz(rs!form_width, 0) & "), px(" & Nz(rs!form_height, 0) & ")" & vbCrLf
         If Len(src) > 0 Then body = body & "    F.RecordSource = " & VbText(src) & vbCrLf
     End If
+    ' Tab past the last control stays on the record, not on to the next one.
+    If Len(src) > 0 Then body = body & "    F.Cycle = 1" & vbCrLf
     rs.Close
     If Len(StepperNames(id)) > 0 Then body = body & "    Ev F, ""OnLoad""" & vbCrLf     ' Form_Load paints the steppers (DesignerStub)
     Set rs = db.OpenRecordset(ItemsSql(id), dbOpenSnapshot)
@@ -1098,7 +1100,10 @@ Public Sub DesignerPreview(ByVal id As Long)
     F.MinMaxButtons = 0
     F.ControlBox = True
     F.CloseButton = True
-    If Len(src) > 0 Then F.AllowEdits = False
+    If Len(src) > 0 Then
+        F.AllowEdits = False
+        F.Cycle = 1                                ' Tab stays on the record, as DesignerCode's form
+    End If
     Set rs = db.OpenRecordset(ItemsSql(id), dbOpenSnapshot)
     Do Until rs.EOF
         BuildItem rs, IIf(isPage, Nz(rs!item_anchor, ""), "")
