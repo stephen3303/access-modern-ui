@@ -4,8 +4,12 @@ Option Explicit
 ' Access UI kit - the form designer (prototype): a page where kit elements
 ' are dragged from a palette onto a canvas, moved, resized, and saved as a
 ' layout. Layouts are rows in kit_layout and kit_layout_item (made the first
-' time the page opens), so a later step can build a real form from them with
-' the kit's builders (Card, Btn, Lbl, Progress).
+' time the page opens). Generate builds a real form from the saved layout with
+' the kit's builders (Card, Btn, Lbl, Progress), shows it (dzPreview), and
+' writes the same builder calls as a Build_<form> procedure, with a
+' code-behind stub, to the designer folder beside the database, for an app's
+' build. Generating needs full Access and the editable .accdb: a locked
+' .accde can't create forms.
 '
 ' Access can't create controls on a form that is open in Form view, so the
 ' page is built with a fixed pool of hidden preview controls per element
@@ -32,6 +36,7 @@ Private Const DZ_LBLS As Long = 16
 Private Const DZ_BTNS As Long = 12
 Private Const DZ_MAX As Long = 42               ' all four pools
 Private Const DZ_TOOLS As String = "card;button;label;progress"   ' palette order (dzTool0..3)
+Private Const DZ_PREVIEW As String = "dzPreview"   ' the form Generate builds to show a layout
 
 Private Const MODE_IDLE As Integer = 0
 Private Const MODE_MOVE As Integer = 1
@@ -90,10 +95,11 @@ Public Sub BuildDesigner(ByVal formName As String, ByVal x As Long, ByVal w As L
     kinds = Split(DZ_TOOLS, ";")
     For i = 0 To 3
         Box "dzTile" & i, x + px(16), ty + px(44) + i * px(38), lw - px(32), px(32), CLR_BG, CLR_BORDER
-        Set c = Lbl("dzTile" & i & "_g", ChrW(CLng("&H" & Choose(i + 1, "E8A9", "E73E", "E8D2", "E9D2"))), _
+        Set c = Lbl("dzTile" & i & "_g", ChrW(CLng("&H" & Choose(i + 1, "E8A9", "E7C9", "E8D2", "E9D2"))), _
             x + px(26), ty + px(44) + i * px(38), px(20), px(32), 11, False, CLR_PRIMARY)
         c.FontName = "Segoe MDL2 Assets"
         VCenter c, px(32), 11, True
+        c.TopMargin = c.TopMargin + px(2)        ' MDL2 glyphs sit high: level with the names
         Set c = Lbl("dzTile" & i & "_n", KindCaption(kinds(i)), x + px(54), ty + px(44) + i * px(38), lw - px(86), px(32), 9, True)
         VCenter c, px(32), 9, True                ' centred on the tile, as the glyph is
         Set c = Glass("dzTool" & i, x + px(16), ty + px(44) + i * px(38), lw - px(32), px(32))
@@ -119,7 +125,8 @@ Public Sub BuildDesigner(ByVal formName As String, ByVal x As Long, ByVal w As L
     Lbl "lblDzName", "LAYOUT NAME", cx + px(232), px(76), px(220), px(16), 8, True, CLR_MUTED_FG
     Set c = Txt("txtDzName", "", cx + px(232), px(94), px(220), px(30))
     Ev c, "AfterUpdate"
-    Btn "btnDzNew", "New", cx + cw - px(176), px(95), px(84), px(28), "outline"
+    Btn "btnDzNew", "New", cx + cw - px(268), px(95), px(84), px(28), "outline"
+    Btn "btnDzGenerate", "Generate", cx + cw - px(176), px(95), px(84), px(28), "outline"
     Btn "btnDzSave", "Save", cx + cw - px(84), px(95), px(84), px(28)
 
     ' Canvas, its empty-state hint, then the pools back to front.
@@ -434,6 +441,212 @@ End Function
 ' The page's CanLeave (ShellCanLeave): ask to save unsaved changes first.
 Public Function DesignerCanLeave(frm As Form) As Boolean
     DesignerCanLeave = OkToDiscard(frm)
+End Function
+
+' ---------------------------------------------------------------------------
+' Generate
+' ---------------------------------------------------------------------------
+
+' btnDzGenerate: save the layout if it has changes, build it as a real form
+' and show it (dzPreview), and write its build procedure and code-behind stub
+' to <database folder>\designer as Build_<form>.txt and <form>.vba.
+Public Sub DesignerGenerate(frm As Form)
+    Dim nm As String, folder As String, id As Long
+    If m_n = 0 Then
+        KitMsgBox "Place at least one element on the canvas first.", vbExclamation, "Form designer"
+        Exit Sub
+    End If
+    If Not CanBuildForms() Then
+        KitMsgBox "Generate builds forms, which a locked (.accde) copy or the Access Runtime can't do. " & _
+            "Open the editable .accdb in full Access to generate.", vbExclamation, "Form designer"
+        Exit Sub
+    End If
+    If m_dirty Or m_layoutId = 0 Then
+        If Not DesignerSave(frm) Then Exit Sub
+    End If
+    id = m_layoutId
+    nm = DesignerFormName(Nz(DLookup("layout_name", "kit_layout", "id=" & id), ""))
+    folder = CurrentProject.Path & "\designer"
+    EnsureFolder folder
+    WriteTextFile folder & "\Build_" & nm & ".txt", DesignerCode(id)
+    WriteTextFile folder & "\" & nm & ".vba", DesignerStub(id)
+    DesignerPreview id
+    KitToast "Preview built. Its code is in the designer folder: Build_" & nm & ".txt and " & nm & ".vba.", "success", 6000
+End Sub
+
+' The form a layout generates: "pg" and the name's letters and digits, each
+' word capitalised ("review navy 2" gives pgReviewNavy2; no letters, pgLayout).
+Public Function DesignerFormName(ByVal layoutName As String) As String
+    Dim i As Long, ch As Long, out As String, up As Boolean
+    up = True
+    For i = 1 To Len(layoutName)
+        ch = AscW(Mid$(layoutName, i, 1))
+        If (ch >= 48 And ch <= 57) Or (ch >= 65 And ch <= 90) Or (ch >= 97 And ch <= 122) Then
+            If up Then out = out & UCase$(ChrW(ch)) Else out = out & ChrW(ch)
+            up = False
+        Else
+            up = True
+        End If
+    Next
+    If Len(out) = 0 Then out = "Layout"
+    DesignerFormName = Left$("pg" & out, 64)
+End Function
+
+' Layout id as a Build_<form> procedure for an app's build module: NewForm
+' at the canvas's size, one kit builder call per element back to front, SaveForm.
+Public Function DesignerCode(ByVal id As Long) As String
+    Dim db As DAO.Database, rs As DAO.Recordset, nm As String, ln As String, s As String, title As String
+    Set db = CurrentDb
+    Set rs = db.OpenRecordset("SELECT layout_name, form_width, form_height FROM kit_layout WHERE id=" & id, dbOpenSnapshot)
+    If rs.EOF Then Err.Raise 5, , "No form designer layout " & id
+    title = OneLine(rs!layout_name)
+    nm = DesignerFormName(title)
+    s = "' " & nm & ", built from the form designer layout """ & title & """ (" & Format$(Now(), "yyyy-mm-dd hh:nn") & ")." & vbCrLf & _
+        "' Call it from the app's build, and keep " & nm & ".vba, its code-behind, in src\forms." & vbCrLf & _
+        "Private Sub Build_" & nm & "()" & vbCrLf & _
+        "    NewForm """", 0, px(" & Nz(rs!form_width, 0) & "), px(" & Nz(rs!form_height, 0) & ")" & vbCrLf
+    rs.Close
+    Set rs = db.OpenRecordset(ItemsSql(id), dbOpenSnapshot)
+    Do Until rs.EOF
+        ln = ItemCall(Nz(rs!kind, ""), ItemName(rs), Nz(rs!item_text, ""), Nz(rs!x, 0), Nz(rs!y, 0), Nz(rs!w, 0), Nz(rs!h, 0))
+        If Len(ln) > 0 Then s = s & "    " & ln & vbCrLf
+        rs.MoveNext
+    Loop
+    rs.Close
+    DesignerCode = s & "    SaveForm """ & nm & """" & vbCrLf & "End Sub" & vbCrLf
+End Function
+
+' Layout id's code-behind to start from: a Click handler for each button,
+' with the kit's error handling, for the app to fill in.
+Public Function DesignerStub(ByVal id As Long) As String
+    Dim db As DAO.Database, rs As DAO.Recordset, nm As String, s As String, title As String, b As String
+    Set db = CurrentDb
+    title = OneLine(Nz(DLookup("layout_name", "kit_layout", "id=" & id), ""))
+    nm = DesignerFormName(title)
+    s = "Option Compare Database" & vbCrLf & "Option Explicit" & vbCrLf & vbCrLf & _
+        "' " & nm & " (Build_" & nm & ", from the form designer layout """ & title & """)." & vbCrLf
+    Set rs = db.OpenRecordset(ItemsSql(id), dbOpenSnapshot)
+    Do Until rs.EOF
+        If Nz(rs!kind, "") = "button" Then
+            b = ItemName(rs)
+            s = s & vbCrLf & "Private Sub " & b & "_Click()" & vbCrLf & _
+                "    On Error GoTo Err_Handler" & vbCrLf & _
+                "    ' What " & OneLine(Nz(rs!item_text, "")) & " does goes here." & vbCrLf & _
+                "    Exit Sub" & vbCrLf & _
+                "Err_Handler:" & vbCrLf & _
+                "    HandleError """ & nm & "." & b & "_Click""" & vbCrLf & _
+                "End Sub" & vbCrLf
+        End If
+        rs.MoveNext
+    Loop
+    rs.Close
+    DesignerStub = s
+End Function
+
+' Build layout id as the pop-up form dzPreview, with the same builder calls
+' DesignerCode writes, and open it. Its buttons do nothing.
+Public Sub DesignerPreview(ByVal id As Long)
+    Dim db As DAO.Database, rs As DAO.Recordset, c As Control, title As String, fw As Long, fh As Long
+    Dim kind As String, nm As String, txt As String, x As Long, y As Long, w As Long, h As Long
+    If IsFormOpen(DZ_PREVIEW) Then DoCmd.Close acForm, DZ_PREVIEW, acSaveNo
+    Set db = CurrentDb
+    Set rs = db.OpenRecordset("SELECT layout_name, form_width, form_height FROM kit_layout WHERE id=" & id, dbOpenSnapshot)
+    If rs.EOF Then Err.Raise 5, , "No form designer layout " & id
+    title = OneLine(rs!layout_name): fw = Nz(rs!form_width, 0): fh = Nz(rs!form_height, 0)
+    rs.Close
+    On Error GoTo Fail
+    NewForm "", 0, px(fw), px(fh)
+    F.Caption = "Preview: " & title
+    F.PopUp = True
+    F.Modal = False
+    F.AutoCenter = True
+    F.AutoResize = True
+    F.BorderStyle = 3
+    F.MinMaxButtons = 0
+    F.ControlBox = True
+    F.CloseButton = True
+    Set rs = db.OpenRecordset(ItemsSql(id), dbOpenSnapshot)
+    Do Until rs.EOF
+        kind = Nz(rs!kind, ""): nm = ItemName(rs): txt = Nz(rs!item_text, "")
+        x = px(Nz(rs!x, 0)): y = px(Nz(rs!y, 0)): w = px(Nz(rs!w, 0)): h = px(Nz(rs!h, 0))
+        Select Case kind
+            Case "card": Card nm, txt, x, y, w, h
+            Case "progress": Progress nm, PercentText(txt), x, y, w, h
+            Case "label": Lbl nm, txt, x, y, w, h
+            Case "button"
+                Set c = Btn(nm, txt, x, y, w, h)
+                c.OnClick = ""
+        End Select
+        rs.MoveNext
+    Loop
+    rs.Close
+    SaveForm DZ_PREVIEW
+    On Error GoTo 0
+    DoCmd.OpenForm DZ_PREVIEW
+    Exit Sub
+Fail:
+    Dim errNo As Long, errSrc As String, errDesc As String
+    errNo = Err.Number: errSrc = Err.Source: errDesc = Err.Description
+    On Error Resume Next
+    If Not F Is Nothing Then DoCmd.Close acForm, F.Name, acSaveNo
+    Set F = Nothing
+    On Error GoTo 0
+    Err.Raise errNo, errSrc, errDesc
+End Sub
+
+Private Function ItemsSql(ByVal id As Long) As String
+    ItemsSql = "SELECT item_name, kind, item_text, x, y, w, h FROM kit_layout_item WHERE layout_id=" & id & " ORDER BY item_order"
+End Function
+
+' One element as a kit builder call; "" for a kind the designer doesn't know.
+Private Function ItemCall(ByVal kind As String, ByVal nm As String, ByVal txt As String, ByVal x As Long, ByVal y As Long, _
+        ByVal w As Long, ByVal h As Long) As String
+    Dim at As String
+    at = ", px(" & x & "), px(" & y & "), px(" & w & "), px(" & h & ")"
+    Select Case kind
+        Case "card": ItemCall = "Card " & VbText(nm) & ", " & VbText(txt) & at
+        Case "progress": ItemCall = "Progress " & VbText(nm) & ", " & VbText(PercentText(txt)) & at
+        Case "label": ItemCall = "Lbl " & VbText(nm) & ", " & VbText(txt) & at
+        Case "button": ItemCall = "Btn " & VbText(nm) & ", " & VbText(txt) & at
+    End Select
+End Function
+
+' The row's item_name when it is a plain control name (letters, digits and
+' _, starting with a letter), else its kind's prefix and order (btn7).
+Private Function ItemName(rs As DAO.Recordset) As String
+    Dim nm As String, i As Long, ch As Long, ok As Boolean
+    nm = Nz(rs!item_name, "")
+    ok = Len(nm) > 0 And Len(nm) <= 64
+    For i = 1 To Len(nm)
+        ch = AscW(Mid$(nm, i, 1))
+        If Not ((ch >= 65 And ch <= 90) Or (ch >= 97 And ch <= 122) Or (i > 1 And ((ch >= 48 And ch <= 57) Or ch = 95))) Then ok = False
+    Next
+    If Not ok Then nm = KindPrefix(Nz(rs!kind, "")) & rs.AbsolutePosition + 1
+    ItemName = nm
+End Function
+
+' A VBA string literal for s, on one line.
+Private Function VbText(ByVal s As String) As String
+    VbText = """" & Replace(OneLine(s), """", """""") & """"
+End Function
+
+Private Function OneLine(ByVal s As Variant) As String
+    OneLine = Replace(Replace(Nz(s, ""), vbCr, " "), vbLf, " ")
+End Function
+
+' A progress element's percent, "0" when it isn't one.
+Private Function PercentText(ByVal s As String) As String
+    If IsWholePercent(s) Then PercentText = CStr(CLng(s)) Else PercentText = "0"
+End Function
+
+' False in a locked (.accde) copy and in the Access Runtime, which can't create forms.
+Private Function CanBuildForms() As Boolean
+    Dim v As String
+    If SysCmd(acSysCmdRuntime) Then Exit Function
+    On Error Resume Next
+    v = CurrentDb.Properties("MDE")
+    On Error GoTo 0
+    CanBuildForms = (v <> "T")
 End Function
 
 ' ---------------------------------------------------------------------------
