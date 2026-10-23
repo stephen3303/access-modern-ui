@@ -537,8 +537,10 @@ End Sub
 ' forms\dlgConfirm.vba), for a step that can't be undone (modKitPurge): a
 ' 56px CLR_SEVA_BG band across the top with the destructive icon and the
 ' heading in 11pt bold CLR_ERROR; the detail in 10pt text across a 420px
-' column (room for 12 lines, scrolling for more); the line naming the word to
-' type, in bold; a 30px input; and, 20px below, the action button in the
+' column (room for 12 lines, scrolling for more); an optional check box with
+' two lines of text (chkAlso, lblAlso: dlgConfirm hides them and moves the
+' rows under them up when the question has no option); the line naming the
+' word to type, in bold; a 30px input; and, 20px below, the action button in the
 ' destructive color (disabled until the word is typed) and Cancel (outline,
 ' Esc) along the bottom right. Neither button is the default, so Enter never
 ' confirms. Build it with the app's other dialogs.
@@ -547,8 +549,8 @@ Public Sub BuildConfirmDialog()
     w = px(460)
     ac = AlertColors("destructive")
     detH = 12 * CLng(10 * 20 * 1.36)                ' 12 lines of 10pt text
-    y = px(56) + px(16) + detH + px(16)            ' the ask line
-    NewDialog "Confirm", w, y + px(22) + px(8) + px(30) + px(20) + px(30) + px(16)
+    y = px(56) + px(16) + detH + px(16)            ' the option row
+    NewDialog "Confirm", w, y + px(36) + px(12) + px(22) + px(8) + px(30) + px(20) + px(30) + px(16)
     F.CloseButton = False                           ' Cancel or Esc closes it
     Ev F, "OnLoad"
     Box "boxWarn", 0, 0, w, px(56), ac(0)
@@ -560,6 +562,10 @@ Public Sub BuildConfirmDialog()
     c.TopMargin = 0: c.LeftMargin = 0: c.RightMargin = 0: c.BottomMargin = 0
     c.ScrollBars = 2                                ' shows only while it has the focus
     c.BackColor = CLR_DIALOG                        ' painted while it has the focus
+    Chk "chkAlso", "", px(20), y + px(2)
+    Set c = Lbl("lblAlso", "Also", px(44), y, w - px(64), px(36), 10, False, CLR_FG)
+    Ev c, "OnClick"
+    y = y + px(36) + px(12)
     Lbl "lblAsk", "To confirm, type DELETE in the box below.", px(20), y, w - px(40), px(22), 10, True, CLR_FG
     y = y + px(22) + px(8)
     Set c = Txt("txtValue", "", px(20), y, w - px(40), px(30), 10)

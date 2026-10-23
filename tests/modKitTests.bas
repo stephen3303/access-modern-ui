@@ -1628,7 +1628,15 @@ Private Sub TestPurge()
         "Confirm button enabled before the word is typed, or Enter confirms"
     Check frm.btnConfirm.Caption = "Delete all data" And InStr(frm.lblAsk.Caption, PURGE_WORD) > 0 And _
         frm.lblHeading.Caption = "Delete all test data", "Confirm dialog doesn't show its heading, word and action"
+    Check Not frm.chkAlso.Visible And frm.lblAsk.Top = frm.lblAlso.Top, "Confirm dialog without an option keeps its check box's space"
     DoCmd.Close acForm, "dlgConfirm", acSaveNo
+    SetKitConfirm "Delete all test data", "Detail", PURGE_WORD, "Delete all data", "", "Also delete the people"
+    DoCmd.OpenForm "dlgConfirm"
+    Set frm = Forms("dlgConfirm")
+    Check frm.chkAlso.Visible And Not frm.chkAlso And frm.lblAlso.Caption = "Also delete the people", _
+        "Confirm dialog's option not shown unticked"
+    DoCmd.Close acForm, "dlgConfirm", acSaveNo
+    Check Not KitConfirmOptionChosen(), "Option chosen without a click"
     SetKitConfirm "", "", "", ""
     Check Not KitConfirmMatches(""), "An empty word confirmed"
     ' A data file with a parent and child table.
@@ -1659,6 +1667,18 @@ Private Sub TestPurge()
     CurrentDb.TableDefs.Delete "pg_child": CurrentDb.TableDefs.Delete "pg_parent"
     Kill bak: RmDir root & "\" & BACKUP_FOLDER
     Kill be: RmDir root
+    ' Everyone deleted from Personnel: no admin until the first one is made again.
+    pErr = 0
+    If Len(PersonnelPath()) > 0 Then
+        KitPurgeTables PersonnelPath(), Array(PERSON_APP_TABLE, PERSON_TABLE), PersonnelKey()
+        Check PersonnelStatus("no_table") = PERSONNEL_NO_ADMIN, "Personnel with nobody in it reported ready"
+        n = AddFirstAdmin("TEST", "Pat", "O'Neil", "LT")
+        Check n > 0 And PersonnelStatus("no_table") = PERSONNEL_READY And PersonCanUse(n, "TEST"), "First admin not made again"
+        On Error Resume Next: AddFirstAdmin "TEST", "Sam", "Lee": pErr = Err.Number: On Error GoTo 0
+        Check pErr = 5, "A second first admin was made while one exists"
+    Else
+        Check False, "No Personnel file linked for the Personnel purge checks"
+    End If
 End Sub
 
 ' Rows a form shows (its recordset clone read to the end).

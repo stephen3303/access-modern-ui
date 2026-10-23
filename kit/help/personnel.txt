@@ -49,3 +49,6 @@ APP needs the shared Personnel file and couldn't find it.
 
 # The site key
 Creating the file fills in a new random **site key** that locks it. You can keep it or type your site's own (12 to 20 characters). It is saved as Personnel.key in the same folder, and every app reads it from there, so nobody has to type it again. Keep Personnel.key with the file: without it the file won't open.
+
+# After everyone was deleted
+When an admin deleted all data and ticked the Personnel box, the Personnel file is still there but has nobody in it. The next person to open an app sees **Create the first admin**: type your name, rank and app password, and you become the Personnel admin for every app. Then add the others again, or **Import** them. If you are not the admin, choose **I'm not the admin** instead. A backup copy of the old file and its key is in the Backups folder beside it.

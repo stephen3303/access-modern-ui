@@ -26,8 +26,15 @@ Option Explicit
 ' the rows it needs to open (its own first-run settings) and signs the admin
 ' out.
 '
-' The shared Personnel file is not touched: it is a separate file that every
-' app shares, and its tables are never in an app's list.
+' The shared Personnel file is a separate file that every app shares, and its
+' tables are never in an app's list. The dialog offers deleting its people
+' too, as a check box that starts unticked. Ticked, the purge also refuses
+' while any other computer has the Personnel file open (any app, anywhere),
+' saves a checked backup of it (with its Personnel.key) in a Backups folder
+' beside it, and empties kit_person_app and kit_person in place, so every
+' app's links and the site key still work. The admin is signed out
+' (KitPurgedPersonnel is True), and the next start of any app shows the
+' Personnel setup screen to create the first admin (PERSONNEL_NO_ADMIN).
 '
 ' The app provides APP_NAME and builds dlgConfirm (BuildConfirmDialog, with
 ' kit\forms\dlgConfirm.vba copied to src\forms).
@@ -42,6 +49,9 @@ Private m_cfHeading As String
 Private m_cfDetail As String
 Private m_cfWord As String
 Private m_cfAction As String
+Private m_cfOption As String          ' the check box's text, "" for none
+Private m_cfOptionChosen As Boolean   ' it was ticked when the action was clicked
+Private m_purgedPersonnel As Boolean  ' the last KitPurgeData emptied the Personnel file too
 
 ' ---------------------------------------------------------------------------
 ' Type-to-confirm dialog
@@ -50,15 +60,16 @@ Private m_cfAction As String
 ' Ask before something that can't be undone: dlgConfirm shows heading in red,
 ' detail (what happens, what is kept), and a box where the user types word;
 ' the action button (caption action, in the destructive color) stays disabled
-' until the box holds word exactly (case counts). True only when that button
-' was clicked. Cancel, Esc, the window's X, or a dialog that can't open (not
-' built yet) all return False: a step like this is never confirmed by a
-' fallback.
+' until the box holds word exactly (case counts). optionText, when given,
+' shows a check box (unticked) with that text; KitConfirmOptionChosen says
+' whether it was ticked. True only when that button was clicked. Cancel,
+' Esc, the window's X, or a dialog that can't open (not built yet) all
+' return False: a step like this is never confirmed by a fallback.
 Public Function KitConfirmTyped(ByVal heading As String, ByVal detail As String, _
         Optional ByVal word As String = PURGE_WORD, Optional ByVal action As String = "Delete", _
-        Optional ByVal title As String = "") As Boolean
+        Optional ByVal title As String = "", Optional ByVal optionText As String = "") As Boolean
     On Error GoTo Failed
-    SetKitConfirm heading, detail, word, action, title
+    SetKitConfirm heading, detail, word, action, title, optionText
     CloseSplash
     KitConfirmTyped = RunDialog("dlgConfirm")
     ClearConfirm
@@ -71,8 +82,10 @@ End Function
 ' Set what dlgConfirm shows next (KitConfirmTyped; the kit tests open the
 ' dialog themselves after it).
 Public Sub SetKitConfirm(ByVal heading As String, ByVal detail As String, ByVal word As String, _
-        ByVal action As String, Optional ByVal title As String = "")
+        ByVal action As String, Optional ByVal title As String = "", Optional ByVal optionText As String = "")
     m_cfTitle = IIf(Len(title) > 0, title, APP_NAME)
+    m_cfOption = optionText
+    m_cfOptionChosen = False
     m_cfHeading = heading
     m_cfDetail = detail
     m_cfWord = word
@@ -100,6 +113,19 @@ Public Function KitConfirmAction() As String
     KitConfirmAction = m_cfAction
 End Function
 
+Public Function KitConfirmOption() As String
+    KitConfirmOption = m_cfOption
+End Function
+
+' Whether the last confirmed question's check box was ticked (dlgConfirm sets it).
+Public Function KitConfirmOptionChosen() As Boolean
+    KitConfirmOptionChosen = m_cfOptionChosen
+End Function
+
+Public Sub SetKitConfirmOptionChosen(ByVal chosen As Boolean)
+    m_cfOptionChosen = chosen
+End Sub
+
 ' True when typed is the word exactly: same letters, same case, no spaces
 ' around it.
 Public Function KitConfirmMatches(ByVal typed As String) As Boolean
@@ -108,7 +134,7 @@ Public Function KitConfirmMatches(ByVal typed As String) As Boolean
 End Function
 
 Private Sub ClearConfirm()
-    m_cfTitle = "": m_cfHeading = "": m_cfDetail = "": m_cfWord = "": m_cfAction = ""
+    m_cfTitle = "": m_cfHeading = "": m_cfDetail = "": m_cfWord = "": m_cfAction = "": m_cfOption = ""
 End Sub
 
 ' ---------------------------------------------------------------------------
@@ -118,14 +144,18 @@ End Sub
 ' The whole purge (see the top of the module). probeTable is one of the app's
 ' linked tables; tables (an array) are emptied in order, children first;
 ' deleted and kept describe them for the warning, in the user's words.
-' Every refusal and failure is explained to the user. Returns True when the
-' tables were emptied.
+' offerPersonnel:=False leaves out the Personnel check box (it is also left
+' out when no Personnel file is linked). Every refusal and failure is
+' explained to the user. Returns True when the tables were emptied;
+' KitPurgedPersonnel then says whether the Personnel file was emptied too.
 Public Function KitPurgeData(ByVal probeTable As String, ByVal tables As Variant, ByVal deleted As String, _
-        ByVal kept As String) As Boolean
+        ByVal kept As String, Optional ByVal offerPersonnel As Boolean = True) As Boolean
     Dim bePath As String, others As String, folder As String, backup As String, rows As Long
-    Dim busy As Boolean, stage As String
+    Dim busy As Boolean, stage As String, pePath As String, peBackup As String, people As Boolean, peRows As Long
+    Dim optionText As String
     On Error GoTo Fail
     stage = "check"
+    m_purgedPersonnel = False
     bePath = KitBackendPath(probeTable)
     If Len(bePath) = 0 Then
         KitMsgBox "This copy of " & APP_NAME & " isn't linked to a shared data file, so there is nothing to purge.", _
@@ -139,12 +169,38 @@ Public Function KitPurgeData(ByVal probeTable As String, ByVal tables As Variant
         Exit Function
     End If
     folder = DefaultBackupFolder(bePath)
+    If offerPersonnel Then pePath = PersonnelPath()
+    If Len(pePath) > 0 Then
+        optionText = "Also delete everyone in the shared Personnel directory. This signs everyone out of every app " & _
+            "that uses it; the next person to open one creates the first admin."
+    End If
     If Not KitConfirmTyped("Delete all " & APP_NAME & " data", _
             "This deletes, for every user:" & vbCrLf & deleted & vbCrLf & vbCrLf & _
             "It keeps:" & vbCrLf & kept & vbCrLf & vbCrLf & _
-            "A backup copy of the data file is saved first, in:" & vbCrLf & folder & vbCrLf & vbCrLf & _
+            "A backup copy of the data file is saved first, in:" & vbCrLf & folder & vbCrLf & _
+            IIf(Len(optionText) > 0, "(and of the Personnel file beside it, when the box below is ticked)" & vbCrLf, "") & _
+            vbCrLf & _
             "This can't be undone from inside " & APP_NAME & ". Only the backup copy can bring the data back.", _
-            PURGE_WORD, "Delete all data") Then Exit Function
+            PURGE_WORD, "Delete all data", "", optionText) Then Exit Function
+    people = (Len(pePath) > 0 And KitConfirmOptionChosen())
+    If people Then
+        others = KitDataFileUsers(pePath)
+        If Len(others) > 0 Then
+            KitMsgBox "Nothing was deleted: the Personnel directory is open in an app on " & others & "." & vbCrLf & _
+                vbCrLf & "Ask them to close every app that uses it, then try again.", vbExclamation
+            Exit Function
+        End If
+        KitBusy "Saving a backup copy of the Personnel file..."
+        busy = True
+        peBackup = TryBackup(pePath, DefaultBackupFolder(pePath))
+        If Len(peBackup) > 0 Then peBackup = WithKeyCopy(pePath, peBackup)
+        KitBusyEnd: busy = False
+        If Len(peBackup) = 0 Then
+            KitMsgBox "Nothing was deleted: the backup copy of the Personnel file couldn't be saved in the " & _
+                BACKUP_FOLDER & " folder beside it.", vbExclamation
+            Exit Function
+        End If
+    End If
 
     stage = "backup"
     KitBusy "Saving a backup copy of the data file..."
@@ -176,6 +232,12 @@ Public Function KitPurgeData(ByVal probeTable As String, ByVal tables As Variant
             "Ask them to close it, then try again.", vbExclamation
         Exit Function
     End If
+    If people Then others = KitDataFileUsers(pePath)
+    If Len(others) > 0 Then
+        KitMsgBox "Nothing was deleted: an app using the Personnel directory was opened on " & others & " meanwhile." & _
+            vbCrLf & vbCrLf & "Ask them to close it, then try again.", vbExclamation
+        Exit Function
+    End If
 
     stage = "delete"
     KitBusy "Deleting the data..."
@@ -186,16 +248,37 @@ Public Function KitPurgeData(ByVal probeTable As String, ByVal tables As Variant
         ") deleted all data in " & bePath & ": " & rows & " rows from " & (UBound(tables) - LBound(tables) + 1) & _
         " tables." & vbCrLf & "Backup copy: " & backup, EVENT_TYPE_WARNING, EVENT_ID_PURGE
     KitPurgeData = True
+    If people Then
+        stage = "personnel"
+        KitBusy "Deleting the people in the Personnel directory..."
+        busy = True
+        peRows = KitPurgeTables(pePath, Array(PERSON_APP_TABLE, PERSON_TABLE), PersonnelKey())
+        KitBusyEnd: busy = False
+        m_purgedPersonnel = True
+        PersonnelSignOut
+        KitEventLog APP_NAME & ": " & WinAccount() & " on " & WinComputer() & " deleted everyone in the Personnel " & _
+            "directory " & pePath & ": " & peRows & " rows." & vbCrLf & "Backup copy: " & peBackup, _
+            EVENT_TYPE_WARNING, EVENT_ID_PURGE
+    End If
     Exit Function
 Fail:
     If busy Then KitBusyEnd
     Select Case stage
+        Case "personnel"
+            HandleError "modKitPurge.KitPurgeData", pePath, "The " & APP_NAME & " data was deleted, but the Personnel " & _
+                "directory couldn't be emptied, so nobody was removed from it."
         Case "delete"
             HandleError "modKitPurge.KitPurgeData", bePath, "Nothing was deleted: the data couldn't be deleted, " & _
                 "so every table was left as it was. The backup copy is in " & backup & "."
         Case Else
             HandleError "modKitPurge.KitPurgeData", bePath, "Nothing was deleted."
     End Select
+End Function
+
+' True when the last KitPurgeData emptied the Personnel file too: the app
+' then restarts into the Personnel setup screen, not its sign-in.
+Public Function KitPurgedPersonnel() As Boolean
+    KitPurgedPersonnel = m_purgedPersonnel
 End Function
 
 ' The computers other than this one that have the data file at bePath open, as
@@ -316,6 +399,22 @@ Private Function TryBackup(ByVal bePath As String, ByVal folder As String) As St
     Exit Function
 Failed:
     LogError "modKitPurge.TryBackup", folder
+End Function
+
+' Copy the Personnel.key beside pePath next to its backup (as
+' "<backup name>.key"), since the backup opens only with that key. Returns
+' backup, or "" (logged, the backup deleted) when the key couldn't be copied.
+Private Function WithKeyCopy(ByVal pePath As String, ByVal backup As String) As String
+    Dim kf As String
+    On Error GoTo Failed
+    kf = PersonnelKeyPath(pePath)
+    If FileExists(kf) Then FileCopy kf, Left$(backup, Len(backup) - Len(".accdb")) & ".key"
+    WithKeyCopy = backup
+    Exit Function
+Failed:
+    LogError "modKitPurge.WithKeyCopy", kf
+    On Error Resume Next
+    Kill backup
 End Function
 
 ' The password in a linked table's Connect ("" when it has none).

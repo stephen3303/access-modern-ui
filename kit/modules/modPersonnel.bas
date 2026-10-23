@@ -46,6 +46,8 @@ Public Const PERSON_APP_TABLE As String = "kit_person_app"
 Public Const PERSONNEL_READY As Long = 0          ' linked and reachable
 Public Const PERSONNEL_NOT_SET_UP As Long = 1     ' no file linked or in the default place: offer find or create
 Public Const PERSONNEL_LOST As Long = 2           ' linked, but the file can't be reached: offer find, never create
+Public Const PERSONNEL_NO_ADMIN As Long = 3       ' linked and reachable, but nobody in it is an active admin (its
+                                                  ' people were deleted, modKitPurge): offer creating the first admin
 
 Private Const DEFAULT_KEY As String = "kit-personnel-1"
 Private Const MIN_PASSWORD_LEN As Long = 8
@@ -124,12 +126,12 @@ Public Function PersonnelStatus(ByVal appTable As String) As Long
     Dim def As String
     On Error GoTo Fail
     If Len(PersonnelPath()) > 0 Then
-        If KitBackendReachable(PERSON_TABLE) Then PersonnelStatus = PERSONNEL_READY: Exit Function
+        If KitBackendReachable(PERSON_TABLE) Then PersonnelStatus = ReadyOrNoAdmin(): Exit Function
     End If
     def = PersonnelDefaultPath(appTable)
     If Len(PersonnelFileProblem(def)) = 0 Then
         LinkPersonnelFile def
-        PersonnelStatus = PERSONNEL_READY
+        PersonnelStatus = ReadyOrNoAdmin()
     ElseIf Len(PersonnelPath()) > 0 Then
         PersonnelStatus = PERSONNEL_LOST
     Else
@@ -138,6 +140,12 @@ Public Function PersonnelStatus(ByVal appTable As String) As Long
     Exit Function
 Fail:
     RaiseAgain "modPersonnel.PersonnelStatus", appTable
+End Function
+
+' A reachable, linked Personnel file: PERSONNEL_READY, or PERSONNEL_NO_ADMIN
+' when nobody in it is an active admin.
+Private Function ReadyOrNoAdmin() As Long
+    If DCount("*", PERSON_TABLE, "is_admin AND is_active") = 0 Then ReadyOrNoAdmin = PERSONNEL_NO_ADMIN Else ReadyOrNoAdmin = PERSONNEL_READY
 End Function
 
 ' Why path can't be used as the Personnel file ("" when it can): missing,
@@ -226,6 +234,24 @@ Fail:
     On Error GoTo 0
     Err.Number = n: Err.Description = d: Err.Source = src
     RaiseAgain "modPersonnel.CreatePersonnelFile", path
+End Function
+
+' Make the current Windows user the first admin of the linked Personnel file
+' after its people were deleted (PERSONNEL_NO_ADMIN), with access to appCode,
+' as CreatePersonnelFile does for a new file. Refuses (error 5) while the
+' file has an active admin, so nobody can make themselves admin of a
+' directory in use. Returns the admin's person_id.
+Public Function AddFirstAdmin(ByVal appCode As String, ByVal firstName As String, ByVal lastName As String, _
+        Optional ByVal rank As String = "") As Long
+    On Error GoTo Fail
+    If Len(PersonnelPath()) = 0 Then Err.Raise 5, "modPersonnel", "No Personnel file is linked."
+    If ReadyOrNoAdmin() <> PERSONNEL_NO_ADMIN Then Err.Raise 5, "modPersonnel", "The Personnel file already has an admin."
+    AddFirstAdmin = AddPerson(firstName, lastName, rank, WinAccount(), "", True)
+    KitExecute "UPDATE " & PERSON_TABLE & " SET windows_sid=" & SqlOrNull(WinSid()) & " WHERE person_id=" & AddFirstAdmin
+    SetPersonApp AddFirstAdmin, appCode, True
+    Exit Function
+Fail:
+    RaiseAgain "modPersonnel.AddFirstAdmin", firstName & " " & lastName
 End Function
 
 ' Add a person; returns their person_id. windowsAccount (DOMAIN\user) may be
