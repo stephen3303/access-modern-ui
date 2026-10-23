@@ -4,8 +4,9 @@ Option Explicit
 ' Kit Demo - BuildAll and the Build_<form> procedures. Each page shows a
 ' group of kit features: pgCards (Card, Progress), pgTables (BuildGrid
 ' options, GridFit, the column chooser, tabs and chips with counts),
-' pgList (the list/detail pattern, PrintGrid and ExportGrid, Alert, Breadcrumb)
-' and pgSteps (Stepper, Accordion). frmMain is the shell; Help in its
+' pgList (the list/detail pattern, PrintGrid and ExportGrid, Alert, Breadcrumb),
+' pgSteps (Stepper, Accordion) and pgDesigner (the kit's form designer,
+' BuildDesigner). frmMain is the shell; Help in its
 ' sidebar and F1 open the kit's help window on the page's topic
 ' (src\help\help.txt).
 
@@ -107,6 +108,7 @@ Private Sub BuildUserInterface()
     Build_subPrefs
     Build_pgSteps
     Build_pgDash
+    BuildDesigner "pgDesigner", CX, PAGE_W, PAGE_H   ' the kit's form designer page
     Build_dlgAppearance
     BuildMessageDialog             ' the kit's dlgMessage, for KitMsgBox
     BuildInputDialog               ' the kit's dlgInput, for KitInputBox
@@ -412,7 +414,8 @@ End Sub
 Private Sub Build_frmMain()
     ShellBuild APP_NAME, "access-modern-ui", _
         Array("cards|Cards and progress|pgCards|E8A9", "tables|Tables|pgTables|F0E2", "list|List and detail|pgList|E8FD", _
-            "steps|Steps and sections|pgSteps|E9D5", "dash|Dashboard|pgDash|E9D2"), _
+            "steps|Steps and sections|pgSteps|E9D5", "dash|Dashboard|pgDash|E9D2", _
+            "design|Form designer|pgDesigner|E70F"), _
         Array("help|Help|E897|=KitHelp()", "trust|Folder trust|E72E|=ShowTrustHelp()", _
             "appearance|Appearance|E790|=DemoAppearance()"), _
         PAGE_W, PAGE_H
