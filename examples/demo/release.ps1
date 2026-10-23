@@ -20,7 +20,8 @@
 #   4. copy it to the release folder; write the design folder (every form as JSON and a
 #      SQL Server build script for the tables, tools\ReleaseDesign.ps1; only a release
 #      build makes these); compile it to KitDemo.accde and keep the .accdb as the full,
-#      editable program; Compact & Repair both
+#      editable program; lock the .accde (tools\ReleaseLock.ps1: Shift can't bypass the
+#      start-up, the navigation pane stays hidden); Compact & Repair both
 #   5. write RELEASE-NOTES.md (merged pull requests up to the tag) and SHA256SUMS.txt
 # An existing release folder is never overwritten. Any Visual Basic or Access dialog
 # stops the release and is reported (tools\AccessWatch.ps1).
@@ -97,6 +98,7 @@ Copy-Item $built $accdb
 Copy-Item (Join-Path $demo 'KitDemo.bmp') $out
 . (Join-Path $work 'tools\AccessWatch.ps1')
 . (Join-Path $work 'tools\ReleaseDesign.ps1')
+. (Join-Path $work 'tools\ReleaseLock.ps1')
 $acc = New-Object -ComObject Access.Application
 $watch = Start-AccessWatch $acc -TimeoutSec 1800
 $failed = $false
@@ -120,6 +122,8 @@ try {
     # through the typed SysCmd method; call it late-bound instead. Join-Path returns
     # PSObject-wrapped strings, which InvokeMember won't pass as BSTRs, hence [string].
     [void][System.__ComObject].InvokeMember('SysCmd', 'InvokeMethod', $null, $acc, @(603, [string]$accdb, [string]$accde))
+    # Shift can't bypass the .accde's start-up, and its navigation pane stays hidden.
+    Lock-ReleaseFrontEnd -Access $acc -Path $accde
 
     # Compact & Repair each file into a temporary copy, then replace it. Sizes go in the
     # release notes.

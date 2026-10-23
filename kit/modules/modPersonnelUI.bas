@@ -8,7 +8,8 @@ Option Explicit
 '   If Not KitPersonnelStart("item", APP_CODE) Then DoCmd.Quit
 ' finds or sets up the Personnel file (dlgPersonnelSetup), then signs the
 ' Windows user in with no questions, or shows the sign-in screen (dlgSignIn)
-' when their account isn't set up. The sidebar's Sign out button:
+' when their account isn't set up, is turned off, or has no access to the
+' app. The sidebar's Sign out button:
 '   If Not KitPersonnelSignOut(APP_CODE) Then DoCmd.Quit
 ' clears the session and shows the sign-in screen, so another person can
 ' sign in on the same copy. A Personnel link or button for admins:
@@ -62,7 +63,7 @@ Public Function KitPersonnelStart(ByVal appTable As String, ByVal appCode As Str
     End If
     SplashStatus "Checking your Windows sign-in" & ChrW(8230)
     If PersonnelSignInWindows(appCode) Then KitPersonnelStart = True: Exit Function
-    m_signInWhy = "notset"
+    m_signInWhy = WindowsSignInWhy()
     CloseSplash
     KitPersonnelStart = RunDialog(SIGNIN_FORM)
     Exit Function
@@ -98,9 +99,40 @@ Fail:
     HandleError "modPersonnelUI.KitPersonnelManage", appCode, "The Personnel page couldn't be opened."
 End Function
 
+' Why this Windows account wasn't signed in: "noaccess" (an active person
+' without access to the app), "off" (a person who is turned off) or
+' "notset" (nobody's account).
+Private Function WindowsSignInWhy() As String
+    Dim id As Long
+    id = PersonnelWindowsPersonId()
+    If id = 0 Then
+        WindowsSignInWhy = "notset"
+    ElseIf DCount("*", PERSON_TABLE, "is_active AND person_id=" & id) = 0 Then
+        WindowsSignInWhy = "off"
+    Else
+        WindowsSignInWhy = "noaccess"
+    End If
+End Function
+
+' The sign-in screen's line on why it shows, for each PersonnelUiSignInWhy
+' but "signout" (""), with who to ask (PersonnelAdminNames).
+Public Function PersonnelSignInWhyText() As String
+    Select Case m_signInWhy
+        Case "notset"
+            PersonnelSignInWhyText = "This Windows account isn't set up in Personnel yet. Ask a Personnel admin" & _
+                PersonnelAdminNames() & " to add it, or sign in with your sign-in name and app password."
+        Case "noaccess"
+            PersonnelSignInWhyText = "This Windows account is in Personnel, but it doesn't have access to " & APP_NAME & _
+                " yet. Ask a Personnel admin" & PersonnelAdminNames() & " to give you access."
+        Case "off"
+            PersonnelSignInWhyText = "This Windows account's Personnel record is turned off. Ask a Personnel admin" & _
+                PersonnelAdminNames() & " to turn it back on."
+    End Select
+End Function
+
 ' For the dialogs: the app's code and linked table, why the setup screen is
 ' open (PERSONNEL_NOT_SET_UP or PERSONNEL_LOST), why the sign-in screen is
-' ("notset": this Windows account isn't set up; "signout").
+' ("notset", "noaccess" or "off": WindowsSignInWhy; "signout").
 ' A searchable picker (PickBox, modMenu) of the active people in the
 ' Personnel file: typing part of a last or first name, a rank or a sign-in
 ' name lists the matches as "Smith, John (LT)" with the sign-in name on the
@@ -277,11 +309,12 @@ Private Sub FieldLabel(ByVal nm As String, ByVal cap As String, ByVal x As Long,
     Lbl(nm, cap, x, y, w, px(16), 9, True, CLR_MUTED_FG).Tag = tg
 End Sub
 
-' dlgSignIn: why it shows (this Windows account isn't set up, with the
-' account and Copy; or signed out), sign-in name and app password, "Use my
-' Windows sign-in next time" (only while this Windows account isn't saved
-' for anyone), a line for what went wrong, and Sign in / Close app. Rows
-' that don't apply are hidden and the rows under them move up (Form_Load).
+' dlgSignIn: why it shows (this Windows account isn't set up, is turned off
+' or has no access to the app, with who to ask, the account and Copy; or
+' signed out), sign-in name and app password, "Use my Windows sign-in next
+' time" (only while this Windows account isn't saved for anyone), a line for
+' what went wrong, and Sign in / Close app. Rows that don't apply are hidden
+' and the rows under them move up (Form_Load).
 Private Sub Build_dlgSignIn()
     Const DLG_W As Long = 6000          ' 400 px
     Dim c As Control, pad As Long, w As Long, x As Long, y As Long, gap As Long, btnW As Long
@@ -293,7 +326,8 @@ Private Sub Build_dlgSignIn()
     y = pad
     Lbl "lblTitle", "Sign in to " & APP_NAME, x, y, w, px(26), 13, True
     y = y + px(26) + gap
-    ' Row "why": this Windows account isn't set up.
+    ' Row "why": why this Windows account wasn't signed in. Form_Load sets the
+    ' text (PersonnelSignInWhyText) and fits the height to it.
     Lbl("lblWhy", "This Windows account isn't set up in Personnel yet. Ask a Personnel admin to add it, " & _
         "or sign in with your sign-in name and app password.", x, y, w, px(52), 9).Tag = "why"
     y = y + px(52) + px(4)

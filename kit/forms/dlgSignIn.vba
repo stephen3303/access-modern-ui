@@ -5,14 +5,15 @@ Option Explicit
 ' KitPersonnelSignOut open it with RunDialog). Checks a sign-in name and app
 ' password (PersonnelSignIn). A person with no password yet chooses one here
 ' when this Windows account is theirs; anyone else is told to ask an admin.
-' Rows tagged why (this Windows account isn't set up) and win (save it for
-' next time) show only when they apply; the rows under a hidden one move up.
+' Rows tagged why (why this Windows account wasn't signed in, and who to
+' ask) and win (save it for next time) show only when they apply; the rows
+' under a hidden one move up, and under the why text as it grows or shrinks.
 ' Ends "ok" when someone is signed in; Close app leaves the app to quit.
 
 Private Sub Form_Load()
     On Error GoTo Err_Handler
     Me.txtAccount = WinAccount()
-    If PersonnelUiSignInWhy() <> "notset" Then CollapseRow "why"
+    If PersonnelUiSignInWhy() = "signout" Then CollapseRow "why" Else FitWhy PersonnelSignInWhyText()
     If WindowsAccountKnown() Or Len(WinAccount()) = 0 Then CollapseRow "win"
     CenterOnApp Me
     Me.txtUser.SetFocus
@@ -52,6 +53,25 @@ Private Sub CollapseRow(ByVal row As String)
         End If
     Next
     Me.Section(acDetail).Height = Me.Section(acDetail).Height - dy
+    Me.InsideHeight = Me.Section(acDetail).Height
+End Sub
+
+' Show text in lblWhy, as tall as its lines (9pt, about 17px a line), and
+' move everything under it by the difference.
+Private Sub FitWhy(ByVal text As String)
+    Dim c As Control, oldBottom As Long, lines As Long, dy As Long
+    Me.lblWhy.Caption = text
+    lines = -Int(-(MeasureText(text, 9, 400) * 1.1) / Me.lblWhy.Width)
+    If lines < 1 Then lines = 1
+    dy = lines * px(17) + px(1) - Me.lblWhy.Height
+    If dy = 0 Then Exit Sub
+    oldBottom = Me.lblWhy.Top + Me.lblWhy.Height
+    If dy > 0 Then Me.Section(acDetail).Height = Me.Section(acDetail).Height + dy   ' room first
+    For Each c In Me.Controls
+        If c.Top >= oldBottom Then c.Top = c.Top + dy
+    Next
+    Me.lblWhy.Height = Me.lblWhy.Height + dy
+    If dy < 0 Then Me.Section(acDetail).Height = Me.Section(acDetail).Height + dy
     Me.InsideHeight = Me.Section(acDetail).Height
 End Sub
 
