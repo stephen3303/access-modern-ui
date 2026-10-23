@@ -94,7 +94,8 @@ Public Sub BuildDesigner(ByVal formName As String, ByVal x As Long, ByVal w As L
             x + px(26), ty + px(44) + i * px(38), px(20), px(32), 11, False, CLR_PRIMARY)
         c.FontName = "Segoe MDL2 Assets"
         VCenter c, px(32), 11, True
-        Lbl "dzTile" & i & "_n", KindCaption(kinds(i)), x + px(54), ty + px(44) + i * px(38), lw - px(86), px(32), 9, True
+        Set c = Lbl("dzTile" & i & "_n", KindCaption(kinds(i)), x + px(54), ty + px(44) + i * px(38), lw - px(86), px(32), 9, True)
+        VCenter c, px(32), 9, True                ' centred on the tile, as the glyph is
         Set c = Glass("dzTool" & i, x + px(16), ty + px(44) + i * px(38), lw - px(32), px(32))
         c.ControlTipText = "Drag onto the canvas, or click and then click the canvas"
     Next
