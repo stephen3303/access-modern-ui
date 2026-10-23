@@ -1444,7 +1444,7 @@ Public Function TestKit(ByVal root As String) As String
     Set peFrm = Forms(PERSON_FORM)
     Check peFrm.txtUser = "alee" And peFrm.txtAccount = "TESTDOM\alee" And peFrm.txtMiddle = "B" And Not peFrm.lblUserHint.Visible, "Change person didn't show the person"
     DoCmd.Close acForm, PERSON_FORM, acSaveNo
-    TestEventLog
+    TestMore
     PersonnelSignOut
     CurrentDb.TableDefs.Delete PERSON_TABLE: CurrentDb.TableDefs.Delete PERSON_APP_TABLE
     g_Silent = False
@@ -1591,6 +1591,78 @@ End Function
 
 ' The Windows Event Log (modKitEventLog): events are written, and LogError writes
 ' one per entry. Its own procedure: TestKit is at VBA's procedure size limit.
+' Checks with their own procedures, called from one line of TestKit (it is
+' at VBA's procedure size limit).
+Private Sub TestMore()
+    TestEventLog
+    TestDesigner
+End Sub
+
+' Form designer (BuildDesigner, modKitDesigner): elements dropped from the
+' palette land snapped on the canvas, the canvas's mouse selects the topmost
+' one, drags it and resizes it from its corner, and a layout saves, clears
+' and reopens the same.
+Private Sub TestDesigner()
+    Const DZ_FORM As String = "pgDesignerTest"
+    Dim frm As Form, g As Control, k As Long, id As Long
+    BuildDesigner DZ_FORM, px(32), px(1056), px(560)
+    DoCmd.OpenForm DZ_FORM, WindowMode:=acHidden
+    Set frm = Forms(DZ_FORM)
+    Set g = frm("dzGlass")
+    Check HasTableNamed("kit_layout") And HasTableNamed("kit_layout_item"), "Designer layout tables not made"
+    Check DesignerCount() = 0 And frm("dzHint").Visible And Not frm("dzSel").Visible, "Designer didn't open empty"
+    ' Dropped centred on the pointer, snapped to 8px and kept on the canvas.
+    Check DesignerPlace(frm, "card", 100, 100) = 1, "Designer card not placed"
+    Check DesignerItem(1) = "card 0,32 240x136 Card title", "Designer card landed at " & DesignerItem(1)
+    Check frm("dzCard1").Visible And frm("dzCard1").Left = g.Left And frm("dzCard1").Top = g.Top + px(32) _
+        And frm("dzCard1_t").Caption = "Card title" And Not frm("dzHint").Visible, "Designer card preview not drawn"
+    Check DesignerPlace(frm, "button", 400, 300) = 2, "Designer button not placed"
+    Check DesignerItem(2) = "button 352,288 96x32 Button" And frm("dzSel").Visible And frm("dzGrip").Visible, _
+        "Designer button landed at " & DesignerItem(2)
+    ' Drag the button by the canvas's mouse, then resize it from its corner (a
+    ' button is at most 48px tall).
+    DesignerMouse frm, 1, acLeftButton, px(360), px(290)
+    DesignerMouse frm, 2, acLeftButton, px(381), px(330)
+    DesignerMouse frm, 3, acLeftButton, px(381), px(330)
+    Check DesignerItem(2) = "button 376,328 96x32 Button" And frm("dzBtn1").Left = g.Left + px(376), _
+        "Designer drag moved the button to " & DesignerItem(2)
+    DesignerMouse frm, 1, acLeftButton, px(472), px(360)
+    DesignerMouse frm, 2, acLeftButton, px(500), px(380)
+    DesignerMouse frm, 3, acLeftButton, px(500), px(380)
+    Check DesignerItem(2) = "button 376,328 128x48 Button" And frm("dzBtn1").Width = px(128), _
+        "Designer resize gave " & DesignerItem(2)
+    ' A click on the card alone selects it; its title follows the text box.
+    DesignerMouse frm, 1, acLeftButton, px(10), px(40)
+    DesignerMouse frm, 3, acLeftButton, px(10), px(40)
+    Check frm("lblDzKind").Caption = "Card" And frm("lblDzTextCap").Caption = "TITLE", "Designer click didn't select the card"
+    frm("txtDzText").Value = "Readiness"
+    DesignerText frm
+    Check frm("dzCard1_t").Caption = "Readiness", "Designer card title not changed"
+    ' Save, clear, reopen.
+    frm("txtDzName").Value = "Test layout"
+    Check DesignerSave(frm), "Designer layout not saved"
+    id = Nz(DLookup("id", "kit_layout", "layout_name='Test layout'"), 0)
+    Check id > 0 And DCount("*", "kit_layout_item", "layout_id=" & id) = 2 _
+        And DLookup("item_name", "kit_layout_item", "kind='button'") = "btn1", "Designer layout rows not written"
+    DesignerNew frm
+    Check DesignerCount() = 0 And Not frm("dzCard1").Visible And Not frm("dzBtn1").Visible, "Designer New left elements"
+    frm("cboDzOpen").Value = id
+    DesignerOpen frm
+    Check DesignerCount() = 2 And DesignerItem(1) = "card 0,32 240x136 Readiness" _
+        And DesignerItem(2) = "button 376,328 128x48 Button" And frm("txtDzName").Value = "Test layout", "Designer layout didn't reopen the same"
+    ' Delete, and a full pool refuses another element.
+    DesignerSelect frm, 2
+    DesignerDelete frm
+    Check DesignerCount() = 1 And Not frm("dzBtn1").Visible And Not frm("dzSel").Visible, "Designer delete left the button"
+    For k = 1 To 5
+        DesignerPlace frm, "card", 400, 200
+    Next
+    Check DesignerCount() = 6 And DesignerPlace(frm, "card", 400, 200) = 0, "Designer card pool not limited to 6"
+    DoCmd.Close acForm, DZ_FORM, acSaveNo
+    DoCmd.DeleteObject acForm, DZ_FORM
+    CurrentDb.TableDefs.Delete "kit_layout_item": CurrentDb.TableDefs.Delete "kit_layout"
+End Sub
+
 Private Sub TestEventLog()
     Dim before As Long, evErr As Long
     before = KitEventsWritten()
