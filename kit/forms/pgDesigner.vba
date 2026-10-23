@@ -29,7 +29,7 @@ Err_Handler:
     HandleError "pgDesigner.CanLeave"
 End Function
 
-' The canvas.
+' The canvas: drag, resize, and a double-click for the element's settings.
 Private Sub dzGlass_MouseDown(Button As Integer, Shift As Integer, X As Single, Y As Single)
     On Error GoTo Err_Handler
     DesignerMouse Me, 1, Button, X, Y
@@ -54,70 +54,46 @@ Err_Handler:
     HandleError "pgDesigner.dzGlass_MouseUp"
 End Sub
 
-' The palette tiles: Card, Button, Label, Progress.
-Private Sub dzTool0_MouseDown(Button As Integer, Shift As Integer, X As Single, Y As Single)
-    ToolMouse 0, 1, Button, X, Y
-End Sub
-
-Private Sub dzTool0_MouseMove(Button As Integer, Shift As Integer, X As Single, Y As Single)
-    ToolMouse 0, 2, Button, X, Y
-End Sub
-
-Private Sub dzTool0_MouseUp(Button As Integer, Shift As Integer, X As Single, Y As Single)
-    ToolMouse 0, 3, Button, X, Y
-End Sub
-
-Private Sub dzTool1_MouseDown(Button As Integer, Shift As Integer, X As Single, Y As Single)
-    ToolMouse 1, 1, Button, X, Y
-End Sub
-
-Private Sub dzTool1_MouseMove(Button As Integer, Shift As Integer, X As Single, Y As Single)
-    ToolMouse 1, 2, Button, X, Y
-End Sub
-
-Private Sub dzTool1_MouseUp(Button As Integer, Shift As Integer, X As Single, Y As Single)
-    ToolMouse 1, 3, Button, X, Y
-End Sub
-
-Private Sub dzTool2_MouseDown(Button As Integer, Shift As Integer, X As Single, Y As Single)
-    ToolMouse 2, 1, Button, X, Y
-End Sub
-
-Private Sub dzTool2_MouseMove(Button As Integer, Shift As Integer, X As Single, Y As Single)
-    ToolMouse 2, 2, Button, X, Y
-End Sub
-
-Private Sub dzTool2_MouseUp(Button As Integer, Shift As Integer, X As Single, Y As Single)
-    ToolMouse 2, 3, Button, X, Y
-End Sub
-
-Private Sub dzTool3_MouseDown(Button As Integer, Shift As Integer, X As Single, Y As Single)
-    ToolMouse 3, 1, Button, X, Y
-End Sub
-
-Private Sub dzTool3_MouseMove(Button As Integer, Shift As Integer, X As Single, Y As Single)
-    ToolMouse 3, 2, Button, X, Y
-End Sub
-
-Private Sub dzTool3_MouseUp(Button As Integer, Shift As Integer, X As Single, Y As Single)
-    ToolMouse 3, 3, Button, X, Y
-End Sub
-
-Private Sub ToolMouse(ByVal idx As Integer, ByVal phase As Integer, ByVal btn As Integer, ByVal X As Single, ByVal Y As Single)
+Private Sub dzGlass_DblClick(Cancel As Integer)
     On Error GoTo Err_Handler
-    DesignerToolMouse Me, idx, phase, btn, X, Y
+    DesignerEdit Me
     Exit Sub
 Err_Handler:
-    HandleError "pgDesigner.dzTool" & idx & "_Mouse"
+    HandleError "pgDesigner.dzGlass_DblClick"
+End Sub
+
+' The palette: one transparent button over every tile.
+Private Sub dzPal_MouseDown(Button As Integer, Shift As Integer, X As Single, Y As Single)
+    On Error GoTo Err_Handler
+    DesignerToolMouse Me, 1, Button, X, Y
+    Exit Sub
+Err_Handler:
+    HandleError "pgDesigner.dzPal_MouseDown"
+End Sub
+
+Private Sub dzPal_MouseMove(Button As Integer, Shift As Integer, X As Single, Y As Single)
+    On Error GoTo Err_Handler
+    DesignerToolMouse Me, 2, Button, X, Y
+    Exit Sub
+Err_Handler:
+    HandleError "pgDesigner.dzPal_MouseMove"
+End Sub
+
+Private Sub dzPal_MouseUp(Button As Integer, Shift As Integer, X As Single, Y As Single)
+    On Error GoTo Err_Handler
+    DesignerToolMouse Me, 3, Button, X, Y
+    Exit Sub
+Err_Handler:
+    HandleError "pgDesigner.dzPal_MouseUp"
 End Sub
 
 ' The selected element and the layout.
-Private Sub txtDzText_AfterUpdate()
+Private Sub btnDzEdit_Click()
     On Error GoTo Err_Handler
-    DesignerText Me
+    DesignerEdit Me
     Exit Sub
 Err_Handler:
-    HandleError "pgDesigner.txtDzText_AfterUpdate"
+    HandleError "pgDesigner.btnDzEdit_Click"
 End Sub
 
 Private Sub btnDzDelete_Click()
