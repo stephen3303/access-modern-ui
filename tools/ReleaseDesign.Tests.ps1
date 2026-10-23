@@ -155,6 +155,9 @@ Check 'sqlserver: a loop keeps one cascade' (([regex]::Matches($rt, 'REFERENCES 
 Check 'sqlserver: cascades left off are listed' (@($routes.Skipped | Where-Object { $_ -match 'left off' }).Count -eq 2)
 Check 'sqlserver: each foreign key indexed once' ($rt -match 'CREATE INDEX \[IX_Grp_a_EventGrp\] ON \[Grp\] \(\[eventId\]\);' -and $rt -match 'CREATE INDEX \[IX_Grp_b_AreaGrp\] ON \[Grp\] \(\[areaId\]\);' -and ([regex]::Matches($rt, 'CREATE INDEX')).Count -eq 5)
 Check 'sqlserver: unenforced relationship gets no index' ($t -notmatch 'IX_Messages_Loose')
+$keyed = (ConvertTo-SqlServerSql ([pscustomobject]@{ Tables = @([pscustomobject]@{ Name = 'Setting'; Fields = @((F 'key' 10 0 @{ Size = 50 }), (F 'value' 10 1 @{ Size = 50 })); Indexes = @((I 'PrimaryKey' @('key') @{ Primary = $true; Unique = $true; Required = $true })) }); Relations = @() })).Text
+Check 'sqlserver: primary-key column not null even when not required' ($keyed -match '\[key\] NVARCHAR\(50\) NOT NULL' -and $keyed -match '\[value\] NVARCHAR\(50\) NULL')
+Check 'sqlserver: GO after each table and each foreign key' ($keyed -match '\);\r\nGO' -and ([regex]::Matches($rt, '(?m)^GO\r?$')).Count -eq 10)
 Check 'sqlserver: bracket in a name escaped' ((Format-SqlName 'a]b') -eq '[a]]b]')
 
 Check 'system tables recognised' ((Test-SchemaSystemTable 'MSysObjects') -and (Test-SchemaSystemTable '~TMPCLP1') -and (Test-SchemaSystemTable 'f_0123456789ABCDEF0123456789ABCDEF_files') -and -not (Test-SchemaSystemTable 'Messages'))

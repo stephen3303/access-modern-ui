@@ -325,6 +325,9 @@ function ConvertTo-SqlServerSql {
     foreach ($t in @($Schema.Tables | Sort-Object Name)) {
         $cols = New-Object System.Collections.Generic.List[string]
         $made[$t.Name] = @{}
+        # SQL Server refuses a primary key on a column that allows NULL; Access doesn't
+        # need Required set on a key field, since the key already forbids empty values.
+        $keyNames = @(@($t.Indexes | Where-Object { $_.Primary }) | Select-Object -First 1 | ForEach-Object { $_.Fields } | ForEach-Object { $_.Name })
         foreach ($f in $t.Fields) {
             $why = $null
             $type = ConvertTo-SqlServerType $f ([ref]$why)
@@ -336,7 +339,7 @@ function ConvertTo-SqlServerSql {
             $c = "    $(Format-SqlName $f.Name) $type"
             if ($f.AutoIncrement) { $c += ' IDENTITY(1,1)' }
             # Access keeps Yes/No fields filled (never empty), so they are NOT NULL.
-            $c += $(if ($f.Required -or $f.AutoIncrement -or $f.Type -eq 1) { ' NOT NULL' } else { ' NULL' })
+            $c += $(if ($f.Required -or $f.AutoIncrement -or $f.Type -eq 1 -or $keyNames -contains $f.Name) { ' NOT NULL' } else { ' NULL' })
             $def = if ($f.AutoIncrement) { $null } else { ConvertTo-SqlServerDefault $f }
             if (-not $def -and $f.Type -eq 1 -and -not $f.AutoIncrement) { $def = '0' }
             if ($def) { $c += " CONSTRAINT $(Format-SqlServerConstraint 'DF', $t.Name, $f.Name) DEFAULT ($def)" }
@@ -374,6 +377,7 @@ function ConvertTo-SqlServerSql {
             $body.Add("$kind $(Format-SqlServerConstraint 'IX', $t.Name, $ix.Name) ON $(Format-SqlName $t.Name) ($ic)$where;")
             if (-not $where) { Add-SqlServerIndexed $indexed $t.Name $ix }
         }
+        $body.Add('GO')
         $body.Add('')
     }
     $rels = New-Object System.Collections.Generic.List[object]
@@ -436,11 +440,13 @@ function ConvertTo-SqlServerSql {
             $indexed[$r.ForeignTable][$key] = $true
             $body.Add("CREATE INDEX $(Format-SqlServerConstraint 'IX', $r.ForeignTable, $r.Name) ON $(Format-SqlName $r.ForeignTable) ($fk);")
         }
+        $body.Add('GO')
     }
     $head = @(
         "-- Tables of $Title for SQL Server (T-SQL).",
         '-- A unique index on a column that may be empty is filtered (WHERE ... IS NOT NULL),',
         '-- because Access allows any number of empty values in a unique index and SQL Server one.',
+        '-- Batches end with GO: run it with sqlcmd -i or in SSMS.',
         '-- Each foreign key gets an index (Access makes one itself). A cascade that would be a',
         '-- second route between two tables, or a loop, is left off: SQL Server refuses those.',
         '-- Not included: data, captions, descriptions, formats, input masks, lookups and validation rules.'
