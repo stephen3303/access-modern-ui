@@ -10,7 +10,7 @@ test changes to it. It has one local table of fictional items and six pages:
 | Steps and sections | A `Stepper` in a card with Back and Next (click a check mark to go back) and a one-open `Accordion` of three sections, the first holding the items table and the last Preferences: a `Slider` (rows per page, with a `KitPopover` help mark) and a `Rating` |
 | Dashboard | Four `StatTile`s (open, past due with down as good, complete, average done) with change badges, and the flagged items in a card with an `EmptyState` when none are flagged |
 | List and detail | The list/detail pattern (`SelectFirstRow`, `ShowDetail`, `ClearDetail`), click-to-sort captions, `PrintGrid` and `ExportGrid` in the list's sort; the Due field is a `DateBox` whose date picker marks federal holidays and every item's due date (`MarkDate`); a compact `Toggle` switch (Flagged for review) on the detail panel's Save row; a `SecretBox` (the item's access code); an `Avatar` with the owner's initials beside the Owner field; Save confirms with a toast; a compact warning `Alert` in the header row counts open items past their due date (its close mark hides it); a `Breadcrumb` below the title (All items > status > item) whose crumbs pick the chip; the list's `SearchBox` (magnifier and clear mark, as on Tables) and its `EmptyState` when nothing matches; the detail card's More button (⋯) opens a `KitMenu` dropdown (Mark complete, Flag, Delete) |
-| Form designer | The kit's form designer (`BuildDesigner`, modKitDesigner), an early version: drag a card, button, label or progress bar from Elements onto the canvas (or click it, then the canvas), drag to move, drag the corner handle to resize, all on an 8px grid; the Selected card edits the element's title, text or percent and deletes it; a layout saves under a name to `kit_layout` and `kit_layout_item` and opens again from the list; Generate builds it as a real form with the kit's builders, shows it (`dzPreview`), and writes the same calls as `designer\Build_pg<Name>.txt` with a `pg<Name>.vba` code-behind stub |
+| Form designer | The kit's form designer (`BuildDesigner`, modKitDesigner), drag any of 17 kit elements (card, button, label, progress, text, date, secret, toggle, segmented, slider, rating, stepper, search, stat tile, alert, avatar, empty state) from Elements onto the canvas (or click it, then the canvas), drag to move, drag the corner handle to resize, all on an 8px grid; double-click an element, or Edit under Selected, for its settings in a dialog (`dlgDzProps`) that checks them against the kit builder's rules; Delete removes it; a layout saves under a name to `kit_layout` and `kit_layout_item` and opens again from the list; Generate builds it as a real form with the kit's builders, shows it (`dzPreview`), and writes the same calls as `designer\Build_pg<Name>.txt` with a `pg<Name>.vba` code-behind stub |
 
 Help in the sidebar, or F1, opens the kit's help window (`KitHelp`) on the page's topic, with a search box over the topic list; the topics are in `src\help\help.txt`. Ctrl+F goes to a page's search box, Ctrl+S saves a changed record, and Ctrl+K opens the command palette over the pages and the items opened lately (`BuildShortcutKeys`, `KitPalette`). The sidebar collapses to icons, and a right-click on a list row opens its actions. Appearance in the sidebar switches palettes. The demo opens on the kit's splash screen
 (`BuildSplash`), which opens the main window and closes; `HideAccessSplash` replaces
@@ -126,6 +126,15 @@ watching for Visual Basic error dialogs as well as the error log:
   real kit control (a rounded card, a themed button, a progress capsule), and writes
   Build_pg<Name>.txt and pg<Name>.vba to a designer folder beside KitDemo.accdb.
   Check it in Navy and Midnight.
+- Form designer elements: every one of the 17 tiles places its element (the ones past
+  Progress as an outlined box with a muted caption: the options of a segmented control,
+  stars for a rating, initials for an avatar). Double-click each (or Edit) for an "Element
+  settings" dialog with only the rows that kind uses; OK applies them and the box redraws;
+  bad settings (one segmented option, a slider step that doesn't divide its range, 2 stars,
+  a stepper's current step past the end) are refused with a message and change nothing.
+  More segmented options or more stars widen the element. Generate with one of each shows
+  them all as real kit controls in the preview (they work there but call no code), and
+  pg<Name>.vba has a handler for each.
 - Dialogs: Appearance in the sidebar and the buttons on Cards and progress dim the whole
   Access window behind their dialog; the dim goes when the dialog closes, and the dialog
   itself is not dimmed.

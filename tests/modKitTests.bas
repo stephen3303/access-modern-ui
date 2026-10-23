@@ -1596,6 +1596,7 @@ End Function
 Private Sub TestMore()
     TestEventLog
     TestDesigner
+    TestDesignerKinds
 End Sub
 
 ' Form designer (BuildDesigner, modKitDesigner): elements dropped from the
@@ -1632,12 +1633,12 @@ Private Sub TestDesigner()
     DesignerMouse frm, 3, acLeftButton, px(500), px(380)
     Check DesignerItem(2) = "button 376,328 128x48 Button" And frm("dzBtn1").Width = px(128), _
         "Designer resize gave " & DesignerItem(2)
-    ' A click on the card alone selects it; its title follows the text box.
+    ' A click on the card alone selects it; its title follows its settings.
     DesignerMouse frm, 1, acLeftButton, px(10), px(40)
     DesignerMouse frm, 3, acLeftButton, px(10), px(40)
-    Check frm("lblDzKind").Caption = "Card" And frm("lblDzTextCap").Caption = "TITLE", "Designer click didn't select the card"
-    frm("txtDzText").Value = "Readiness"
-    DesignerText frm
+    Check frm("lblDzKind").Caption = "Card" And frm("btnDzEdit").Enabled, "Designer click didn't select the card"
+    Check DesignerSetProps(1, "Readiness", "", "", "") = "", "Designer card settings refused"
+    DesignerRedraw frm
     Check frm("dzCard1_t").Caption = "Readiness", "Designer card title not changed"
     ' Save, clear, reopen.
     frm("txtDzName").Value = "Test layout"
@@ -1683,6 +1684,67 @@ Private Sub TestDesigner()
         DesignerPlace frm, "card", 400, 200
     Next
     Check DesignerCount() = 6 And DesignerPlace(frm, "card", 400, 200) = 0, "Designer card pool not limited to 6"
+    DoCmd.Close acForm, DZ_FORM, acSaveNo
+    DoCmd.DeleteObject acForm, DZ_FORM
+    CurrentDb.TableDefs.Delete "kit_layout_item": CurrentDb.TableDefs.Delete "kit_layout"
+End Sub
+
+' Form designer elements beyond the first four: each lands at its default
+' size in the outlined-box pool, settings are checked against the kit
+' builder's rules and resize the element they constrain, and Generate writes
+' and builds every kind with the handlers its stub declares.
+Private Sub TestDesignerKinds()
+    Const DZ_FORM As String = "pgDesignerKinds"
+    Dim frm As Form, kinds() As String, k As Long, id As Long, code As String
+    BuildDesigner DZ_FORM, px(32), px(1056), px(560)
+    DoCmd.OpenForm DZ_FORM, WindowMode:=acHidden
+    Set frm = Forms(DZ_FORM)
+    kinds = Split("text;date;secret;toggle;segmented;slider;rating;stepper;search;stat;alert;avatar;empty", ";")
+    For k = 0 To UBound(kinds)
+        Check DesignerPlace(frm, kinds(k), 300, 200) = k + 1, "Designer " & kinds(k) & " not placed"
+        Check frm("dzGen" & (k + 1)).Visible And frm("dzGen" & (k + 1) & "_t").Visible, "Designer " & kinds(k) & " preview not drawn"
+    Next
+    Check DesignerItem(5) = "segmented 184,184 240x32 All;Open;Done" And frm("dzGen5_t").Caption = "All  |  Open  |  Done", _
+        "Designer segmented landed as " & DesignerItem(5)
+    Check DesignerItem(12) = "avatar 288,184 32x32 Jane Doe" And frm("dzGen12_t").Caption = "JD", "Designer avatar landed as " & DesignerItem(12)
+    ' The builders' rules, refused with a reason and nothing changed.
+    Check DesignerSetProps(5, "Only", "", "", "") <> "" And DesignerSetProps(5, "A;;B", "", "", "") <> "", "Designer segmented took bad options"
+    Check DesignerSetProps(6, "0", "100", "7", "") <> "" And DesignerSetProps(6, "0", "1,5", "1", "") <> "", "Designer slider took bad stops"
+    Check DesignerSetProps(7, "2", "", "", "") <> "" And DesignerSetProps(8, "A;B", "4", "", "") <> "", "Designer rating or stepper took bad settings"
+    Check DesignerSetProps(10, "Open", "many", "", "") <> "" And DesignerSetProps(11, "T", "M", "", "loud") <> "" _
+        And DesignerSetProps(13, "", "", "", "") <> "", "Designer stat, alert or empty state took bad settings"
+    Check DesignerItem(5) = "segmented 184,184 240x32 All;Open;Done", "Designer refused settings still changed " & DesignerItem(5)
+    ' Settings that change what fits: more options widen, more stars widen.
+    Check DesignerSetProps(5, "Day;Week;Month;Quarter;Year;All", "", "", "") = "", "Designer segmented options refused"
+    Check DesignerItem(5) = "segmented 184,184 246x32 Day;Week;Month;Quarter;Year;All", "Designer segmented not widened: " & DesignerItem(5)
+    Check DesignerSetProps(7, "8", "", "", "") = "" And DesignerItem(7) = "rating 240,192 192x24 8", "Designer rating gave " & DesignerItem(7)
+    Check DesignerSetProps(11, "Saved", "All changes are saved.", "", "success") = "", "Designer alert settings refused"
+    DesignerRedraw frm
+    Check frm("dzGen11_t").Caption = "success: Saved" And frm("dzGen7_t").Caption = String$(8, ChrW(9733)), "Designer settings not redrawn"
+    ' Save and Generate: every kind's builder call, its handler stub, and the preview.
+    frm("txtDzName").Value = "Kinds test"
+    Check DesignerSave(frm), "Designer kinds layout not saved"
+    id = Nz(DLookup("id", "kit_layout", "layout_name='Kinds test'"), 0)
+    Check DLookup("item_choice", "kit_layout_item", "layout_id=" & id & " AND kind='alert'") = "success" _
+        And DLookup("item_text2", "kit_layout_item", "layout_id=" & id & " AND kind='slider'") = "100", "Designer settings columns not written"
+    code = DesignerCode(id)
+    Check InStr(code, "Segmented ""seg1"", """", px(184), px(184), px(246), ""day|Day;week|Week;month|Month;quarter|Quarter;year|Year;all|All"", px(32), ""seg1Changed""") > 0 _
+        And InStr(code, "Slider ""sld1"", """", px(184), px(192), px(240), 0, 100, 10, ""sld1Changed""") > 0 _
+        And InStr(code, "Stepper ""step1"", px(") > 0 And InStr(code, ", 1, ""step1Step"", ""Details"", ""Owner"", ""Review""") > 0 _
+        And InStr(code, "Alert ""alert1"", px(") > 0 And InStr(code, """success"", ""Saved"", ""All changes are saved.""") > 0 _
+        And InStr(code, "Avatar ""av1"", ""=""""Jane Doe"""""", px(288)") > 0, "Designer kinds build code wrong: " & code
+    code = DesignerStub(id)
+    Check InStr(code, "Public Sub seg1Changed()") > 0 And InStr(code, "Public Sub step1Step(ByVal stepNo As Long)") > 0 _
+        And InStr(code, "Public Sub search1Search(ByVal text As String)") > 0 And InStr(code, "Private Sub empty1_b_Click()") > 0 _
+        And InStr(code, "tgl1Changed") > 0 And InStr(code, "rate1Changed") > 0, "Designer kinds stub wrong: " & code
+    DesignerPreview id
+    Check IsFormOpen("dzPreview"), "Designer kinds preview not open"
+    With Forms("dzPreview")
+        Check .Controls("seg1_bg").Left = px(184) And .Controls("step1").Width = px(360) And .Controls("empty1_b").OnClick = "" _
+            And .Controls("av1_bg").Width = px(32), "Designer kinds preview doesn't match the layout"
+    End With
+    DoCmd.Close acForm, "dzPreview", acSaveNo
+    DoCmd.DeleteObject acForm, "dzPreview"
     DoCmd.Close acForm, DZ_FORM, acSaveNo
     DoCmd.DeleteObject acForm, DZ_FORM
     CurrentDb.TableDefs.Delete "kit_layout_item": CurrentDb.TableDefs.Delete "kit_layout"

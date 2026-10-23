@@ -57,16 +57,16 @@ This page shows a step indicator and a set of sections that open and close.
 - Click a section's title to open it. Opening one closes the others.
 
 === design | Form designer
-This page lays out a form by dragging. It is an early version: it places cards, buttons, labels and progress bars, saves the layout, and builds a real form from it.
+This page lays out a form by dragging. It places the kit's elements (cards, buttons, labels, progress bars, text, date and secret boxes, toggles, segmented controls, sliders, ratings, steppers, search boxes, stat tiles, alerts, avatars and empty states), saves the layout, and builds a real form from it. On the canvas, elements other than cards, buttons, labels and progress bars show as an outlined box naming what they will be; Generate shows them for real.
 
 # Try it
 - Drag an element from **Elements** onto the canvas. Or click it, then click the canvas where it should go. **Esc** cancels.
 - Drag an element to move it. Drag the small square on its bottom-right corner to resize it. Everything snaps to an 8px grid.
-- Click an element to select it. Change its title, text or percent under **Selected**, or click **Delete**.
+- Click an element to select it. **Double-click** it, or click **Edit** under **Selected** (or press **Enter**), for its settings: a card's title, a button's caption and style, a segmented control's options, a slider's range, a stepper's steps and so on. Settings the kit can't build are refused with the reason. Click **Delete** to remove it.
 - With an element selected, the **arrow keys** move it 8px, or 1px with **Shift**. **Delete** removes it.
 
 # Saving
 Type a name under **Layout name** and click **Save**. Pick a saved layout from **Open a layout** to show it again, and click **New** for an empty canvas. If you leave with changes that aren't saved, you are asked whether to save them first.
 
 # Generate
-Click **Generate** to build the layout as a real form and show it in a window of its own. It saves the layout first if it has changes. It also writes the form's build code to the **designer** folder beside the database: **Build_pg<Name>.txt** holds the calls that build the form, ready to add to an app's build, and **pg<Name>.vba** is its code, with an empty handler for each button. Generate needs the editable .accdb in full Access: a locked copy can't build forms.
+Click **Generate** to build the layout as a real form and show it in a window of its own. It saves the layout first if it has changes. It also writes the form's build code to the **designer** folder beside the database: **Build_pg<Name>.txt** holds the calls that build the form, ready to add to an app's build, and **pg<Name>.vba** is its code, with an empty handler for each button, and for each toggle, segmented control, slider, rating, stepper and search box. Generate needs the editable .accdb in full Access: a locked copy can't build forms.
