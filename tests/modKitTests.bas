@@ -1609,6 +1609,56 @@ Private Sub TestEventLog()
     On Error GoTo 0
     Check evErr = 5 And KitEventsWritten() = before + 1 And DCount("*", "error_log") = 1, "LogError did not write an event"
     CurrentDb.TableDefs.Delete "error_log"
+    TestPurge                                   ' here, not in TestKit, which is at VBA's size limit
+End Sub
+
+' The purge (modKitPurge): the typed word, dlgConfirm, the user roster, the
+' checked backup copy, and emptying tables all or none.
+Private Sub TestPurge()
+    Dim root As String, be As String, db As DAO.Database, bak As String, n As Long, pErr As Long, frm As Form
+    root = CurrentProject.Path & "\purge_test"
+    EnsureFolder root
+    SetKitConfirm "Delete all test data", "Detail", PURGE_WORD, "Delete all data"
+    Check KitConfirmMatches("DELETE") And Not KitConfirmMatches("delete") And Not KitConfirmMatches(" DELETE") _
+        And Not KitConfirmMatches("DELETE ") And Not KitConfirmMatches(""), "Typed word not matched exactly"
+    BuildConfirmDialog
+    DoCmd.OpenForm "dlgConfirm"
+    Set frm = Forms("dlgConfirm")
+    Check Not frm.btnConfirm.Enabled And Not frm.btnConfirm.Default And Not frm.btnCancel.Default And frm.btnCancel.Cancel, _
+        "Confirm button enabled before the word is typed, or Enter confirms"
+    Check frm.btnConfirm.Caption = "Delete all data" And InStr(frm.lblAsk.Caption, PURGE_WORD) > 0 And _
+        frm.lblHeading.Caption = "Delete all test data", "Confirm dialog doesn't show its heading, word and action"
+    DoCmd.Close acForm, "dlgConfirm", acSaveNo
+    SetKitConfirm "", "", "", ""
+    Check Not KitConfirmMatches(""), "An empty word confirmed"
+    ' A data file with a parent and child table.
+    be = root & "\purge_be.accdb"
+    If FileExists(be) Then Kill be
+    Set db = DBEngine.CreateDatabase(be, dbLangGeneral)
+    db.Execute "CREATE TABLE pg_parent (id LONG PRIMARY KEY, name TEXT(60))", dbFailOnError
+    db.Execute "CREATE TABLE pg_child (id LONG PRIMARY KEY, parent_id LONG REFERENCES pg_parent (id))", dbFailOnError
+    db.Execute "INSERT INTO pg_parent VALUES (1, 'one')", dbFailOnError
+    db.Execute "INSERT INTO pg_parent VALUES (2, 'two')", dbFailOnError
+    db.Execute "INSERT INTO pg_child VALUES (1, 1)", dbFailOnError
+    db.Close
+    KitLinkTables be, Array("pg_parent", "pg_child")
+    Check KitDataFileUsers(be) = "", "This computer listed as another user of the data file"
+    bak = KitBackupDataFile(be, root & "" & BACKUP_FOLDER)
+    Check FileExists(bak) And InStr(bak, "\" & BACKUP_FOLDER & "\purge_be_backup_") > 0, "Backup copy not saved in the Backups folder"
+    Set db = DBEngine.OpenDatabase(bak, False, True)
+    n = db.OpenRecordset("SELECT COUNT(*) FROM pg_parent").Fields(0)
+    db.Close
+    Check n = 2, "Backup copy lacks the data"
+    ' A missing table after two that emptied: the transaction puts both back.
+    pErr = 0: On Error Resume Next: KitPurgeTables be, Array("pg_child", "pg_parent", "pg_missing"): pErr = Err.Number: On Error GoTo 0
+    Check pErr <> 0 And DCount("*", "pg_parent") = 2 And DCount("*", "pg_child") = 1, "A failed purge left some tables emptied"
+    Check KitPurgeTables(be, Array("pg_child", "pg_parent")) = 3, "Purge didn't count the deleted rows"
+    Check DCount("*", "pg_parent") = 0 And DCount("*", "pg_child") = 0, "Purge left rows behind"
+    pErr = 0: On Error Resume Next: KitBackupDataFile be, root & "\" & BACKUP_FOLDER & "\" & Chr$(1): pErr = Err.Number: On Error GoTo 0
+    Check pErr <> 0, "Backup into a folder that can't be made reported success"
+    CurrentDb.TableDefs.Delete "pg_child": CurrentDb.TableDefs.Delete "pg_parent"
+    Kill bak: RmDir root & "\" & BACKUP_FOLDER
+    Kill be: RmDir root
 End Sub
 
 ' Rows a form shows (its recordset clone read to the end).
