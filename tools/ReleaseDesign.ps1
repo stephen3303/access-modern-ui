@@ -281,18 +281,53 @@ function ConvertTo-SqlServerDefault($Field) {
     $null
 }
 
+# True if a cascade from $Parent to $Child would give SQL Server a loop or a second
+# cascade route between two tables (error 1785), given the cascades already made
+# ($Graph: table -> tables it cascades to). Access allows both; SQL Server neither.
+function Test-SqlServerCascadeClash($Graph, [string]$Parent, [string]$Child) {
+    $reach = {
+        param([string]$From, [bool]$Back)
+        $seen = @{ $From = $true }; $todo = [System.Collections.Generic.Queue[string]]::new(); $todo.Enqueue($From)
+        while ($todo.Count) {
+            $n = $todo.Dequeue()
+            $next = if ($Back) { @($Graph.Keys | Where-Object { $Graph[$_] -contains $n }) } else { @($Graph[$n]) }
+            foreach ($m in $next) { if ($m -and -not $seen.ContainsKey($m)) { $seen[$m] = $true; $todo.Enqueue($m) } }
+        }
+        $seen
+    }
+    $above = & $reach $Parent $true    # the parent and every table that cascades to it
+    $below = & $reach $Child $false    # the child and every table it cascades to
+    foreach ($a in $above.Keys) {
+        if ($below.ContainsKey($a)) { return $true }   # a loop
+        $fromA = & $reach $a $false
+        foreach ($b in $below.Keys) { if ($fromA.ContainsKey($b)) { return $true } }   # a second route
+    }
+    $false
+}
+
+# Notes in $Indexed that $Index serves every leading run of its columns.
+function Add-SqlServerIndexed($Indexed, [string]$Table, $Index) {
+    if (-not $Indexed.ContainsKey($Table)) { $Indexed[$Table] = @{} }
+    $names = @($Index.Fields | ForEach-Object { $_.Name })
+    for ($n = 1; $n -le $names.Count; $n++) { $Indexed[$Table][($names[0..($n - 1)] -join '|').ToLowerInvariant()] = $true }
+}
+
 # The schema (Read-AccessSchema) as a T-SQL script: CREATE TABLE for each table with its
 # primary key and defaults, then its other indexes, then the relationships as foreign
-# keys (last, so table order doesn't matter). Returns Text and Skipped, like
+# keys with an index each (last, so table order doesn't matter). Returns Text and Skipped, like
 # ConvertTo-SchemaSql; what can't be carried over is also a comment where it would go.
 function ConvertTo-SqlServerSql {
     param([Parameter(Mandatory)]$Schema, [string]$Title = 'database')
     $body = New-Object System.Collections.Generic.List[string]
     $skipped = New-Object System.Collections.Generic.List[string]
     $made = @{}
+    $indexed = @{}   # table -> the leading column lists of its indexes, so a foreign key isn't indexed twice
     foreach ($t in @($Schema.Tables | Sort-Object Name)) {
         $cols = New-Object System.Collections.Generic.List[string]
         $made[$t.Name] = @{}
+        # SQL Server refuses a primary key on a column that allows NULL; Access doesn't
+        # need Required set on a key field, since the key already forbids empty values.
+        $keyNames = @(@($t.Indexes | Where-Object { $_.Primary }) | Select-Object -First 1 | ForEach-Object { $_.Fields } | ForEach-Object { $_.Name })
         foreach ($f in $t.Fields) {
             $why = $null
             $type = ConvertTo-SqlServerType $f ([ref]$why)
@@ -304,7 +339,7 @@ function ConvertTo-SqlServerSql {
             $c = "    $(Format-SqlName $f.Name) $type"
             if ($f.AutoIncrement) { $c += ' IDENTITY(1,1)' }
             # Access keeps Yes/No fields filled (never empty), so they are NOT NULL.
-            $c += $(if ($f.Required -or $f.AutoIncrement -or $f.Type -eq 1) { ' NOT NULL' } else { ' NULL' })
+            $c += $(if ($f.Required -or $f.AutoIncrement -or $f.Type -eq 1 -or $keyNames -contains $f.Name) { ' NOT NULL' } else { ' NULL' })
             $def = if ($f.AutoIncrement) { $null } else { ConvertTo-SqlServerDefault $f }
             if (-not $def -and $f.Type -eq 1 -and -not $f.AutoIncrement) { $def = '0' }
             if ($def) { $c += " CONSTRAINT $(Format-SqlServerConstraint 'DF', $t.Name, $f.Name) DEFAULT ($def)" }
@@ -321,6 +356,7 @@ function ConvertTo-SqlServerSql {
         $pk = @($t.Indexes | Where-Object { $_.Primary }) | Select-Object -First 1
         if ($pk -and -not @($pk.Fields | Where-Object { -not $made[$t.Name].ContainsKey($_.Name) }).Count) {
             $cols.Add("    CONSTRAINT $(Format-SqlServerConstraint 'PK', $t.Name) PRIMARY KEY ($((@($pk.Fields | ForEach-Object { Format-SqlName $_.Name })) -join ', '))")
+            Add-SqlServerIndexed $indexed $t.Name $pk
         }
         $body.Add("CREATE TABLE $(Format-SqlName $t.Name) (`r`n" + ($cols -join ",`r`n") + "`r`n);")
         foreach ($ix in @($t.Indexes | Where-Object { -not $_.Primary -and -not $_.Foreign } | Sort-Object Name)) {
@@ -339,29 +375,80 @@ function ConvertTo-SqlServerSql {
             }
             $kind = if ($ix.Unique) { 'CREATE UNIQUE INDEX' } else { 'CREATE INDEX' }
             $body.Add("$kind $(Format-SqlServerConstraint 'IX', $t.Name, $ix.Name) ON $(Format-SqlName $t.Name) ($ic)$where;")
+            if (-not $where) { Add-SqlServerIndexed $indexed $t.Name $ix }
         }
+        $body.Add('GO')
         $body.Add('')
     }
+    $rels = New-Object System.Collections.Generic.List[object]
     foreach ($r in @($Schema.Relations | Sort-Object Name)) {
         if ($r.Attributes -band 4) { continue }   # dbRelationInherited: belongs to a linked database
         if ((Test-SchemaSystemTable $r.Table) -or (Test-SchemaSystemTable $r.ForeignTable)) { continue }
         $label = "relationship $(Format-SqlName $r.Name) ($(Format-SqlName $r.ForeignTable) to $(Format-SqlName $r.Table))"
         if (-not $made.ContainsKey($r.Table) -or -not $made.ContainsKey($r.ForeignTable)) { $skipped.Add("${label}: a table is not in this database"); continue }
         if (@($r.Fields | Where-Object { -not $made[$r.Table].ContainsKey($_.Name) -or -not $made[$r.ForeignTable].ContainsKey($_.ForeignName) }).Count) { $skipped.Add("${label}: uses a field SQL can't make"); continue }
+        $rels.Add([pscustomobject]@{ R = $r; Label = $label; Enforced = -not ($r.Attributes -band 2) })   # dbRelationDontEnforce
+    }
+    # SQL Server refuses a second cascade route between two tables, and loops (error 1785);
+    # Access allows both. Cascades are kept one step at a time down the chains, so a
+    # shortcut (A to C where A to B to C also cascades) is the one that becomes a plain
+    # foreign key: deleting A still reaches C through B.
+    $depth = @{}
+    $cascading = @($rels | Where-Object { $_.Enforced -and ($_.R.Attributes -band (4096 + 256)) })
+    for ($pass = 0; $pass -lt $made.Count; $pass++) {   # longest cascade chain to each table; loops stop at the pass limit
+        $changed = $false
+        foreach ($x in $cascading) {
+            $d = 1 + [int]$depth[$x.R.Table]
+            if ($d -gt [int]$depth[$x.R.ForeignTable]) { $depth[$x.R.ForeignTable] = $d; $changed = $true }
+        }
+        if (-not $changed) { break }
+    }
+    $dropped = @{}
+    foreach ($c in @(@{ Bit = 4096; Sql = 'ON DELETE CASCADE' }, @{ Bit = 256; Sql = 'ON UPDATE CASCADE' })) {   # dbRelationDeleteCascade, dbRelationUpdateCascade
+        $graph = @{}
+        foreach ($x in @($cascading | Where-Object { $_.R.Attributes -band $c.Bit } | Sort-Object @{ Expression = { [int]$depth[$_.R.ForeignTable] - [int]$depth[$_.R.Table] } }, @{ Expression = { $_.R.Name } })) {
+            if (Test-SqlServerCascadeClash $graph $x.R.Table $x.R.ForeignTable) { $dropped["$($x.R.Name)|$($c.Bit)"] = $true; continue }
+            if (-not $graph.ContainsKey($x.R.Table)) { $graph[$x.R.Table] = New-Object System.Collections.Generic.List[string] }
+            $graph[$x.R.Table].Add($x.R.ForeignTable)
+        }
+    }
+    foreach ($x in $rels) {
+        $r = $x.R
         $fk = @($r.Fields | ForEach-Object { Format-SqlName $_.ForeignName }) -join ', '
         $pkc = @($r.Fields | ForEach-Object { Format-SqlName $_.Name }) -join ', '
         $st = "ALTER TABLE $(Format-SqlName $r.ForeignTable) ADD CONSTRAINT $(Format-SqlServerConstraint 'FK', $r.Name) FOREIGN KEY ($fk) REFERENCES $(Format-SqlName $r.Table) ($pkc)"
-        if ($r.Attributes -band 4096) { $st += ' ON DELETE CASCADE' }   # dbRelationDeleteCascade
-        if ($r.Attributes -band 256) { $st += ' ON UPDATE CASCADE' }    # dbRelationUpdateCascade
-        if ($r.Attributes -band 2) {   # dbRelationDontEnforce
-            $skipped.Add("${label}: not enforced in Access, kept as a comment")
+        $notes = New-Object System.Collections.Generic.List[string]
+        foreach ($c in @(@{ Bit = 4096; Sql = 'ON DELETE CASCADE' }, @{ Bit = 256; Sql = 'ON UPDATE CASCADE' })) {
+            if (-not ($r.Attributes -band $c.Bit)) { continue }
+            if ($dropped.ContainsKey("$($r.Name)|$($c.Bit)")) {
+                $skipped.Add("$($x.Label): $($c.Sql) left off, a second cascade route or a loop, which SQL Server refuses")
+                $notes.Add("-- $(Format-SqlName $r.Name): $($c.Sql) in Access, left off here: SQL Server allows one cascade route between two tables and no loops.")
+            } else { $st += " $($c.Sql)" }
+        }
+        if (-not $x.Enforced) {
+            $skipped.Add("$($x.Label): not enforced in Access, kept as a comment")
             $body.Add("-- Not enforced in Access (no referential integrity):`r`n-- $st;")
-        } else { $body.Add("$st;") }
+            continue
+        }
+        $body.AddRange($notes)
+        $body.Add("$st;")
+        # Access indexes a foreign key itself; SQL Server doesn't, so add one unless an
+        # index already starts with the same columns.
+        $key = (@($r.Fields | ForEach-Object { $_.ForeignName }) -join '|').ToLowerInvariant()
+        if (-not $indexed.ContainsKey($r.ForeignTable)) { $indexed[$r.ForeignTable] = @{} }
+        if (-not $indexed[$r.ForeignTable].ContainsKey($key)) {
+            $indexed[$r.ForeignTable][$key] = $true
+            $body.Add("CREATE INDEX $(Format-SqlServerConstraint 'IX', $r.ForeignTable, $r.Name) ON $(Format-SqlName $r.ForeignTable) ($fk);")
+        }
+        $body.Add('GO')
     }
     $head = @(
         "-- Tables of $Title for SQL Server (T-SQL).",
         '-- A unique index on a column that may be empty is filtered (WHERE ... IS NOT NULL),',
         '-- because Access allows any number of empty values in a unique index and SQL Server one.',
+        '-- Batches end with GO: run it with sqlcmd -i or in SSMS.',
+        '-- Each foreign key gets an index (Access makes one itself). A cascade that would be a',
+        '-- second route between two tables, or a loop, is left off: SQL Server refuses those.',
         '-- Not included: data, captions, descriptions, formats, input masks, lookups and validation rules.'
     )
     if ($skipped.Count) {
