@@ -6,9 +6,13 @@ Option Explicit
 ' choice, create or ask) and fits the dialog to it. Ends "ok" when the
 ' Personnel file is linked: found, or created with the current Windows user
 ' signed in as its first admin. Closing any other way leaves the app to quit.
+' After everyone was deleted from the directory (PERSONNEL_NO_ADMIN, an
+' admin's purge) it offers creating the first admin in the linked file
+' instead: Create asks only for the name, rank and password.
 
 Private m_tops As Object          ' each tagged control's designed Top, by name
 Private m_fullHeight As Long      ' the designed Detail height (the tallest panel)
+Private m_noAdmin As Boolean      ' the linked file has no admin: Create makes the first one in it
 
 Private Sub Form_Load()
     On Error GoTo Err_Handler
@@ -19,7 +23,19 @@ Private Sub Form_Load()
     Next
     m_fullHeight = Me.Section(acDetail).Height
     lost = (PersonnelUiSetupMode() = PERSONNEL_LOST)
-    If lost Then
+    m_noAdmin = (PersonnelUiSetupMode() = PERSONNEL_NO_ADMIN)
+    If m_noAdmin Then
+        Me.lblTitle.Caption = "Create the first Personnel admin"
+        Me.lblWhy.Caption = "Everyone was deleted from the Personnel directory, so it has no admin. If you are " & _
+            "the admin, create your account as its first admin. Otherwise ask your admin."
+        ' The file is linked and stays: Find leaves, and Create takes its place.
+        Me.btnFind.Tag = "never": Me.lblFindHint.Tag = "never"
+        m_tops("btnNotAdmin") = m_tops("btnCreate"): m_tops("lblNotAdminHint") = m_tops("lblCreateHint")
+        m_tops("btnCreate") = m_tops("btnFind"): m_tops("lblCreateHint") = m_tops("lblFindHint")
+        Me.btnCreate.Caption = "Create the first admin"
+        Me.lblCreateHint.Caption = "You become the Personnel admin for every app that uses it."
+        HideFileRows
+    ElseIf lost Then
         Me.lblTitle.Caption = "The Personnel file can't be reached"
         Me.lblWhy.Caption = APP_NAME & " can't reach its Personnel file at " & PersonnelPath() & _
             ". If it has moved, find it. Otherwise ask your admin."
@@ -39,6 +55,21 @@ Private Sub Form_Load()
     Exit Sub
 Err_Handler:
     LogError "dlgPersonnelSetup.Form_Load"
+End Sub
+
+' The first admin goes into the linked file: no folder or site key to choose.
+' Their rows leave the create panel, and the rows under them move up.
+Private Sub HideFileRows()
+    Dim v As Variant, shift As Long, c As Control
+    shift = m_tops("lblPwd") - m_tops("lblFolder")
+    For Each c In Me.Controls
+        If c.Tag = "create" Then
+            If m_tops(c.Name) >= m_tops("lblPwd") Then m_tops(c.Name) = m_tops(c.Name) - shift
+        End If
+    Next
+    For Each v In Array("lblFolder", "txtFolder", "btnFolder", "lblFolderHint", "lblKey", "txtKey", "lblKeyHint")
+        Me.Controls(v).Tag = "never"
+    Next
 End Sub
 
 ' F1 opens the help on this screen (KitHelp).
@@ -151,7 +182,7 @@ End Sub
 Private Sub btnCreate_Click()
     On Error GoTo Err_Handler
     ShowPanel "create"
-    Me.lblTitle.Caption = "Create the Personnel file"
+    Me.lblTitle.Caption = IIf(m_noAdmin, "Create the first Personnel admin", "Create the Personnel file")
     If Len(Nz(Me.txtKey, "")) = 0 Then Me.txtKey = NewPersonnelKey()
     Me.txtFirst.SetFocus
     Exit Sub
@@ -172,7 +203,7 @@ End Sub
 Private Sub btnBack_Click()
     On Error GoTo Err_Handler
     ShowPanel "choice"
-    Me.lblTitle.Caption = "Set up the Personnel directory"
+    Me.lblTitle.Caption = IIf(m_noAdmin, "Create the first Personnel admin", "Set up the Personnel directory")
     Me.btnCreate.SetFocus
     Exit Sub
 Err_Handler:
@@ -189,8 +220,9 @@ Err_Handler:
     HandleError "dlgPersonnelSetup.btnFolder_Click"
 End Sub
 
-' Create the file with the site key shown, make the current Windows user its
-' first admin with the password typed, and sign them in.
+' Create the file with the site key shown (or, with no admin, use the linked
+' one), make the current Windows user its first admin with the password
+' typed, and sign them in.
 Private Sub btnCreateGo_Click()
     On Error GoTo Err_Handler
     Dim firstName As String, lastName As String, pwd As String, path As String, id As Long, problem As String, siteKey As String
@@ -199,17 +231,14 @@ Private Sub btnCreateGo_Click()
     If Len(firstName) = 0 Or Len(lastName) = 0 Then KitMsgBox "Type your first and last name.", vbExclamation: Exit Sub
     If StrComp(pwd, Nz(Me.txtPwd2, ""), vbBinaryCompare) <> 0 Then KitMsgBox "The two passwords don't match.", vbExclamation: Exit Sub
     If Len(pwd) < 8 Then KitMsgBox "Use at least 8 characters for your password.", vbExclamation: Exit Sub
-    siteKey = Trim$(Nz(Me.txtKey, ""))
-    If Len(PersonnelKeyProblem(siteKey)) > 0 Then KitMsgBox PersonnelKeyProblem(siteKey), vbExclamation: Exit Sub
-    path = Nz(Me.txtFolder, "")
-    If Right$(path, 1) <> "\" Then path = path & "\"
-    path = path & PERSONNEL_FILE
-    If FileExists(path) Or FileExists(PersonnelKeyPath(path)) Then
-        KitMsgBox "There is already a Personnel file or key in that folder. Go Back and choose Find the Personnel file.", vbExclamation
-        Exit Sub
+    If m_noAdmin Then
+        DoCmd.Hourglass True
+        id = AddFirstAdmin(PersonnelUiAppCode(), firstName, lastName, Trim$(Nz(Me.txtRank, "")))
+    Else
+        If Not NewFileChecked(path, siteKey) Then Exit Sub
+        DoCmd.Hourglass True
+        id = CreatePersonnelFile(path, PersonnelUiAppCode(), firstName, lastName, Trim$(Nz(Me.txtRank, "")), siteKey)
     End If
-    DoCmd.Hourglass True
-    id = CreatePersonnelFile(path, PersonnelUiAppCode(), firstName, lastName, Trim$(Nz(Me.txtRank, "")), siteKey)
     problem = PersonnelSetPassword(id, pwd)
     DoCmd.Hourglass False
     If Len(problem) > 0 Then KitMsgBox problem, vbExclamation
@@ -220,8 +249,25 @@ Private Sub btnCreateGo_Click()
     Exit Sub
 Err_Handler:
     DoCmd.Hourglass False
-    HandleError "dlgPersonnelSetup.btnCreateGo_Click", path, "The Personnel file couldn't be created."
+    HandleError "dlgPersonnelSetup.btnCreateGo_Click", path, IIf(m_noAdmin, "The first admin couldn't be created.", _
+        "The Personnel file couldn't be created.")
 End Sub
+
+' The new file's path and site key from the create panel, checked: False,
+' having told the user, when the key is unusable or the folder already has
+' a Personnel file or key.
+Private Function NewFileChecked(ByRef path As String, ByRef siteKey As String) As Boolean
+    siteKey = Trim$(Nz(Me.txtKey, ""))
+    If Len(PersonnelKeyProblem(siteKey)) > 0 Then KitMsgBox PersonnelKeyProblem(siteKey), vbExclamation: Exit Function
+    path = Nz(Me.txtFolder, "")
+    If Right$(path, 1) <> "\" Then path = path & "\"
+    path = path & PERSONNEL_FILE
+    If FileExists(path) Or FileExists(PersonnelKeyPath(path)) Then
+        KitMsgBox "There is already a Personnel file or key in that folder. Go Back and choose Find the Personnel file.", vbExclamation
+        Exit Function
+    End If
+    NewFileChecked = True
+End Function
 
 Private Sub btnCopy_Click()
     On Error GoTo Err_Handler

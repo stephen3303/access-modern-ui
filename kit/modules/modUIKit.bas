@@ -533,6 +533,52 @@ Public Sub BuildInputDialog()
     SaveForm "dlgInput"
 End Sub
 
+' The type-to-confirm dialog KitConfirmTyped opens (dlgConfirm, code in
+' forms\dlgConfirm.vba), for a step that can't be undone (modKitPurge): a
+' 56px CLR_SEVA_BG band across the top with the destructive icon and the
+' heading in 11pt bold CLR_ERROR; the detail in 10pt text across a 420px
+' column (room for 12 lines, scrolling for more); an optional check box with
+' two lines of text (chkAlso, lblAlso: dlgConfirm hides them and moves the
+' rows under them up when the question has no option); the line naming the
+' word to type, in bold; a 30px input; and, 20px below, the action button in the
+' destructive color (disabled until the word is typed) and Cancel (outline,
+' Esc) along the bottom right. Neither button is the default, so Enter never
+' confirms. Build it with the app's other dialogs.
+Public Sub BuildConfirmDialog()
+    Dim c As Control, w As Long, detH As Long, y As Long, ac As Variant
+    w = px(460)
+    ac = AlertColors("destructive")
+    detH = 12 * CLng(10 * 20 * 1.36)                ' 12 lines of 10pt text
+    y = px(56) + px(16) + detH + px(16)            ' the option row
+    NewDialog "Confirm", w, y + px(54) + px(12) + px(22) + px(8) + px(30) + px(20) + px(30) + px(16)
+    F.CloseButton = False                           ' Cancel or Esc closes it
+    Ev F, "OnLoad"
+    Box "boxWarn", 0, 0, w, px(56), ac(0)
+    Set c = Lbl("lblIcon", ChrW(ac(2)), px(20), px(16), px(24), px(24), 16, False, ac(1))
+    c.FontName = "Segoe MDL2 Assets": c.FontWeight = 400: c.TextAlign = 2
+    Lbl "lblHeading", "Delete", px(52), px(16), w - px(72), px(24), 11, True, ac(1)
+    ' Read-only text box rather than a label, so a longer detail can scroll.
+    Set c = RO("txtDetail", "", px(20), px(72), w - px(40), detH, 10, False, CLR_FG)
+    c.TopMargin = 0: c.LeftMargin = 0: c.RightMargin = 0: c.BottomMargin = 0
+    c.ScrollBars = 2                                ' shows only while it has the focus
+    c.BackColor = CLR_DIALOG                        ' painted while it has the focus
+    Chk "chkAlso", "", px(20), y + px(2)
+    Set c = Lbl("lblAlso", "Also", px(44), y, w - px(64), px(54), 10, False, CLR_FG)   ' three lines
+    Ev c, "OnClick"
+    y = y + px(54) + px(12)
+    Lbl "lblAsk", "To confirm, type DELETE in the box below.", px(20), y, w - px(40), px(22), 10, True, CLR_FG
+    y = y + px(22) + px(8)
+    Set c = Txt("txtValue", "", px(20), y, w - px(40), px(30), 10)
+    Ev c, "OnChange"
+    y = y + px(30) + px(20)
+    Set c = Btn("btnConfirm", "Delete", w - px(20) - px(88) - px(8) - px(140), y, px(140), px(30), "destructive")
+    Ev c, "OnClick"
+    Set c = Btn("btnCancel", "Cancel", w - px(20) - px(88), y, px(88), px(30), "outline")
+    c.Cancel = True
+    Ev c, "OnClick"
+    SaveForm "dlgConfirm"
+End Sub
+
 ' Splash screen frmSplash, shown while the app starts: the app's icon glyph,
 ' APP_NAME, a subtitle, its version (database property AppVersion, else the
 ' AppBuild stamp) and a status line (SplashStatus), on the sidebar color of
