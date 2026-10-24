@@ -204,10 +204,8 @@ Public Sub BuildDesigner(ByVal formName As String, ByVal x As Long, ByVal w As L
     Lbl "lblDzPos", "", x + px(16), py + px(56), lw - px(32), px(20), 9, False, CLR_MUTED_FG
     Set c = Btn("btnDzEdit", "Edit" & ChrW(8230), x + px(16), py + px(78), px(56), px(28))
     c.Enabled = False
-    Set c = Btn("btnDzDelete", "Delete", x + px(80), py + px(78), px(60), px(28), "outline")
-    c.Enabled = False
-    Set c = GlyphBtn("btnDzArrange", "E8E4", x + px(148), py + px(78), px(36), "Duplicate, align and distribute")
-    c.Enabled = False
+    Btn "btnDzDelete", "Delete", x + px(80), py + px(78), px(60), px(28), "outline"
+    GlyphBtn "btnDzArrange", "E8E4", x + px(148), py + px(78), px(36), "Duplicate, align and distribute"
 
     ' Layout list, name, Undo, Redo, Form, Tab order, More, Generate and Save.
     Lbl "lblDzOpen", "OPEN A LAYOUT", cx, px(76), px(148), px(16), 8, True, CLR_MUTED_FG
@@ -216,10 +214,8 @@ Public Sub BuildDesigner(ByVal formName As String, ByVal x As Long, ByVal w As L
     Lbl "lblDzName", "LAYOUT NAME", cx + px(160), px(76), px(148), px(16), 8, True, CLR_MUTED_FG
     Set c = Txt("txtDzName", "", cx + px(160), px(94), px(148), px(30))
     Ev c, "AfterUpdate"
-    Set c = GlyphBtn("btnDzUndo", "E7A7", cx + cw - px(456), px(95), px(28), "Undo (Ctrl+Z)")
-    c.Enabled = False
-    Set c = GlyphBtn("btnDzRedo", "E7A6", cx + cw - px(424), px(95), px(28), "Redo (Ctrl+Y)")
-    c.Enabled = False
+    GlyphBtn "btnDzUndo", "E7A7", cx + cw - px(456), px(95), px(28), "Undo (Ctrl+Z)"
+    GlyphBtn "btnDzRedo", "E7A6", cx + cw - px(424), px(95), px(28), "Redo (Ctrl+Y)"
     Set c = Btn("btnDzForm", "Form" & ChrW(8230), cx + cw - px(384), px(95), px(72), px(28), "outline")
     c.ControlTipText = "Page or dialog, size and record source"
     Btn "btnDzTabs", "Tab order" & ChrW(8230), cx + cw - px(304), px(95), px(92), px(28), "outline"
@@ -2989,11 +2985,22 @@ Private Sub ShowSelection(frm As Form)
     End If
 End Sub
 
-' Enable or disable an outline button, its text muted while disabled: Access
-' doesn't dim a disabled outline button on a dark palette.
+' Show an outline button on (v) or off. Off, its text and edge are muted, it
+' doesn't light up under the mouse and Tab skips it, and its Tag is "off";
+' it stays enabled, since Access paints a disabled button's text its own
+' way, as bright as an enabled one on a dark palette, whatever its
+' ForeColor. Its click does nothing then: the Designer* routine it calls
+' finds nothing to do.
 Private Sub OutlineEnabled(c As Control, ByVal v As Boolean)
-    SetEnabled c, v
+    SetEnabled c, True
     c.ForeColor = Th(IIf(v, CLR_OUT_FG, CLR_MUTED_FG))
+    c.HoverForeColor = c.ForeColor
+    c.PressedForeColor = c.ForeColor
+    c.BorderColor = Th(IIf(v, CLR_OUT_BORDER, CLR_BORDER))
+    c.HoverColor = Th(IIf(v, CLR_OUT_HOVER, CLR_OUT_BG))
+    c.PressedColor = Th(IIf(v, CLR_BORDER, CLR_OUT_BG))
+    c.TabStop = v
+    c.Tag = IIf(v, "", "off")
 End Sub
 
 ' The selection outline 2px outside (x, y, w, h) px, with the resize handle

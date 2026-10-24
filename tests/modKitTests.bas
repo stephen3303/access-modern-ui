@@ -1993,8 +1993,9 @@ Private Sub TestDesignerArrange()
     DoCmd.OpenForm DZ_FORM, WindowMode:=acHidden
     Set frm = Forms(DZ_FORM)
     Check DesignerPlace(frm, "button", 100, 50) = 1 And DesignerPlace(frm, "button", 300, 120) = 2 _
-        And DesignerPlace(frm, "button", 600, 90) = 3 And DesignerHistory() = "3/0" And Not frm("btnDzRedo").Enabled _
-        And frm("btnDzUndo").Enabled And frm("btnDzUndo").ForeColor = Th(CLR_OUT_FG) And frm("btnDzRedo").ForeColor = Th(CLR_MUTED_FG), _
+        And DesignerPlace(frm, "button", 600, 90) = 3 And DesignerHistory() = "3/0" And frm("btnDzRedo").Tag = "off" _
+        And frm("btnDzUndo").Tag = "" And frm("btnDzUndo").ForeColor = Th(CLR_OUT_FG) And frm("btnDzRedo").ForeColor = Th(CLR_MUTED_FG) _
+        And frm("btnDzRedo").Enabled And Not frm("btnDzRedo").TabStop, _
         "Designer arrange buttons not placed, or Undo not kept (or not dimmed): " & DesignerHistory()
     ' A box from the canvas's corner selects all three.
     DesignerMouse frm, 1, acLeftButton, 0, 0
@@ -2002,7 +2003,7 @@ Private Sub TestDesignerArrange()
     DesignerMouse frm, 3, acLeftButton, px(700), px(200)
     Check DesignerSelected() = "1,2,3" And frm("lblDzKind").Caption = "3 elements" And frm("dzMark1").Visible _
         And frm("dzMark3").Visible And Not frm("dzMark4").Visible And Not frm("dzSel").Visible And Not frm("btnDzEdit").Enabled _
-        And frm("btnDzArrange").Enabled, "Designer selection box selected " & DesignerSelected()
+        And frm("btnDzArrange").Tag = "", "Designer selection box selected " & DesignerSelected()
     ' Align their tops, then space them out evenly across.
     DesignerAlign frm, "top"
     Check DesignerItem(1) = "button 56,32 96x32 Button" And DesignerItem(2) = "button 256,32 96x32 Button" _
@@ -2016,7 +2017,7 @@ Private Sub TestDesignerArrange()
     Check DesignerItem(2) = "button 56,32 96x32 Button", "Designer align left gave " & DesignerItem(2)
     DesignerUndo frm
     Check DesignerItem(2) = "button 304,32 96x32 Button" And DesignerSelected() = "1,2" And DesignerHistory() = "5/1" _
-        And frm("btnDzRedo").Enabled, "Designer undo gave " & DesignerItem(2) & " " & DesignerHistory()
+        And frm("btnDzRedo").Tag = "", "Designer undo gave " & DesignerItem(2) & " " & DesignerHistory()
     DesignerRedo frm
     Check DesignerItem(2) = "button 56,32 96x32 Button" And DesignerHistory() = "6/0", "Designer redo gave " & DesignerItem(2)
     DesignerUndo frm
@@ -2062,7 +2063,7 @@ Private Sub TestDesignerArrange()
     Check DesignerHistory() = "49/1", "Designer undo past the cap gave " & DesignerHistory()
     ' New starts with nothing to undo.
     DesignerImportJson frm, DesignerLayoutJson(frm)
-    Check DesignerHistory() = "0/0" And Not frm("btnDzUndo").Enabled, "Designer import kept the undo steps"
+    Check DesignerHistory() = "0/0" And frm("btnDzUndo").Tag = "off", "Designer import kept the undo steps"
     DoCmd.Close acForm, DZ_FORM, acSaveNo
     DoCmd.DeleteObject acForm, DZ_FORM
     CurrentDb.TableDefs.Delete "kit_layout_item": CurrentDb.TableDefs.Delete "kit_layout"
