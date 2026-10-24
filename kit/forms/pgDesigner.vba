@@ -29,10 +29,11 @@ Err_Handler:
     HandleError "pgDesigner.CanLeave"
 End Function
 
-' The canvas: drag, resize, and a double-click for the element's settings.
+' The canvas: select (Shift-click adds, a box selects what it encloses),
+' drag, resize, and a double-click for the element's settings.
 Private Sub dzGlass_MouseDown(Button As Integer, Shift As Integer, X As Single, Y As Single)
     On Error GoTo Err_Handler
-    DesignerMouse Me, 1, Button, X, Y
+    DesignerMouse Me, 1, Button, X, Y, Shift
     Exit Sub
 Err_Handler:
     HandleError "pgDesigner.dzGlass_MouseDown"
@@ -40,7 +41,7 @@ End Sub
 
 Private Sub dzGlass_MouseMove(Button As Integer, Shift As Integer, X As Single, Y As Single)
     On Error GoTo Err_Handler
-    DesignerMouse Me, 2, Button, X, Y
+    DesignerMouse Me, 2, Button, X, Y, Shift
     Exit Sub
 Err_Handler:
     HandleError "pgDesigner.dzGlass_MouseMove"
@@ -48,7 +49,7 @@ End Sub
 
 Private Sub dzGlass_MouseUp(Button As Integer, Shift As Integer, X As Single, Y As Single)
     On Error GoTo Err_Handler
-    DesignerMouse Me, 3, Button, X, Y
+    DesignerMouse Me, 3, Button, X, Y, Shift
     Exit Sub
 Err_Handler:
     HandleError "pgDesigner.dzGlass_MouseUp"
@@ -104,6 +105,30 @@ Err_Handler:
     HandleError "pgDesigner.btnDzDelete_Click"
 End Sub
 
+Private Sub btnDzArrange_Click()
+    On Error GoTo Err_Handler
+    DesignerArrange Me
+    Exit Sub
+Err_Handler:
+    HandleError "pgDesigner.btnDzArrange_Click"
+End Sub
+
+Private Sub btnDzUndo_Click()
+    On Error GoTo Err_Handler
+    DesignerUndo Me
+    Exit Sub
+Err_Handler:
+    HandleError "pgDesigner.btnDzUndo_Click"
+End Sub
+
+Private Sub btnDzRedo_Click()
+    On Error GoTo Err_Handler
+    DesignerRedo Me
+    Exit Sub
+Err_Handler:
+    HandleError "pgDesigner.btnDzRedo_Click"
+End Sub
+
 Private Sub cboDzOpen_AfterUpdate()
     On Error GoTo Err_Handler
     DesignerOpen Me
@@ -136,12 +161,13 @@ Err_Handler:
     HandleError "pgDesigner.btnDzTabs_Click"
 End Sub
 
-Private Sub btnDzNew_Click()
+' New, Import and Export.
+Private Sub btnDzMore_Click()
     On Error GoTo Err_Handler
-    DesignerNew Me
+    DesignerMore Me
     Exit Sub
 Err_Handler:
-    HandleError "pgDesigner.btnDzNew_Click"
+    HandleError "pgDesigner.btnDzMore_Click"
 End Sub
 
 Private Sub btnDzSave_Click()

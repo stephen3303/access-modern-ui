@@ -31,8 +31,19 @@ Option Explicit
 ' code-behind hands every event to the Designer* routines here. Positions
 ' and sizes are in px from the canvas's top-left corner, on an 8px grid
 ' (DZ_GRID). Double-click an element, or Edit, for its settings; Esc cancels
-' a palette click; Delete removes the selected element; the arrow keys move
-' it 8px (1px with Shift).
+' a palette click; Delete removes the selected elements; the arrow keys move
+' them 8px (1px with Shift).
+'
+' Shift-click (or Ctrl-click) adds an element to the selection or takes it
+' out, and a box dragged over the empty canvas selects every element inside
+' it; dragging any selected element moves them all. Arrange (beside Edit and
+' Delete) duplicates the selection, aligns its edges or centers, and spaces
+' three or more out evenly. Undo and Redo (Ctrl+Z, Ctrl+Y) step through the
+' last DZ_UNDO changes: each step is the layout as LayoutJson writes it.
+' More holds New, and Import and Export, which read and write a layout as a
+' JSON file (LayoutJson's format, "kit-layout" version 1) to move it between
+' databases or keep it with an app's source. Generate counts the controls the
+' form gets and warns past DZ_CTL_WARN: Access allows 754 in a form's life.
 '
 ' Form (the same settings dialog) sets what the layout builds: a page or a
 ' dialog, its size (the outlined area of the canvas) and its record source,
@@ -56,6 +67,12 @@ Private Const DZ_GENS As Long = 24
 Private Const DZ_LBLS As Long = 16
 Private Const DZ_BTNS As Long = 12
 Private Const DZ_MAX As Long = 66               ' all five pools
+Private Const DZ_UNDO As Long = 50              ' changes Undo can step back through
+Private Const DZ_CTL_WARN As Long = 500         ' controls on a generated form past which Generate warns
+Private Const DZ_CTL_LIMIT As Long = 754        ' Access's limit on the controls a form ever has
+Private Const DZ_JSON_FORMAT As String = "kit-layout"  ' a layout file's "format" (LayoutJson)
+Private Const DZ_JSON_VERSION As Long = 1
+Private Const DZ_COPY_STEP As Long = 16         ' a duplicate's offset from what it copies, px
 ' Palette order: tile i (two columns, row by row) places kind i.
 Private Const DZ_KINDS As String = "card;button;label;progress;text;date;secret;toggle;segmented;slider;" & _
     "rating;stepper;search;stat;alert;avatar;empty;table;chips;tabs;breadcrumb;accordion"
@@ -75,6 +92,7 @@ Private Const MODE_MOVE As Integer = 1
 Private Const MODE_SIZE As Integer = 2
 Private Const MODE_DRAG As Integer = 3          ' dragging a new element in from the palette
 Private Const MODE_ARMED As Integer = 4         ' palette element clicked; the next canvas click places it
+Private Const MODE_BAND As Integer = 5          ' dragging a selection box over the empty canvas
 
 ' The layout being edited: items 1..m_n, each in slot m_slot of its kind's
 ' pool. m_text, m_text2 and m_text3 are the settings in the dialog's first
@@ -106,7 +124,20 @@ Private m_title As String
 Private m_propsForm As Boolean                  ' the settings dialog is showing Form, not an element
 Private m_tabSeq() As Long                      ' the tab order dialog's list: item numbers in order
 Private m_tabReading As Boolean                 ' ... and whether it is the reading order
-Private m_sel As Long                           ' selected item, 0 for none
+Private m_sel As Long                           ' the selected item clicked last (its handle resizes it), 0 for none
+Private m_on(1 To DZ_MAX) As Boolean            ' every selected item, m_sel among them
+Private m_bandX As Long                         ' where a selection box started, px
+Private m_bandY As Long
+Private m_moved As Boolean                      ' a drag has moved the selection
+Private m_before As String                      ' the layout when a drag began (UndoState)
+' Undo and Redo: the layout before each change (UndoState), newest last.
+Private m_undo(1 To DZ_UNDO) As String
+Private m_nUndo As Long
+Private m_redo(1 To DZ_UNDO) As String
+Private m_nRedo As Long
+' The JSON being read (JsonParse) and the character reading is at.
+Private m_js As String
+Private m_jp As Long
 Private m_mode As Integer
 Private m_tool As String                        ' kind being dragged in or armed
 Private m_toolIdx As Long                       ' its palette tile
@@ -125,10 +156,11 @@ Private m_dirty As Boolean
 ' ---------------------------------------------------------------------------
 
 ' The designer page, w x h twips with x twips of padding on each side:
-' Elements (the palette) and Selected (the selected element, Edit and
-' Delete) on the left, the layout list, name, Form, Tab order, New, Generate
-' and Save above the canvas on the right. Saved as formName with
-' pgDesigner.vba's code. Builds its dialogs dlgDzProps and dlgDzTabs first.
+' Elements (the palette) and Selected (the selection, Edit, Delete and
+' Arrange) on the left, the layout list, name, Undo, Redo, Form, Tab order,
+' More (New, Import, Export), Generate and Save above the canvas on the
+' right. Saved as formName with pgDesigner.vba's code. Builds its dialogs
+' dlgDzProps and dlgDzTabs first.
 Public Sub BuildDesigner(ByVal formName As String, ByVal x As Long, ByVal w As Long, ByVal h As Long)
     Dim c As Control, i As Long, ty As Long, py As Long, lw As Long, cx As Long, cy As Long, cw As Long, ch As Long
     Dim kinds() As String, rows As Long
@@ -139,6 +171,7 @@ Public Sub BuildDesigner(ByVal formName As String, ByVal x As Long, ByVal w As L
     Ev F, "OnLoad", "OnKeyDown"
     PageHeader "Form designer", "Drag an element from Elements onto the canvas, or click one and then click the canvas. " & _
         "Drag an element to move it, and its corner handle to resize it. Everything snaps to an 8px grid. " & _
+        "Shift-click, or drag a box, to select several; Arrange lines them up. " & _
         "Double-click an element for its settings, and click Form for the form's: page or dialog, size and record source. " & _
         "Save keeps the layout under its name; Generate builds it as a real form.", x
     lw = px(200)
@@ -164,27 +197,33 @@ Public Sub BuildDesigner(ByVal formName As String, ByVal x As Long, ByVal w As L
     Set c = Glass("dzPal", x + px(16), ty + px(44), px(2 * DZ_TILE_W + 8), px(rows * DZ_TILE_STEP))
     c.ControlTipText = "Drag onto the canvas, or click and then click the canvas"
 
-    ' The selected element.
+    ' The selection.
     py = ty + px(44 + rows * DZ_TILE_STEP + 8) + px(12)
     Card "DzProps", "Selected", x, py, lw, h - py - px(16)
     Lbl "lblDzKind", "Nothing selected", x + px(16), py + px(36), lw - px(32), px(20), 9, True
     Lbl "lblDzPos", "", x + px(16), py + px(56), lw - px(32), px(20), 9, False, CLR_MUTED_FG
-    Set c = Btn("btnDzEdit", "Edit" & ChrW(8230), x + px(16), py + px(78), px(84), px(28))
+    Set c = Btn("btnDzEdit", "Edit" & ChrW(8230), x + px(16), py + px(78), px(56), px(28))
     c.Enabled = False
-    Set c = Btn("btnDzDelete", "Delete", x + px(108), py + px(78), px(76), px(28), "outline")
+    Set c = Btn("btnDzDelete", "Delete", x + px(80), py + px(78), px(60), px(28), "outline")
+    c.Enabled = False
+    Set c = GlyphBtn("btnDzArrange", "E8E4", x + px(148), py + px(78), px(36), "Duplicate, align and distribute")
     c.Enabled = False
 
-    ' Layout list, name, Form, Tab order, New, Generate and Save.
-    Lbl "lblDzOpen", "OPEN A LAYOUT", cx, px(76), px(168), px(16), 8, True, CLR_MUTED_FG
-    Set c = Cbo("cboDzOpen", "", "", cx, px(94), px(168), px(30), 2, "0;" & px(168))
+    ' Layout list, name, Undo, Redo, Form, Tab order, More, Generate and Save.
+    Lbl "lblDzOpen", "OPEN A LAYOUT", cx, px(76), px(148), px(16), 8, True, CLR_MUTED_FG
+    Set c = Cbo("cboDzOpen", "", "", cx, px(94), px(148), px(30), 2, "0;" & px(148))
     Ev c, "AfterUpdate"
-    Lbl "lblDzName", "LAYOUT NAME", cx + px(180), px(76), px(168), px(16), 8, True, CLR_MUTED_FG
-    Set c = Txt("txtDzName", "", cx + px(180), px(94), px(168), px(30))
+    Lbl "lblDzName", "LAYOUT NAME", cx + px(160), px(76), px(148), px(16), 8, True, CLR_MUTED_FG
+    Set c = Txt("txtDzName", "", cx + px(160), px(94), px(148), px(30))
     Ev c, "AfterUpdate"
-    Set c = Btn("btnDzForm", "Form" & ChrW(8230), cx + cw - px(416), px(95), px(72), px(28), "outline")
+    Set c = GlyphBtn("btnDzUndo", "E7A7", cx + cw - px(456), px(95), px(28), "Undo (Ctrl+Z)")
+    c.Enabled = False
+    Set c = GlyphBtn("btnDzRedo", "E7A6", cx + cw - px(424), px(95), px(28), "Redo (Ctrl+Y)")
+    c.Enabled = False
+    Set c = Btn("btnDzForm", "Form" & ChrW(8230), cx + cw - px(384), px(95), px(72), px(28), "outline")
     c.ControlTipText = "Page or dialog, size and record source"
-    Btn "btnDzTabs", "Tab order" & ChrW(8230), cx + cw - px(336), px(95), px(92), px(28), "outline"
-    Btn "btnDzNew", "New", cx + cw - px(236), px(95), px(64), px(28), "outline"
+    Btn "btnDzTabs", "Tab order" & ChrW(8230), cx + cw - px(304), px(95), px(92), px(28), "outline"
+    GlyphBtn "btnDzMore", "E712", cx + cw - px(204), px(95), px(32), "New, import or export a layout"
     Btn "btnDzGenerate", "Generate", cx + cw - px(164), px(95), px(84), px(28), "outline"
     Btn "btnDzSave", "Save", cx + cw - px(72), px(95), px(72), px(28)
 
@@ -217,7 +256,12 @@ Public Sub BuildDesigner(ByVal formName As String, ByVal x As Long, ByVal w As L
         c.TextAlign = 2
         c.Visible = False
     Next
-    ' Selection outline and its resize handle, over every element.
+    ' An outline for each element of a selection of several, then the
+    ' selection outline (or the selection box) and its resize handle, over
+    ' every element.
+    For i = 1 To DZ_MAX
+        Set c = Box("dzMark" & i, cx, cy, px(16), px(16), -1, CLR_PRIMARY): c.Visible = False
+    Next
     Set c = Box("dzSel", cx, cy, px(16), px(16), -1, CLR_PRIMARY): c.BorderWidth = 1: c.Visible = False
     Set c = Box("dzGrip", cx, cy, px(DZ_GRIP), px(DZ_GRIP), CLR_PRIMARY, CLR_SURFACE): c.Visible = False
     ' Last, so it is on top: the canvas's mouse.
@@ -284,6 +328,18 @@ Public Sub BuildDesignerTabsDialog()
     SaveForm DZ_TABS
 End Sub
 
+' An outline button showing Segoe MDL2 Assets glyph (hex), tip as its tooltip.
+Private Function GlyphBtn(ByVal nm As String, ByVal glyph As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, _
+        ByVal tip As String) As Control
+    Dim c As Control
+    Set c = Btn(nm, ChrW(CLng("&H" & glyph)), x, y, w, px(28), "outline")
+    c.FontName = "Segoe MDL2 Assets"
+    c.FontWeight = 400
+    c.FontSize = 10
+    c.ControlTipText = tip
+    Set GlyphBtn = c
+End Function
+
 ' A transparent button that takes the mouse for what is drawn under it.
 Private Function Glass(ByVal nm As String, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long) As Control
     Dim c As Control
@@ -310,10 +366,17 @@ Public Sub DesignerLoad(frm As Form)
 End Sub
 
 ' The canvas's MouseDown (phase 1), MouseMove (2) and MouseUp (3). x and y
-' are twips from the canvas's corner, as Access passes them.
-Public Sub DesignerMouse(frm As Form, ByVal phase As Integer, ByVal btn As Integer, ByVal x As Single, ByVal y As Single)
-    Dim p As Long, q As Long, i As Long, nx As Long, ny As Long
+' are twips from the canvas's corner, as Access passes them; shift is
+' Access's Shift argument (Shift or Ctrl adds to the selection). Pressed on
+' an element, it drags the selection (just that element unless it was
+' selected already); on the handle of a selection of one, it resizes it; on
+' the empty canvas, it drags a box that selects what it encloses. A click on
+' one of several selected elements leaves just that one selected.
+Public Sub DesignerMouse(frm As Form, ByVal phase As Integer, ByVal btn As Integer, ByVal x As Single, ByVal y As Single, _
+        Optional ByVal shift As Integer = 0)
+    Dim p As Long, q As Long, i As Long, nx As Long, ny As Long, adding As Boolean
     p = CLng(x / 15): q = CLng(y / 15)
+    adding = ((shift And (acShiftMask Or acCtrlMask)) <> 0)
     Select Case phase
         Case 1
             If btn <> acLeftButton Then Exit Sub
@@ -322,32 +385,65 @@ Public Sub DesignerMouse(frm As Form, ByVal phase As Integer, ByVal btn As Integ
                 Exit Sub
             End If
             m_mode = MODE_IDLE
-            If m_sel > 0 Then
+            m_moved = False
+            If m_sel > 0 And SelCount() = 1 And Not adding Then
                 If Abs(p - (m_x(m_sel) + m_w(m_sel))) <= DZ_GRIP And Abs(q - (m_y(m_sel) + m_h(m_sel))) <= DZ_GRIP Then
                     m_mode = MODE_SIZE
+                    m_before = UndoState()
                     Exit Sub
                 End If
             End If
             i = HitTest(p, q)
-            m_sel = i
-            If i > 0 Then
+            If i = 0 Then
+                If Not adding Then SelectOnly 0
+                m_mode = MODE_BAND
+                m_bandX = Clamp(p, 0, m_cw): m_bandY = Clamp(q, 0, m_ch)
+            ElseIf adding Then
+                m_on(i) = Not m_on(i)
+                If m_on(i) Then
+                    m_sel = i
+                ElseIf m_sel = i Then
+                    m_sel = FirstSelected()
+                End If
+            Else
+                If Not m_on(i) Then SelectOnly i
+                m_sel = i
                 m_mode = MODE_MOVE
                 m_offX = p - m_x(i)
                 m_offY = q - m_y(i)
+                m_before = UndoState()
             End If
             ShowSelection frm
         Case 2
-            If (btn And acLeftButton) = 0 Or m_sel = 0 Then Exit Sub
+            If (btn And acLeftButton) = 0 Then Exit Sub
+            If m_mode = MODE_BAND Then
+                p = Clamp(p, 0, m_cw): q = Clamp(q, 0, m_ch)
+                Outline frm, IIf(p < m_bandX, p, m_bandX), IIf(q < m_bandY, q, m_bandY), Abs(p - m_bandX), Abs(q - m_bandY), False
+                Exit Sub
+            End If
+            If m_sel = 0 Then Exit Sub
             i = m_sel
             If m_mode = MODE_MOVE Then
                 nx = Snap(p - m_offX): ny = Snap(q - m_offY)
-                If nx <> m_x(i) Or ny <> m_y(i) Then SetRect frm, i, nx, ny, m_w(i), m_h(i)
+                If nx <> m_x(i) Or ny <> m_y(i) Then MoveSelected frm, nx - m_x(i), ny - m_y(i)
             ElseIf m_mode = MODE_SIZE Then
                 nx = Snap(p) - m_x(i): ny = Snap(q) - m_y(i)
                 If nx <> m_w(i) Or ny <> m_h(i) Then SetRect frm, i, m_x(i), m_y(i), nx, ny
             End If
         Case 3
-            If m_mode = MODE_MOVE Or m_mode = MODE_SIZE Then m_mode = MODE_IDLE
+            If m_mode = MODE_BAND Then
+                m_mode = MODE_IDLE
+                BandSelect m_bandX, m_bandY, Clamp(p, 0, m_cw), Clamp(q, 0, m_ch)
+                ShowSelection frm
+            ElseIf m_mode = MODE_MOVE Or m_mode = MODE_SIZE Then
+                If m_mode = MODE_MOVE And Not m_moved And SelCount() > 1 Then
+                    SelectOnly m_sel
+                    ShowSelection frm
+                End If
+                m_mode = MODE_IDLE
+                EndChange frm, m_before
+                m_before = ""
+            End If
     End Select
 End Sub
 
@@ -397,11 +493,14 @@ Public Sub DesignerToolMouse(frm As Form, ByVal phase As Integer, ByVal btn As I
 End Sub
 
 ' Form_KeyDown: Esc cancels a palette click or clears the selection; with the
-' canvas or the palette focused, Delete removes the selected element and the
-' arrow keys move it (8px, or 1px with Shift). Returns the key code to pass
+' canvas or the palette focused, Delete removes the selected elements, Enter
+' opens the settings, the arrow keys move the selection (8px, or 1px with
+' Shift), Ctrl+A selects every element and Ctrl+D duplicates the selection.
+' Ctrl+Z undoes and Ctrl+Y (or Ctrl+Shift+Z) redoes, except in the layout's
+' name and list, where they are the text's own. Returns the key code to pass
 ' on (0 when the designer used the key).
 Public Function DesignerKeyDown(frm As Form, ByVal keyCode As Integer, ByVal shift As Integer) As Integer
-    Dim nm As String, stp As Long, i As Long
+    Dim nm As String, stp As Long, i As Long, before As String, onCanvas As Boolean
     DesignerKeyDown = keyCode
     On Error Resume Next
     nm = frm.ActiveControl.Name
@@ -413,31 +512,62 @@ Public Function DesignerKeyDown(frm As Form, ByVal keyCode As Integer, ByVal shi
         DesignerKeyDown = 0
         Exit Function
     End If
-    If m_sel = 0 Or Not (nm = "dzGlass" Or nm = "dzPal") Then Exit Function
-    i = m_sel
+    onCanvas = (nm = "dzGlass" Or nm = "dzPal")
+    If (shift And acCtrlMask) <> 0 Then
+        Select Case keyCode
+            Case vbKeyZ, vbKeyY
+                If nm = "txtDzName" Or nm = "cboDzOpen" Then Exit Function
+                If keyCode = vbKeyY Or (shift And acShiftMask) <> 0 Then DesignerRedo frm Else DesignerUndo frm
+            Case vbKeyA
+                If Not onCanvas Then Exit Function
+                For i = 1 To m_n
+                    m_on(i) = True
+                Next
+                If m_sel = 0 And m_n > 0 Then m_sel = m_n
+                ShowSelection frm
+            Case vbKeyD
+                If Not onCanvas Then Exit Function
+                DesignerDuplicate frm
+            Case Else: Exit Function
+        End Select
+        DesignerKeyDown = 0
+        Exit Function
+    End If
+    If SelCount() = 0 Or Not onCanvas Then Exit Function
     stp = IIf((shift And acShiftMask) <> 0, 1, DZ_GRID)
     Select Case keyCode
         Case vbKeyEscape
-            m_sel = 0
+            SelectOnly 0
             ShowSelection frm
         Case vbKeyDelete
             DesignerDelete frm
         Case vbKeyReturn
             DesignerEdit frm
-        Case vbKeyLeft: SetRect frm, i, m_x(i) - stp, m_y(i), m_w(i), m_h(i)
-        Case vbKeyRight: SetRect frm, i, m_x(i) + stp, m_y(i), m_w(i), m_h(i)
-        Case vbKeyUp: SetRect frm, i, m_x(i), m_y(i) - stp, m_w(i), m_h(i)
-        Case vbKeyDown: SetRect frm, i, m_x(i), m_y(i) + stp, m_w(i), m_h(i)
+        Case vbKeyLeft, vbKeyRight, vbKeyUp, vbKeyDown
+            before = UndoState()
+            Select Case keyCode
+                Case vbKeyLeft: MoveSelected frm, -stp, 0
+                Case vbKeyRight: MoveSelected frm, stp, 0
+                Case vbKeyUp: MoveSelected frm, 0, -stp
+                Case Else: MoveSelected frm, 0, stp
+            End Select
+            EndChange frm, before
         Case Else: Exit Function
     End Select
     DesignerKeyDown = 0
 End Function
 
 ' btnDzEdit, a double-click on an element, and Enter on the canvas: the
-' selected element's settings (dlgDzProps), redrawn when they change.
+' selected element's settings (dlgDzProps), redrawn when they change (a
+' selection of several becomes the one clicked last). Then a toast when it
+' stretches across toward an element on its right (DesignerStretchClash).
 Public Sub DesignerEdit(frm As Form)
-    Dim r As Long, used As Boolean
+    Dim r As Long, used As Boolean, before As String, clash As String
     If m_sel = 0 Then Exit Sub
+    If SelCount() > 1 Then
+        SelectOnly m_sel
+        ShowSelection frm
+    End If
     For r = 1 To DZ_ROWS
         If Len(RowCaption(m_kind(m_sel), r)) > 0 Then used = True
     Next
@@ -446,18 +576,25 @@ Public Sub DesignerEdit(frm As Form)
         Exit Sub
     End If
     m_propsForm = False
+    before = UndoState()
     If RunDialog(DZ_PROPS) Then
         Render frm, m_sel
+        EndChange frm, before
         ShowSelection frm
+        clash = DesignerStretchClash(m_sel)
+        If Len(clash) > 0 Then KitToast clash, "warning", 8000
     End If
 End Sub
 
 ' btnDzForm: the form's settings (page or dialog, size, record source) in
 ' dlgDzProps; the canvas shows the new size.
 Public Sub DesignerForm(frm As Form)
+    Dim before As String
     m_propsForm = True
+    before = UndoState()
     If RunDialog(DZ_PROPS) Then
         ShowCanvas frm
+        EndChange frm, before
         ShowSelection frm
     End If
     m_propsForm = False
@@ -465,12 +602,16 @@ End Sub
 
 ' btnDzTabs: the tab order of the elements that take the focus (dlgDzTabs).
 Public Sub DesignerTabs(frm As Form)
-    Dim seq() As Long
+    Dim seq() As Long, before As String
     If TabSequence(seq) = 0 Then
         KitToast "Nothing on the canvas takes the focus yet: add a text box, a button or another control first.", "info"
         Exit Sub
     End If
-    RunDialog DZ_TABS
+    before = UndoState()
+    If RunDialog(DZ_TABS) Then
+        EndChange frm, before
+        ShowSelection frm
+    End If
 End Sub
 
 ' txtDzName's AfterUpdate: a new name is a change to save.
@@ -478,25 +619,179 @@ Public Sub DesignerRenamed()
     m_dirty = True
 End Sub
 
-' btnDzDelete, and Delete on the canvas: remove the selected element.
+' btnDzDelete, and Delete on the canvas: remove the selected elements.
 Public Sub DesignerDelete(frm As Form)
-    Dim i As Long, j As Long
-    i = m_sel
-    If i = 0 Then Exit Sub
-    ShowSlot frm, m_kind(i), m_slot(i), False
-    For j = i To m_n - 1
-        m_kind(j) = m_kind(j + 1): m_slot(j) = m_slot(j + 1)
-        m_x(j) = m_x(j + 1): m_y(j) = m_y(j + 1): m_w(j) = m_w(j + 1): m_h(j) = m_h(j + 1)
-        m_text(j) = m_text(j + 1): m_text2(j) = m_text2(j + 1): m_text3(j) = m_text3(j + 1): m_choice(j) = m_choice(j + 1)
-        m_field(j) = m_field(j + 1): m_anchor(j) = m_anchor(j + 1): m_tab(j) = m_tab(j + 1)
+    Dim i As Long, before As String
+    If SelCount() = 0 Then Exit Sub
+    before = UndoState()
+    For i = m_n To 1 Step -1
+        If m_on(i) Then RemoveItem frm, i
     Next
-    m_n = m_n - 1
     m_sel = 0
     m_dirty = True
+    EndChange frm, before
     ShowSelection frm
 End Sub
 
-' btnDzNew: an empty canvas, after asking to save unsaved changes.
+' btnDzArrange: duplicate, align or distribute the selection, from a menu
+' (aligning takes two elements or more, distributing three).
+Public Sub DesignerArrange(frm As Form)
+    Dim n As Long, a As String, d As String, pick As String
+    n = SelCount()
+    If n = 0 Then Exit Sub
+    a = IIf(n >= 2, "", "~"): d = IIf(n >= 3, "", "~")
+    pick = KitMenu(frm("btnDzArrange"), "dup|Duplicate|E8C8", "-", a & "left|Align left|E8E4", a & "center|Align centers|E8E3", _
+        a & "right|Align right|E8E2", a & "top|Align tops", a & "middle|Align middles", a & "bottom|Align bottoms", _
+        d & "across|Distribute across", d & "down|Distribute down")
+    Select Case pick
+        Case "dup": DesignerDuplicate frm
+        Case "left", "center", "right", "top", "middle", "bottom": DesignerAlign frm, pick
+        Case "across", "down": DesignerDistribute frm, (pick = "across")
+    End Select
+End Sub
+
+' btnDzMore: New, Import or Export, from a menu.
+Public Sub DesignerMore(frm As Form)
+    Select Case KitMenu(frm("btnDzMore"), "new|New layout|E710", "-", "import|Import layout" & ChrW(8230) & "|E8B5", _
+            "export|Export layout" & ChrW(8230) & "|EDE1")
+        Case "new": DesignerNew frm
+        Case "import": DesignerImport frm
+        Case "export": DesignerExport frm
+    End Select
+End Sub
+
+' Copy every selected element DZ_COPY_STEP px down and right (kept on the
+' form), with its settings and anchor, in reading order for Tab; the copies
+' become the selection. A tab strip or breadcrumb isn't copied (a form takes
+' one), nor anything past a full pool: a toast says so.
+Public Sub DesignerDuplicate(frm As Form)
+    Dim i As Long, k As Long, n As Long, made As Long, before As String, src() As Boolean, note As String
+    n = m_n
+    If SelCount() = 0 Then Exit Sub
+    before = UndoState()
+    ReDim src(1 To n)
+    For i = 1 To n
+        src(i) = m_on(i)
+        m_on(i) = False
+    Next
+    m_sel = 0
+    For i = 1 To n
+        If src(i) Then
+            If m_kind(i) = "tabs" Or m_kind(i) = "breadcrumb" Then
+                note = "A form takes one tab strip and one breadcrumb, so they weren't copied."
+            Else
+                k = AddItem(m_kind(i), m_x(i) + DZ_COPY_STEP, m_y(i) + DZ_COPY_STEP, m_w(i), m_h(i), m_text(i), m_text2(i), _
+                    m_text3(i), m_choice(i), m_field(i), m_anchor(i), 0)
+                If k = 0 Then
+                    note = "The canvas has room for " & PoolSize(KindPool(m_kind(i))) & " " & PoolCaption(KindPool(m_kind(i))) & _
+                        ", so not everything was copied."
+                Else
+                    Render frm, k
+                    m_on(k) = True
+                    m_sel = k
+                    made = made + 1
+                End If
+            End If
+        End If
+    Next
+    If made = 0 Then                        ' nothing copied: the selection stays as it was
+        For i = 1 To n
+            m_on(i) = src(i)
+            If src(i) Then m_sel = i
+        Next
+    Else
+        m_dirty = True
+        EndChange frm, before
+    End If
+    ShowSelection frm
+    If Len(note) > 0 Then KitToast note, "warning"
+End Sub
+
+' Line up the selection's left edges, centres or right edges ("left",
+' "center", "right") or its tops, middles or bottoms ("top", "middle",
+' "bottom") with the box around it all. Needs two elements or more.
+Public Sub DesignerAlign(frm As Form, ByVal how As String)
+    Dim i As Long, l As Long, t As Long, r As Long, b As Long, nx As Long, ny As Long, before As String
+    If SelCount() < 2 Then Exit Sub
+    SelBounds l, t, r, b
+    before = UndoState()
+    For i = 1 To m_n
+        If m_on(i) Then
+            nx = m_x(i): ny = m_y(i)
+            Select Case how
+                Case "left": nx = l
+                Case "center": nx = (l + r - m_w(i)) \ 2
+                Case "right": nx = r - m_w(i)
+                Case "top": ny = t
+                Case "middle": ny = (t + b - m_h(i)) \ 2
+                Case "bottom": ny = b - m_h(i)
+            End Select
+            FitRect i, nx, ny, m_w(i), m_h(i)
+            Render frm, i
+        End If
+    Next
+    m_dirty = True
+    EndChange frm, before
+    ShowSelection frm
+End Sub
+
+' Space the selection out evenly across (by left edges) or down (by tops):
+' the first and last stay put, and the gaps between the others are equal.
+' Needs three elements or more.
+Public Sub DesignerDistribute(frm As Form, ByVal across As Boolean)
+    Dim i As Long, n As Long, k As Long, items() As Long, keys() As Double, idx() As Long
+    Dim first As Long, last As Long, span As Long, total As Long, gap As Double, pos As Double, before As String
+    n = SelCount()
+    If n < 3 Then Exit Sub
+    ReDim items(0 To n - 1): ReDim keys(0 To n - 1): ReDim idx(0 To n - 1)
+    For i = 1 To m_n
+        If m_on(i) Then
+            items(k) = i
+            If across Then keys(k) = m_x(i) * 100000# + m_y(i) Else keys(k) = m_y(i) * 100000# + m_x(i)
+            idx(k) = k
+            total = total + IIf(across, m_w(i), m_h(i))
+            k = k + 1
+        End If
+    Next
+    SortByKey idx, keys, n
+    first = items(idx(0)): last = items(idx(n - 1))
+    If across Then span = m_x(last) + m_w(last) - m_x(first) Else span = m_y(last) + m_h(last) - m_y(first)
+    gap = (span - total) / (n - 1)
+    before = UndoState()
+    pos = IIf(across, m_x(first) + m_w(first), m_y(first) + m_h(first)) + gap
+    For k = 1 To n - 2
+        i = items(idx(k))
+        If across Then FitRect i, CLng(pos), m_y(i), m_w(i), m_h(i) Else FitRect i, m_x(i), CLng(pos), m_w(i), m_h(i)
+        Render frm, i
+        pos = pos + IIf(across, m_w(i), m_h(i)) + gap
+    Next
+    m_dirty = True
+    EndChange frm, before
+    ShowSelection frm
+End Sub
+
+' btnDzUndo and Ctrl+Z: the layout as it was before the last change (and its
+' selection then); Redo brings the change back.
+Public Sub DesignerUndo(frm As Form)
+    If m_nUndo = 0 Then Exit Sub
+    PushState m_redo, m_nRedo, UndoState()
+    RestoreState frm, m_undo(m_nUndo)
+    m_undo(m_nUndo) = ""
+    m_nUndo = m_nUndo - 1
+    ShowSelection frm
+End Sub
+
+' btnDzRedo, Ctrl+Y and Ctrl+Shift+Z: the change the last Undo took back.
+Public Sub DesignerRedo(frm As Form)
+    If m_nRedo = 0 Then Exit Sub
+    PushState m_undo, m_nUndo, UndoState()
+    RestoreState frm, m_redo(m_nRedo)
+    m_redo(m_nRedo) = ""
+    m_nRedo = m_nRedo - 1
+    ShowSelection frm
+End Sub
+
+' More > New: an empty canvas, after asking to save unsaved changes.
 Public Sub DesignerNew(frm As Form)
     If Not OkToDiscard(frm) Then Exit Sub
     ClearLayout frm
@@ -924,9 +1219,11 @@ End Sub
 ' btnDzGenerate: save the layout if it has changes, build it as a real form
 ' and show it (dzPreview), and write its build procedure and code-behind stub
 ' to <database folder>\designer as Build_<form>.txt and <form>.vba. Refused,
-' with the reason, when its record source or a bound field is gone.
+' with the reason, when its record source or a bound field is gone. The
+' toast counts the form's controls, and warns when they near Access's limit
+' (DesignerControlsWarning).
 Public Sub DesignerGenerate(frm As Form)
-    Dim nm As String, folder As String, id As Long, msg As String
+    Dim nm As String, folder As String, id As Long, msg As String, n As Long
     If m_n = 0 Then
         KitMsgBox "Place at least one element on the canvas first.", vbExclamation, "Form designer"
         Exit Sub
@@ -951,7 +1248,14 @@ Public Sub DesignerGenerate(frm As Form)
     WriteTextFile folder & "\Build_" & nm & ".txt", DesignerCode(id)
     WriteTextFile folder & "\" & nm & ".vba", DesignerStub(id)
     DesignerPreview id
-    KitToast "Preview built. Its code is in the designer folder: Build_" & nm & ".txt and " & nm & ".vba.", "success", 6000
+    n = Forms(DZ_PREVIEW).Controls.Count
+    msg = DesignerControlsWarning(n)
+    If Len(msg) > 0 Then
+        KitToast msg, "warning", 10000
+    Else
+        KitToast "Preview built, with " & n & " controls. Its code is in the designer folder: Build_" & nm & ".txt and " & _
+            nm & ".vba.", "success", 6000
+    End If
 End Sub
 
 ' The form a layout generates: "pg" (or "dlg" for a dialog) and the name's
@@ -1731,9 +2035,29 @@ End Function
 
 ' Select item i (0 for none), as clicking it does.
 Public Sub DesignerSelect(frm As Form, ByVal i As Long)
+    SelectOnly i
+    ShowSelection frm
+End Sub
+
+' Add item i to the selection, as Shift-clicking it does (smoke tests).
+Public Sub DesignerSelectMore(frm As Form, ByVal i As Long)
+    m_on(i) = True
     m_sel = i
     ShowSelection frm
 End Sub
+
+' The selected items' numbers, comma-separated ("" for none), and the
+' changes Undo and Redo can step through as "undo/redo" (smoke tests).
+Public Function DesignerSelected() As String
+    Dim i As Long
+    For i = 1 To m_n
+        If m_on(i) Then DesignerSelected = DesignerSelected & IIf(Len(DesignerSelected) > 0, ",", "") & i
+    Next
+End Function
+
+Public Function DesignerHistory() As String
+    DesignerHistory = m_nUndo & "/" & m_nRedo
+End Function
 
 ' Draw every item again (after DesignerSetProps).
 Public Sub DesignerRedraw(frm As Form)
@@ -1752,7 +2076,8 @@ End Sub
 ' selected. 0 (with a toast) when that kind's pool is full, it can't be made
 ' small enough for the form, or for a second tab strip or breadcrumb.
 Private Function Place(frm As Form, ByVal kind As String, ByVal x As Long, ByVal y As Long) As Long
-    Dim i As Long, lx As Long, ly As Long
+    Dim i As Long, lx As Long, ly As Long, before As String
+    before = UndoState()
     m_mode = MODE_IDLE
     m_tool = ""
     Status frm, ""
@@ -1780,8 +2105,9 @@ Private Function Place(frm As Form, ByVal kind As String, ByVal x As Long, ByVal
         Exit Function
     End If
     Render frm, i
-    m_sel = i
+    SelectOnly i
     m_dirty = True
+    EndChange frm, before
     ShowSelection frm
     Place = i
 End Function
@@ -1824,6 +2150,61 @@ Private Sub SetRect(frm As Form, ByVal i As Long, ByVal x As Long, ByVal y As Lo
     ShowSelection frm
 End Sub
 
+' Move every selected item dx, dy px, as far as keeps them all on the form
+' (each keeps its place against the others), and redraw them.
+Private Sub MoveSelected(frm As Form, ByVal dx As Long, ByVal dy As Long)
+    Dim i As Long
+    For i = 1 To m_n
+        If m_on(i) Then
+            If m_x(i) + dx < 0 Then dx = -m_x(i)
+            If m_x(i) + m_w(i) + dx > m_fw Then dx = m_fw - m_x(i) - m_w(i)
+            If m_y(i) + dy < 0 Then dy = -m_y(i)
+            If m_y(i) + m_h(i) + dy > m_fh Then dy = m_fh - m_y(i) - m_h(i)
+        End If
+    Next
+    If dx = 0 And dy = 0 Then Exit Sub
+    For i = 1 To m_n
+        If m_on(i) Then
+            m_x(i) = m_x(i) + dx
+            m_y(i) = m_y(i) + dy
+            Render frm, i
+        End If
+    Next
+    m_moved = True
+    m_dirty = True
+    ShowSelection frm
+End Sub
+
+' Take item i off the canvas: its preview hidden, the items after it moved up one.
+Private Sub RemoveItem(frm As Form, ByVal i As Long)
+    Dim j As Long
+    ShowSlot frm, m_kind(i), m_slot(i), False
+    For j = i To m_n - 1
+        m_kind(j) = m_kind(j + 1): m_slot(j) = m_slot(j + 1)
+        m_x(j) = m_x(j + 1): m_y(j) = m_y(j + 1): m_w(j) = m_w(j + 1): m_h(j) = m_h(j + 1)
+        m_text(j) = m_text(j + 1): m_text2(j) = m_text2(j + 1): m_text3(j) = m_text3(j + 1): m_choice(j) = m_choice(j + 1)
+        m_field(j) = m_field(j + 1): m_anchor(j) = m_anchor(j + 1): m_tab(j) = m_tab(j + 1)
+        m_on(j) = m_on(j + 1)
+    Next
+    m_on(m_n) = False
+    If m_sel = i Then
+        m_sel = 0
+    ElseIf m_sel > i Then
+        m_sel = m_sel - 1
+    End If
+    m_n = m_n - 1
+End Sub
+
+' Hide every item and empty the canvas (the form's settings stay).
+Private Sub ClearItems(frm As Form)
+    Dim i As Long
+    For i = 1 To m_n
+        ShowSlot frm, m_kind(i), m_slot(i), False
+    Next
+    m_n = 0
+    SelectOnly 0
+End Sub
+
 ' Item i's rectangle: within the sizes its kind and settings allow (an avatar
 ' stays round), and inside the form.
 Private Sub FitRect(ByVal i As Long, ByVal x As Long, ByVal y As Long, ByVal w As Long, ByVal h As Long)
@@ -1862,16 +2243,12 @@ Private Function TileAt(ByVal x As Double, ByVal y As Double) As Long
     If idx <= UBound(Split(DZ_KINDS, ";")) Then TileAt = idx
 End Function
 
-' Hide every element and start a new, unsaved layout.
+' Hide every element and start a new, unsaved layout, with nothing to undo.
 Private Sub ClearLayout(frm As Form)
-    Dim i As Long
-    For i = 1 To m_n
-        ShowSlot frm, m_kind(i), m_slot(i), False
-    Next
-    m_n = 0
-    m_sel = 0
+    ClearItems frm
     m_mode = MODE_IDLE
     m_tool = ""
+    ClearHistory
     m_layoutId = 0
     m_dirty = False
     m_formKind = "page"
@@ -1932,6 +2309,534 @@ Private Function OkToDiscard(frm As Form) As Boolean
         Case vbYes: OkToDiscard = DesignerSave(frm)
         Case vbNo: OkToDiscard = True
     End Select
+End Function
+
+' ---------------------------------------------------------------------------
+' Selection and undo
+' ---------------------------------------------------------------------------
+
+' How many items are selected.
+Private Function SelCount() As Long
+    Dim i As Long
+    For i = 1 To m_n
+        If m_on(i) Then SelCount = SelCount + 1
+    Next
+End Function
+
+' Select item i alone (0 for nothing).
+Private Sub SelectOnly(ByVal i As Long)
+    Dim j As Long
+    For j = 1 To DZ_MAX
+        m_on(j) = (j = i)
+    Next
+    m_sel = i
+End Sub
+
+' The last selected item, 0 for none.
+Private Function FirstSelected() As Long
+    Dim i As Long
+    For i = m_n To 1 Step -1
+        If m_on(i) Then FirstSelected = i: Exit Function
+    Next
+End Function
+
+' Add every item wholly inside the box from (x1, y1) to (x2, y2) px to the
+' selection (a click, with no box, adds nothing).
+Private Sub BandSelect(ByVal x1 As Long, ByVal y1 As Long, ByVal x2 As Long, ByVal y2 As Long)
+    Dim i As Long, l As Long, t As Long, r As Long, b As Long
+    If x1 < x2 Then l = x1: r = x2 Else l = x2: r = x1
+    If y1 < y2 Then t = y1: b = y2 Else t = y2: b = y1
+    If r - l < 2 And b - t < 2 Then Exit Sub
+    For i = 1 To m_n
+        If m_x(i) >= l And m_y(i) >= t And m_x(i) + m_w(i) <= r And m_y(i) + m_h(i) <= b Then
+            m_on(i) = True
+            m_sel = i
+        End If
+    Next
+End Sub
+
+' The box around the selection, px: left, top, right and bottom.
+Private Sub SelBounds(ByRef l As Long, ByRef t As Long, ByRef r As Long, ByRef b As Long)
+    Dim i As Long, first As Boolean
+    first = True
+    For i = 1 To m_n
+        If m_on(i) Then
+            If first Or m_x(i) < l Then l = m_x(i)
+            If first Or m_y(i) < t Then t = m_y(i)
+            If first Or m_x(i) + m_w(i) > r Then r = m_x(i) + m_w(i)
+            If first Or m_y(i) + m_h(i) > b Then b = m_y(i) + m_h(i)
+            first = False
+        End If
+    Next
+End Sub
+
+' The layout as it is now, for Undo: LayoutJson, then a null character and
+' the selected items' numbers (m_sel first).
+Private Function UndoState() As String
+    Dim i As Long, sel As String
+    If m_sel > 0 Then sel = CStr(m_sel)
+    For i = 1 To m_n
+        If m_on(i) And i <> m_sel Then sel = sel & IIf(Len(sel) > 0, ",", "") & i
+    Next
+    UndoState = LayoutJson("") & vbNullChar & sel
+End Function
+
+' After a change: when the layout differs from before (UndoState), keep
+' before for Undo, and forget what Redo had.
+Private Sub EndChange(frm As Form, ByVal before As String)
+    Dim i As Long
+    If Len(before) = 0 Then Exit Sub
+    If Split(before, vbNullChar)(0) = LayoutJson("") Then Exit Sub
+    PushState m_undo, m_nUndo, before
+    For i = 1 To m_nRedo
+        m_redo(i) = ""
+    Next
+    m_nRedo = 0
+    m_dirty = True
+End Sub
+
+' Put state on top of the stack (n deep), dropping the oldest when it is full.
+Private Sub PushState(stack() As String, ByRef n As Long, ByVal state As String)
+    Dim i As Long
+    If n >= DZ_UNDO Then
+        For i = 1 To DZ_UNDO - 1
+            stack(i) = stack(i + 1)
+        Next
+        n = DZ_UNDO - 1
+    End If
+    n = n + 1
+    stack(n) = state
+End Sub
+
+Private Sub ClearHistory()
+    Dim i As Long
+    For i = 1 To DZ_UNDO
+        m_undo(i) = "": m_redo(i) = ""
+    Next
+    m_nUndo = 0: m_nRedo = 0
+End Sub
+
+' Show the layout state (UndoState) again, with its selection. The layout's
+' name and the saved copy stay as they are; it is a change to save.
+Private Sub RestoreState(frm As Form, ByVal state As String)
+    Dim parts() As String, root As Variant, sel As Variant
+    parts = Split(state, vbNullChar)
+    JsonParse parts(0), root
+    ApplyLayout frm, root, True
+    For Each sel In Split(parts(1), ",")
+        If Val(sel) >= 1 And Val(sel) <= m_n Then m_on(CLng(sel)) = True
+    Next
+    If Len(parts(1)) > 0 Then
+        m_sel = CLng(Split(parts(1), ",")(0))
+        If m_sel > m_n Then m_sel = FirstSelected()
+    End If
+    m_mode = MODE_IDLE
+    m_dirty = True
+End Sub
+
+' What to tell the user about item i stretching across ("" when nothing):
+' on a page, an element anchored to stretch across that has another element
+' to its right, beside it, runs over it once the window is wider.
+Public Function DesignerStretchClash(ByVal i As Long) As String
+    Dim j As Long
+    If m_formKind = "dialog" Or (m_anchor(i) <> "across" And m_anchor(i) <> "both") Then Exit Function
+    For j = 1 To m_n
+        If j <> i And m_x(j) >= m_x(i) + m_w(i) And m_y(j) < m_y(i) + m_h(i) And m_y(j) + m_h(j) > m_y(i) Then
+            If m_anchor(j) <> "tr" And m_anchor(j) <> "br" Then
+                DesignerStretchClash = AKind(m_kind(i), True) & " stretches across, and " & AKind(m_kind(j)) & _
+                    " sits to its right: as the window widens it will run over it. Anchor that one to the right, " & _
+                    "or keep this one top left."
+                Exit Function
+            End If
+        End If
+    Next
+End Function
+
+' ---------------------------------------------------------------------------
+' Layout files (JSON)
+' ---------------------------------------------------------------------------
+
+' The layout on the canvas as JSON, called nm: its format and version, the
+' form's settings, and each element (one to a line, in the canvas's order)
+' with its kind, rectangle in px, settings, field, anchor and tab place.
+' DesignerImportJson reads it back; Undo keeps each step this way.
+Private Function LayoutJson(ByVal nm As String) As String
+    Dim s As String, i As Long
+    s = "{" & vbCrLf & _
+        "  ""format"": " & JsonText(DZ_JSON_FORMAT) & "," & vbCrLf & _
+        "  ""version"": " & DZ_JSON_VERSION & "," & vbCrLf & _
+        "  ""name"": " & JsonText(nm) & "," & vbCrLf & _
+        "  ""form"": {""kind"": " & JsonText(m_formKind) & ", ""width"": " & m_fw & ", ""height"": " & m_fh & _
+        ", ""recordSource"": " & JsonText(m_recSrc) & ", ""title"": " & JsonText(m_title) & "}," & vbCrLf & _
+        "  ""items"": ["
+    For i = 1 To m_n
+        s = s & IIf(i > 1, ",", "") & vbCrLf & _
+            "    {""kind"": " & JsonText(m_kind(i)) & ", ""x"": " & m_x(i) & ", ""y"": " & m_y(i) & _
+            ", ""w"": " & m_w(i) & ", ""h"": " & m_h(i) & ", ""text"": " & JsonText(m_text(i)) & _
+            ", ""text2"": " & JsonText(m_text2(i)) & ", ""text3"": " & JsonText(m_text3(i)) & _
+            ", ""choice"": " & JsonText(m_choice(i)) & ", ""field"": " & JsonText(m_field(i)) & _
+            ", ""anchor"": " & JsonText(m_anchor(i)) & ", ""tab"": " & m_tab(i) & "}"
+    Next
+    LayoutJson = s & IIf(m_n > 0, vbCrLf & "  ", "") & "]" & vbCrLf & "}" & vbCrLf
+End Function
+
+' The layout on the canvas as a layout file's text, under the name typed for
+' it (Export).
+Public Function DesignerLayoutJson(frm As Form) As String
+    DesignerLayoutJson = LayoutJson(Trim$(Nz(frm("txtDzName").Value, "")))
+End Function
+
+' More > Export: save the layout on the canvas as a .json file the user names.
+Public Sub DesignerExport(frm As Form)
+    Dim nm As String, path As String
+    If m_n = 0 Then
+        KitMsgBox "Place at least one element on the canvas first.", vbExclamation, "Form designer"
+        Exit Sub
+    End If
+    nm = Trim$(Nz(frm("txtDzName").Value, ""))
+    path = KitSaveAs("Export layout", IIf(Len(nm) = 0, "Layout", nm) & ".json", "Layout file|*.json", "designer")
+    If Len(path) = 0 Then Exit Sub
+    WriteTextFile path, DesignerLayoutJson(frm)
+    KitToast "Layout exported to " & Mid$(path, InStrRev(path, "\") + 1) & ".", "success"
+End Sub
+
+' More > Import: after asking to save unsaved changes, read a .json layout
+' file the user picks onto the canvas (DesignerImportJson).
+Public Sub DesignerImport(frm As Form)
+    Dim path As String, msg As String
+    If Not OkToDiscard(frm) Then Exit Sub
+    path = KitPickFile("Import layout", "Layout file|*.json", "designer")
+    If Len(path) = 0 Then Exit Sub
+    msg = DesignerImportJson(frm, ReadTextFile(path))
+    If Len(msg) > 0 Then KitMsgBox msg, vbExclamation, "Form designer"
+End Sub
+
+' Read text, a layout file (LayoutJson's format), onto the canvas as a new,
+' unsaved layout under its name (made unique among the saved ones). Each
+' element is checked as the settings dialog checks it: one of a kind this
+' version doesn't know, settings the kit can't build, a second tab strip or
+' breadcrumb, or one past a full pool is left out, with a toast. A record
+' source or field this database lacks stays, for Generate to point out.
+' Returns what stops the file being read ("" when it was), changing nothing.
+Public Function DesignerImportJson(frm As Form, ByVal text As String) As String
+    Dim root As Variant, skipped As Long, nm As String, msg As String
+    On Error GoTo NotJson
+    JsonParse text, root
+    On Error GoTo 0
+    msg = "This file isn't a form designer layout."
+    If Not IsObject(root) Then DesignerImportJson = msg: Exit Function
+    If TypeName(root) <> "Dictionary" Then DesignerImportJson = msg: Exit Function
+    If JText(root, "format", 20) <> DZ_JSON_FORMAT Then DesignerImportJson = msg: Exit Function
+    If JNum(root, "version", 0) < 1 Then DesignerImportJson = msg: Exit Function
+    If JNum(root, "version", 0) > DZ_JSON_VERSION Then
+        DesignerImportJson = "This layout was saved by a newer form designer (version " & JNum(root, "version", 0) & _
+            "). Update the kit to open it."
+        Exit Function
+    End If
+    If Not JHas(root, "items", "Collection") Then DesignerImportJson = msg: Exit Function
+    nm = UniqueLayoutName(JText(root, "name", 64))
+    ClearLayout frm
+    skipped = ApplyLayout(frm, root, False)
+    frm("txtDzName").Value = nm
+    m_dirty = True
+    ShowSelection frm
+    If skipped > 0 Then KitToast skipped & " element(s) couldn't be built as they were in the file and were left out.", "warning"
+    Exit Function
+NotJson:
+    DesignerImportJson = "This file isn't a form designer layout: " & Err.Description
+End Function
+
+' Put layout root (a parsed layout file) on the canvas in place of what is
+' there: the form's settings, then its elements. trusted (an Undo step)
+' takes them as they are; otherwise each is checked (DesignerImportJson).
+' Returns how many were left out.
+Private Function ApplyLayout(frm As Form, root As Variant, ByVal trusted As Boolean) As Long
+    Dim f As Object, it As Variant, kind As String, i As Long, skipped As Long, ok As Boolean
+    Dim t1 As String, t2 As String, t3 As String, ch As String, fld As String, anc As String, tabNo As Long
+    ClearItems frm
+    If JHas(root, "form", "Dictionary") Then
+        Set f = root("form")
+        m_formKind = IIf(JText(f, "kind", 10) = "dialog", "dialog", "page")
+        m_fw = Clamp(JNum(f, "width", m_cw), DZ_MIN_FW, m_cw)
+        m_fh = Clamp(JNum(f, "height", m_ch), DZ_MIN_FH, m_ch)
+        m_recSrc = JText(f, "recordSource", 64)
+        m_title = JText(f, "title", 255)
+    End If
+    ShowCanvas frm
+    For Each it In root("items")
+        ok = False
+        If IsObject(it) Then ok = (TypeName(it) = "Dictionary")
+        If ok Then
+            kind = JText(it, "kind", 20)
+            ok = (Len(KindPool(kind)) > 0)
+        End If
+        If ok Then
+            t1 = JText(it, "text", 255, KindDefault(kind, 1))
+            t2 = JText(it, "text2", 255, KindDefault(kind, 2))
+            t3 = JText(it, "text3", 255, KindDefault(kind, 3))
+            ch = JText(it, "choice", 30, KindDefault(kind, 4))
+            fld = JText(it, "field", 64)
+            anc = JText(it, "anchor", 10)
+            tabNo = JNum(it, "tab", 0)
+            If Not trusted Then
+                If Not BindKind(kind) And kind <> "table" Then fld = ""
+                If anc = "tl" Or InStr(";" & AnchorList(kind) & ";", ";" & anc & ";") = 0 Then anc = ""
+                If tabNo < 0 Then tabNo = 0
+                If Len(PropsProblem(kind, t1, t2, t3, ch)) > 0 Or Len(SizeProblem(kind, t1, t2, ch)) > 0 Then ok = False
+                If kind = "tabs" Or kind = "breadcrumb" Then
+                    For i = 1 To m_n
+                        If m_kind(i) = kind Then ok = False
+                    Next
+                End If
+            End If
+        End If
+        If ok Then
+            i = AddItem(kind, JNum(it, "x", 0), JNum(it, "y", 0), JNum(it, "w", DefaultW(kind)), JNum(it, "h", DefaultH(kind)), _
+                t1, t2, t3, ch, fld, anc, tabNo)
+            ok = (i > 0)
+            If ok Then
+                If m_w(i) > m_fw Or m_h(i) > m_fh Then     ' its smallest size is past the form's edge
+                    m_n = m_n - 1
+                    ok = False
+                Else
+                    Render frm, i
+                End If
+            End If
+        End If
+        If Not ok Then skipped = skipped + 1
+    Next
+    ApplyLayout = skipped
+End Function
+
+' nm, or "Imported layout" for "", with " (2)", " (3)"... added when a saved
+' layout already has the name.
+Private Function UniqueLayoutName(ByVal nm As String) As String
+    Dim k As Long, tryName As String
+    nm = Trim$(nm)
+    If Len(nm) = 0 Then nm = "Imported layout"
+    tryName = nm
+    k = 1
+    Do While DCount("*", "kit_layout", "layout_name=" & SqlText(tryName)) > 0
+        k = k + 1
+        tryName = Left$(nm, 64 - Len(" (" & k & ")")) & " (" & k & ")"
+    Loop
+    UniqueLayoutName = tryName
+End Function
+
+' s as a JSON string: quoted, with ", \ and control characters escaped.
+Private Function JsonText(ByVal s As String) As String
+    Dim i As Long, ch As String, code As Long, out As String
+    For i = 1 To Len(s)
+        ch = Mid$(s, i, 1)
+        code = AscW(ch)
+        Select Case code
+            Case 34: out = out & "\"""
+            Case 92: out = out & "\\"
+            Case 10: out = out & "\n"
+            Case 13: out = out & "\r"
+            Case 9: out = out & "\t"
+            Case 0 To 31: out = out & "\u" & Right$("000" & Hex$(code), 4)
+            Case Else: out = out & ch
+        End Select
+    Next
+    JsonText = """" & out & """"
+End Function
+
+' Parse JSON text into v: an object as a Scripting.Dictionary, an array as a
+' Collection, a string as a String, a number as a Double, true and false as
+' Booleans and null as Null. Raises error 5, saying where, for text that
+' isn't JSON.
+Private Sub JsonParse(ByVal text As String, ByRef v As Variant)
+    m_js = text
+    m_jp = 1
+    JsonValue v
+    JsonSpace
+    If m_jp <= Len(m_js) Then JsonFail "there is more after the end"
+    m_js = ""
+End Sub
+
+Private Sub JsonValue(ByRef v As Variant)
+    Dim ch As String
+    JsonSpace
+    If m_jp > Len(m_js) Then JsonFail "it ends too soon"
+    ch = Mid$(m_js, m_jp, 1)
+    Select Case ch
+        Case "{": JsonObject v
+        Case "[": JsonArray v
+        Case """": v = JsonString()
+        Case "t": JsonWord "true": v = True
+        Case "f": JsonWord "false": v = False
+        Case "n": JsonWord "null": v = Null
+        Case "-", "0" To "9": v = JsonNumber()
+        Case Else: JsonFail "it has " & ch & " where a value should be"
+    End Select
+End Sub
+
+Private Sub JsonObject(ByRef v As Variant)
+    Dim d As Object, k As String, item As Variant
+    Set d = CreateObject("Scripting.Dictionary")
+    m_jp = m_jp + 1
+    JsonSpace
+    If Mid$(m_js, m_jp, 1) = "}" Then
+        m_jp = m_jp + 1
+        Set v = d
+        Exit Sub
+    End If
+    Do
+        JsonSpace
+        If Mid$(m_js, m_jp, 1) <> """" Then JsonFail "a name in quotes should come next"
+        k = JsonString()
+        JsonSpace
+        If Mid$(m_js, m_jp, 1) <> ":" Then JsonFail "a : should follow a name"
+        m_jp = m_jp + 1
+        JsonValue item
+        If d.Exists(k) Then d.Remove k
+        d.Add k, item
+        JsonSpace
+        Select Case Mid$(m_js, m_jp, 1)
+            Case ",": m_jp = m_jp + 1
+            Case "}": m_jp = m_jp + 1: Exit Do
+            Case Else: JsonFail "a , or } should come next"
+        End Select
+    Loop
+    Set v = d
+End Sub
+
+Private Sub JsonArray(ByRef v As Variant)
+    Dim c As Collection, item As Variant
+    Set c = New Collection
+    m_jp = m_jp + 1
+    JsonSpace
+    If Mid$(m_js, m_jp, 1) = "]" Then
+        m_jp = m_jp + 1
+        Set v = c
+        Exit Sub
+    End If
+    Do
+        JsonValue item
+        c.Add item
+        JsonSpace
+        Select Case Mid$(m_js, m_jp, 1)
+            Case ",": m_jp = m_jp + 1
+            Case "]": m_jp = m_jp + 1: Exit Do
+            Case Else: JsonFail "a , or ] should come next"
+        End Select
+    Loop
+    Set v = c
+End Sub
+
+' The string starting at the reading point (its opening quote), unescaped.
+Private Function JsonString() As String
+    Dim out As String, ch As String, hx As String, code As Long, k As Long
+    m_jp = m_jp + 1
+    Do
+        If m_jp > Len(m_js) Then JsonFail "a string isn't closed"
+        ch = Mid$(m_js, m_jp, 1)
+        If ch = """" Then Exit Do
+        If ch = "\" Then
+            m_jp = m_jp + 1
+            ch = Mid$(m_js, m_jp, 1)
+            Select Case ch
+                Case """", "\", "/": out = out & ch
+                Case "b": out = out & ChrW(8)
+                Case "f": out = out & ChrW(12)
+                Case "n": out = out & vbLf
+                Case "r": out = out & vbCr
+                Case "t": out = out & vbTab
+                Case "u"
+                    hx = Mid$(m_js, m_jp + 1, 4)
+                    If Len(hx) < 4 Or Not (hx Like "[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]") Then JsonFail "a \u needs four hex digits"
+                    code = 0
+                    For k = 1 To 4
+                        code = code * 16 + InStr(1, "0123456789ABCDEF", Mid$(hx, k, 1), vbTextCompare) - 1
+                    Next
+                    out = out & ChrW(code)
+                    m_jp = m_jp + 4
+                Case Else: JsonFail "a string has a \ that escapes nothing JSON knows"
+            End Select
+        ElseIf AscW(ch) < 32 Then
+            JsonFail "a string has a line break or another control character in it"
+        Else
+            out = out & ch
+        End If
+        m_jp = m_jp + 1
+    Loop
+    m_jp = m_jp + 1                             ' past the closing quote
+    JsonString = out
+End Function
+
+' The number starting at the reading point (Val reads it the same in every locale).
+Private Function JsonNumber() As Double
+    Dim st As Long, s As String
+    st = m_jp
+    Do While m_jp <= Len(m_js)
+        If InStr("0123456789+-.eE", Mid$(m_js, m_jp, 1)) = 0 Then Exit Do
+        m_jp = m_jp + 1
+    Loop
+    s = Mid$(m_js, st, m_jp - st)
+    If Not (s Like "*[0-9]*") Or s Like "*[!0-9.eE+-]*" Then JsonFail "a number isn't written as JSON writes them"
+    JsonNumber = Val(s)
+End Function
+
+Private Sub JsonWord(ByVal w As String)
+    If StrComp(Mid$(m_js, m_jp, Len(w)), w, vbBinaryCompare) <> 0 Then JsonFail "it has a word that isn't true, false or null"
+    m_jp = m_jp + Len(w)
+End Sub
+
+Private Sub JsonSpace()
+    Do While m_jp <= Len(m_js)
+        Select Case Mid$(m_js, m_jp, 1)
+            Case " ", vbTab, vbCr, vbLf: m_jp = m_jp + 1
+            Case Else: Exit Do
+        End Select
+    Loop
+End Sub
+
+Private Sub JsonFail(ByVal why As String)
+    Dim at As Long
+    at = m_jp
+    m_js = ""
+    Err.Raise 5, "modKitDesigner.JsonParse", why & " (at character " & at & ")."
+End Sub
+
+' True when object d has key holding an object of type typ (TypeName).
+Private Function JHas(ByVal d As Object, ByVal key As String, ByVal typ As String) As Boolean
+    If Not d.Exists(key) Then Exit Function
+    If IsObject(d(key)) Then JHas = (TypeName(d(key)) = typ)
+End Function
+
+' Object d's key as text, cut to n characters: a number as written, dflt
+' when d hasn't the key, "" when it is null, true, false or an object.
+Private Function JText(ByVal d As Object, ByVal key As String, ByVal n As Long, Optional ByVal dflt As String = "") As String
+    Dim v As Variant
+    If Not d.Exists(key) Then JText = dflt: Exit Function
+    If IsObject(d(key)) Then Exit Function
+    v = d(key)
+    Select Case VarType(v)
+        Case vbString: JText = Left$(Trim$(v), n)
+        Case vbDouble: JText = Left$(Trim$(Str$(v)), n)
+    End Select
+End Function
+
+' Object d's key as a whole number of px (or a count), dflt when it isn't a number.
+Private Function JNum(ByVal d As Object, ByVal key As String, ByVal dflt As Long) As Long
+    Dim v As Variant
+    JNum = dflt
+    If Not d.Exists(key) Then Exit Function
+    If IsObject(d(key)) Then Exit Function
+    v = d(key)
+    If VarType(v) <> vbDouble Then Exit Function
+    If v > 100000 Then v = 100000
+    If v < -100000 Then v = -100000
+    JNum = CLng(v)
+End Function
+
+' What Generate says about a form with n controls: a warning past
+' DZ_CTL_WARN ("" below it), as Access allows DZ_CTL_LIMIT in a form's life.
+Public Function DesignerControlsWarning(ByVal n As Long) As String
+    If n < DZ_CTL_WARN Then Exit Function
+    DesignerControlsWarning = "The form has " & n & " controls. Access allows " & DZ_CTL_LIMIT & " in a form's life, " & _
+        "counting ones deleted, so leave room for the app's own: split it into pages, or use fewer cards and accordions."
 End Function
 
 ' ---------------------------------------------------------------------------
@@ -2025,26 +2930,43 @@ Private Sub ShowSlot(frm As Form, ByVal kind As String, ByVal s As Long, ByVal v
     End Select
 End Sub
 
-' The outline and resize handle on the selected item (none when nothing is
-' selected), the Selected card, and the canvas hint when it is empty.
+' The outline and resize handle on the selected item, or an outline on each
+' item of a selection of several (none when nothing is selected), the
+' Selected card, Undo and Redo, and the canvas hint when it is empty.
 Private Sub ShowSelection(frm As Form)
-    Dim i As Long
+    Dim i As Long, n As Long, l As Long, t As Long, r As Long, b As Long, c As Control, want As Boolean
+    n = SelCount()
     i = m_sel
-    If i > 0 Then
+    If n = 1 Then
         Outline frm, m_x(i), m_y(i), m_w(i), m_h(i), True
     Else
         frm("dzSel").Visible = False
         frm("dzGrip").Visible = False
     End If
+    For i = 1 To DZ_MAX
+        Set c = frm("dzMark" & i)
+        want = False
+        If n > 1 And i <= m_n Then want = m_on(i)
+        If want Then MoveCtl c, frm("dzGlass").Left + px(m_x(i) - 2), frm("dzGlass").Top + px(m_y(i) - 2), px(m_w(i) + 4), px(m_h(i) + 4)
+        If c.Visible <> want Then c.Visible = want
+    Next
     frm("dzHint").Visible = (m_n = 0)
-    SetEnabled frm("btnDzEdit"), i > 0
-    SetEnabled frm("btnDzDelete"), i > 0
-    If i = 0 Then
+    SetEnabled frm("btnDzEdit"), n = 1
+    SetEnabled frm("btnDzDelete"), n > 0
+    SetEnabled frm("btnDzArrange"), n > 0
+    SetEnabled frm("btnDzUndo"), m_nUndo > 0
+    SetEnabled frm("btnDzRedo"), m_nRedo > 0
+    If n = 0 Then
         frm("lblDzKind").Caption = "Nothing selected"
         frm("lblDzPos").Caption = ""
-    Else
+    ElseIf n = 1 Then
+        i = m_sel
         frm("lblDzKind").Caption = KindCaption(m_kind(i))
         frm("lblDzPos").Caption = m_x(i) & ", " & m_y(i) & "   " & m_w(i) & " x " & m_h(i) & " px"
+    Else
+        SelBounds l, t, r, b
+        frm("lblDzKind").Caption = n & " elements"
+        frm("lblDzPos").Caption = l & ", " & t & "   " & r - l & " x " & b - t & " px"
     End If
 End Sub
 
@@ -2071,7 +2993,7 @@ End Sub
 
 ' The page subtitle: what to do next, or the default how-to.
 Private Sub Status(frm As Form, ByVal msg As String)
-    If Len(msg) = 0 Then msg = "Drag elements onto the canvas; drag to move, drag the corner to resize, double-click for settings."
+    If Len(msg) = 0 Then msg = "Drag elements onto the canvas. Shift-click or drag a box to select several; double-click one for its settings."
     frm("lblSubtitle").Caption = msg
 End Sub
 
