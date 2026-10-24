@@ -2543,7 +2543,8 @@ Public Function DesignerImportJson(frm As Form, ByVal text As String) As String
     If skipped > 0 Then KitToast skipped & " element(s) couldn't be built as they were in the file and were left out.", "warning"
     Exit Function
 NotJson:
-    DesignerImportJson = "This file isn't a form designer layout: " & Err.Description
+    DesignerImportJson = "This file isn't a form designer layout, or it is damaged: Import reads the files Export " & _
+        "writes. (For whoever edited it: " & Err.Description & ")"
 End Function
 
 ' Put layout root (a parsed layout file) on the canvas in place of what is
@@ -2970,10 +2971,10 @@ Private Sub ShowSelection(frm As Form)
     Next
     frm("dzHint").Visible = (m_n = 0)
     SetEnabled frm("btnDzEdit"), n = 1
-    SetEnabled frm("btnDzDelete"), n > 0
-    SetEnabled frm("btnDzArrange"), n > 0
-    SetEnabled frm("btnDzUndo"), m_nUndo > 0
-    SetEnabled frm("btnDzRedo"), m_nRedo > 0
+    OutlineEnabled frm("btnDzDelete"), n > 0
+    OutlineEnabled frm("btnDzArrange"), n > 0
+    OutlineEnabled frm("btnDzUndo"), m_nUndo > 0
+    OutlineEnabled frm("btnDzRedo"), m_nRedo > 0
     If n = 0 Then
         frm("lblDzKind").Caption = "Nothing selected"
         frm("lblDzPos").Caption = ""
@@ -2986,6 +2987,13 @@ Private Sub ShowSelection(frm As Form)
         frm("lblDzKind").Caption = n & " elements"
         frm("lblDzPos").Caption = l & ", " & t & "   " & r - l & " x " & b - t & " px"
     End If
+End Sub
+
+' Enable or disable an outline button, its text muted while disabled: Access
+' doesn't dim a disabled outline button on a dark palette.
+Private Sub OutlineEnabled(c As Control, ByVal v As Boolean)
+    SetEnabled c, v
+    c.ForeColor = Th(IIf(v, CLR_OUT_FG, CLR_MUTED_FG))
 End Sub
 
 ' The selection outline 2px outside (x, y, w, h) px, with the resize handle

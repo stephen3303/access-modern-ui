@@ -1994,7 +1994,8 @@ Private Sub TestDesignerArrange()
     Set frm = Forms(DZ_FORM)
     Check DesignerPlace(frm, "button", 100, 50) = 1 And DesignerPlace(frm, "button", 300, 120) = 2 _
         And DesignerPlace(frm, "button", 600, 90) = 3 And DesignerHistory() = "3/0" And Not frm("btnDzRedo").Enabled _
-        And frm("btnDzUndo").Enabled, "Designer arrange buttons not placed, or Undo not kept: " & DesignerHistory()
+        And frm("btnDzUndo").Enabled And frm("btnDzUndo").ForeColor = Th(CLR_OUT_FG) And frm("btnDzRedo").ForeColor = Th(CLR_MUTED_FG), _
+        "Designer arrange buttons not placed, or Undo not kept (or not dimmed): " & DesignerHistory()
     ' A box from the canvas's corner selects all three.
     DesignerMouse frm, 1, acLeftButton, 0, 0
     DesignerMouse frm, 2, acLeftButton, px(700), px(200)
