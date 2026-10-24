@@ -2582,7 +2582,12 @@ Private Function ApplyLayout(frm As Form, root As Variant, ByVal trusted As Bool
                 If Not BindKind(kind) And kind <> "table" Then fld = ""
                 If anc = "tl" Or InStr(";" & AnchorList(kind) & ";", ";" & anc & ";") = 0 Then anc = ""
                 If tabNo < 0 Then tabNo = 0
-                If Len(PropsProblem(kind, t1, t2, t3, ch)) > 0 Or Len(SizeProblem(kind, t1, t2, ch)) > 0 Then ok = False
+                ' Sizes only once the settings are good: SizeProblem reads them as numbers.
+                If Len(PropsProblem(kind, t1, t2, t3, ch)) > 0 Then
+                    ok = False
+                ElseIf Len(SizeProblem(kind, t1, t2, ch)) > 0 Then
+                    ok = False
+                End If
                 If kind = "tabs" Or kind = "breadcrumb" Then
                     For i = 1 To m_n
                         If m_kind(i) = kind Then ok = False
@@ -2673,7 +2678,7 @@ Private Sub JsonValue(ByRef v As Variant)
 End Sub
 
 Private Sub JsonObject(ByRef v As Variant)
-    Dim d As Object, k As String, item As Variant
+    Dim d As Object, k As String
     Set d = CreateObject("Scripting.Dictionary")
     m_jp = m_jp + 1
     JsonSpace
@@ -2689,9 +2694,8 @@ Private Sub JsonObject(ByRef v As Variant)
         JsonSpace
         If Mid$(m_js, m_jp, 1) <> ":" Then JsonFail "a : should follow a name"
         m_jp = m_jp + 1
-        JsonValue item
         If d.Exists(k) Then d.Remove k
-        d.Add k, item
+        JsonMember d, k
         JsonSpace
         Select Case Mid$(m_js, m_jp, 1)
             Case ",": m_jp = m_jp + 1
@@ -2703,7 +2707,7 @@ Private Sub JsonObject(ByRef v As Variant)
 End Sub
 
 Private Sub JsonArray(ByRef v As Variant)
-    Dim c As Collection, item As Variant
+    Dim c As Collection
     Set c = New Collection
     m_jp = m_jp + 1
     JsonSpace
@@ -2713,8 +2717,7 @@ Private Sub JsonArray(ByRef v As Variant)
         Exit Sub
     End If
     Do
-        JsonValue item
-        c.Add item
+        JsonElement c
         JsonSpace
         Select Case Mid$(m_js, m_jp, 1)
             Case ",": m_jp = m_jp + 1
@@ -2723,6 +2726,21 @@ Private Sub JsonArray(ByRef v As Variant)
         End Select
     Loop
     Set v = c
+End Sub
+
+' The next value, as d's key k, and as c's next item. Each reads into a
+' Variant of its own: a scalar assigned to one that holds an object would
+' go to the object's default property.
+Private Sub JsonMember(d As Object, ByVal k As String)
+    Dim item As Variant
+    JsonValue item
+    d.Add k, item
+End Sub
+
+Private Sub JsonElement(c As Collection)
+    Dim item As Variant
+    JsonValue item
+    c.Add item
 End Sub
 
 ' The string starting at the reading point (its opening quote), unescaped.
@@ -2754,7 +2772,7 @@ Private Function JsonString() As String
                     m_jp = m_jp + 4
                 Case Else: JsonFail "a string has a \ that escapes nothing JSON knows"
             End Select
-        ElseIf AscW(ch) < 32 Then
+        ElseIf AscW(ch) >= 0 And AscW(ch) < 32 Then     ' AscW is negative past U+7FFF
             JsonFail "a string has a line break or another control character in it"
         Else
             out = out & ch

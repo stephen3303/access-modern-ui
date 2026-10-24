@@ -2118,6 +2118,18 @@ Private Sub TestDesignerFiles()
         And DesignerItem(3) = "text 16,160 200x30 " And DesignerItemData(3) = "crew||0" _
         And DesignerItem(4) = "label 220,8 120x24 Tab" & vbTab & "and " & ChrW(233), _
         "Designer hand-written elements wrong: " & DesignerItem(2) & " / " & DesignerItem(4)
+    ' Keys in any order, characters past U+7FFF, and a rating too big for a number.
+    hand = "{""form"":{""kind"":""page""},""format"":""kit-layout"",""version"":1,""name"":""Order " & ChrW(&HD55C) & """," & _
+        """items"":[{""kind"":""label"",""text"":""" & ChrW(&HD55C) & ChrW(&HAE00) & """},{""kind"":""rating"",""text"":""999999999999999""}]}"
+    Check DesignerImportJson(frm, hand) = "" And DesignerCount() = 1 And DesignerItem(1) = "label 0,0 120x24 " & ChrW(&HD55C) & ChrW(&HAE00) _
+        And frm("txtDzName").Value = "Order " & ChrW(&HD55C), "Designer layout with keys out of order or Hangul read as " & DesignerCount()
+    Check DesignerImportJson(frm, DesignerLayoutJson(frm)) = "" And DesignerItem(1) = "label 0,0 120x24 " & ChrW(&HD55C) & ChrW(&HAE00), _
+        "Designer didn't read back its own Hangul layout"
+    ' Back to the hand-written layout for the stretch checks.
+    hand = "{""format"":""kit-layout"",""version"":1,""name"":""Hand"",""form"":{""kind"":""dialog"",""width"":400,""height"":300}," & _
+        """items"":[{""kind"":""card"",""x"":8,""y"":8,""w"":200,""h"":120},{""kind"":""tabs"",""x"":0,""y"":200}," & _
+        "{""kind"":""text"",""x"":16,""y"":160},{""kind"":""label"",""text"":""Tab\tand \u00e9"",""x"":220,""y"":8}]}"
+    Check DesignerImportJson(frm, hand) = "" And DesignerCount() = 4, "Designer hand-written layout not read back"
     ' A card stretched across with a label to its right: warned until the label anchors right.
     Check DesignerStretchClash(1) = "", "Designer warned about stretching on a dialog"
     Check DesignerSetForm("", "400", "300", "page", "") = "" And DesignerSetProps(1, "Card title", "", "", "", , "across") = "", _
