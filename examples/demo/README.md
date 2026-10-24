@@ -120,7 +120,7 @@ watching for Visual Basic error dialogs as well as the error log:
   corner handle (a button stays 24 to 48px tall, a progress bar 4 to 16px). Moving and
   resizing don't flicker the page, and labels and buttons stay on top of cards. Delete
   (the button, or the key with the canvas focused) removes it; the arrow keys move it. Save
-  with a name, New, then pick the name under Open a layout: the same elements come back.
+  with a name, More > New layout, then pick the name under Open a layout: the same elements come back.
   Leaving the page with unsaved changes asks to save them. Generate opens a window titled
   "Preview: <name>" where every element sits exactly where it was on the canvas, now as the
   real kit control (a rounded card, a themed button, a progress capsule), and writes
@@ -161,6 +161,22 @@ watching for Visual Basic error dialogs as well as the error log:
   whose rows take clicks. Build_pg<Name>.txt starts with the table's BuildGrid and the accordion's BuildBlank, and pg<Name>.vba
   has chips1Chip, tabs1Tab, crumb1Crumb, GridClick and a Form_Load. Check it in Navy and
   Midnight.
+- Form designer selection, Arrange, Undo and layout files: Shift-click adds an element to the
+  selection (each gets a thin outline, and Selected reads "3 elements" with the box around
+  them) and Shift-click again takes it out; dragging a box over the empty canvas selects what
+  is wholly inside it, and the box follows the pointer without flicker. Dragging one selected
+  element moves them all and none leaves the form; a click on one of them leaves it alone
+  selected, with its resize handle. Arrange (beside Delete) is a menu: with one element only
+  Duplicate is enabled, with two the aligns too, with three Distribute across and down;
+  Align left lines up the left edges, Distribute across makes the gaps equal; Duplicate
+  copies 16px down and right with the same settings, except a tab strip or breadcrumb (a
+  toast says why). Undo and Redo (arrows left of Form) are dimmed until there is something
+  to undo or redo; Ctrl+Z and Ctrl+Y on the canvas do the same, while in Layout name they
+  undo the typing. More (three dots, left of Generate) has New layout, Import layout and
+  Export layout: export, New, import the file, and the same layout comes back under the same
+  name, or "<name> (2)" once that name is saved; a .txt file renamed .json is refused with a
+  message and the canvas stays as it was. Generate's toast counts the controls. Check it in
+  Navy and Midnight (the outlines and the glyph buttons).
 - Dialogs: Appearance in the sidebar and the buttons on Cards and progress dim the whole
   Access window behind their dialog; the dim goes when the dialog closes, and the dialog
   itself is not dimmed.

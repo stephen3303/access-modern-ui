@@ -1599,6 +1599,8 @@ Private Sub TestMore()
     TestDesignerKinds
     TestDesignerData
     TestDesignerMore
+    TestDesignerArrange
+    TestDesignerFiles
 End Sub
 
 ' Form designer (BuildDesigner, modKitDesigner): elements dropped from the
@@ -1978,6 +1980,170 @@ Private Sub TestDesignerMore()
     DoCmd.DeleteObject acForm, DZ_FORM
     CurrentDb.TableDefs.Delete "kit_layout_item": CurrentDb.TableDefs.Delete "kit_layout"
     CurrentDb.TableDefs.Delete "dz_crew": CurrentDb.TableDefs.Delete "dz_noid"
+End Sub
+
+' Form designer selection, Arrange and Undo: a box dragged over the canvas
+' selects what it encloses, Shift-click adds and removes, a selection moves
+' together, aligns, distributes and duplicates, and Undo and Redo step back
+' and forward through each change (at most 50).
+Private Sub TestDesignerArrange()
+    Const DZ_FORM As String = "pgDesignerArrange"
+    Dim frm As Form, k As Long
+    BuildDesigner DZ_FORM, px(32), px(1056), px(560)
+    DoCmd.OpenForm DZ_FORM, WindowMode:=acHidden
+    Set frm = Forms(DZ_FORM)
+    Check DesignerPlace(frm, "button", 100, 50) = 1 And DesignerPlace(frm, "button", 300, 120) = 2 _
+        And DesignerPlace(frm, "button", 600, 90) = 3 And DesignerHistory() = "3/0" And frm("btnDzRedo").Tag = "off" _
+        And frm("btnDzUndo").Tag = "" And frm("btnDzUndo").ForeColor = Th(CLR_OUT_FG) And frm("btnDzRedo").ForeColor = Th(CLR_MUTED_FG) _
+        And frm("btnDzRedo").Enabled And Not frm("btnDzRedo").TabStop, _
+        "Designer arrange buttons not placed, or Undo not kept (or not dimmed): " & DesignerHistory()
+    ' A box from the canvas's corner selects all three.
+    DesignerMouse frm, 1, acLeftButton, 0, 0
+    DesignerMouse frm, 2, acLeftButton, px(700), px(200)
+    DesignerMouse frm, 3, acLeftButton, px(700), px(200)
+    Check DesignerSelected() = "1,2,3" And frm("lblDzKind").Caption = "3 elements" And frm("dzMark1").Visible _
+        And frm("dzMark3").Visible And Not frm("dzMark4").Visible And Not frm("dzSel").Visible And Not frm("btnDzEdit").Enabled _
+        And frm("btnDzArrange").Tag = "", "Designer selection box selected " & DesignerSelected()
+    ' Align their tops, then space them out evenly across.
+    DesignerAlign frm, "top"
+    Check DesignerItem(1) = "button 56,32 96x32 Button" And DesignerItem(2) = "button 256,32 96x32 Button" _
+        And DesignerItem(3) = "button 552,32 96x32 Button", "Designer align tops gave " & DesignerItem(2)
+    DesignerDistribute frm, True
+    Check DesignerItem(2) = "button 304,32 96x32 Button" And DesignerHistory() = "5/0", "Designer distribute gave " & DesignerItem(2)
+    ' Undo and Redo, with the selection as it was.
+    DesignerSelect frm, 1
+    DesignerSelectMore frm, 2
+    DesignerAlign frm, "left"
+    Check DesignerItem(2) = "button 56,32 96x32 Button", "Designer align left gave " & DesignerItem(2)
+    DesignerUndo frm
+    Check DesignerItem(2) = "button 304,32 96x32 Button" And DesignerSelected() = "1,2" And DesignerHistory() = "5/1" _
+        And frm("btnDzRedo").Tag = "", "Designer undo gave " & DesignerItem(2) & " " & DesignerHistory()
+    DesignerRedo frm
+    Check DesignerItem(2) = "button 56,32 96x32 Button" And DesignerHistory() = "6/0", "Designer redo gave " & DesignerItem(2)
+    DesignerUndo frm
+    ' Dragging one selected element moves both; a change forgets what Redo had.
+    DesignerMouse frm, 1, acLeftButton, px(310), px(40)
+    DesignerMouse frm, 2, acLeftButton, px(318), px(56)
+    DesignerMouse frm, 3, acLeftButton, px(318), px(56)
+    Check DesignerItem(1) = "button 64,48 96x32 Button" And DesignerItem(2) = "button 312,48 96x32 Button" _
+        And DesignerSelected() = "1,2" And DesignerHistory() = "6/0", "Designer group drag gave " & DesignerItem(1) & " / " & DesignerItem(2)
+    ' A click on one of them leaves it alone selected; Shift-click adds and removes.
+    DesignerMouse frm, 1, acLeftButton, px(70), px(50)
+    DesignerMouse frm, 3, acLeftButton, px(70), px(50)
+    Check DesignerSelected() = "1" And frm("dzSel").Visible And frm("dzGrip").Visible And Not frm("dzMark1").Visible, _
+        "Designer click in a selection left " & DesignerSelected()
+    DesignerMouse frm, 1, acLeftButton, px(560), px(40), acShiftMask
+    DesignerMouse frm, 3, acLeftButton, px(560), px(40), acShiftMask
+    Check DesignerSelected() = "1,3", "Designer Shift-click didn't add: " & DesignerSelected()
+    DesignerMouse frm, 1, acLeftButton, px(560), px(40), acShiftMask
+    Check DesignerSelected() = "1", "Designer Shift-click didn't remove: " & DesignerSelected()
+    DesignerMouse frm, 1, acLeftButton, px(560), px(40), acShiftMask
+    ' Duplicate: copies 16px down and right become the selection; Delete and Undo.
+    DesignerDuplicate frm
+    Check DesignerCount() = 5 And DesignerItem(4) = "button 80,64 96x32 Button" And DesignerItem(5) = "button 568,48 96x32 Button" _
+        And DesignerSelected() = "4,5" And DesignerHistory() = "7/0", "Designer duplicate gave " & DesignerItem(4) & " / " & DesignerItem(5)
+    DesignerDelete frm
+    Check DesignerCount() = 3 And DesignerSelected() = "" And Not frm("dzBtn4").Visible, "Designer delete of a selection left elements"
+    DesignerUndo frm
+    Check DesignerCount() = 5 And DesignerSelected() = "4,5" And frm("dzBtn4").Visible And DesignerHistory() = "7/1", _
+        "Designer undo of a delete gave " & DesignerCount() & " " & DesignerSelected()
+    ' A form takes one tab strip, so it isn't copied.
+    Check DesignerPlace(frm, "tabs", 200, 300) = 6, "Designer arrange tab strip not placed"
+    DesignerDuplicate frm
+    Check DesignerCount() = 6 And DesignerSelected() = "6" And DesignerHistory() = "8/0", "Designer copied a tab strip"
+    ' Undo keeps the last 50 changes.
+    DesignerSelect frm, 1
+    DesignerSelectMore frm, 6
+    For k = 1 To 30
+        DesignerAlign frm, "left"
+        DesignerAlign frm, "right"
+    Next
+    Check DesignerHistory() = "50/0", "Designer undo not capped at 50: " & DesignerHistory()
+    DesignerUndo frm
+    Check DesignerHistory() = "49/1", "Designer undo past the cap gave " & DesignerHistory()
+    ' New starts with nothing to undo.
+    DesignerImportJson frm, DesignerLayoutJson(frm)
+    Check DesignerHistory() = "0/0" And frm("btnDzUndo").Tag = "off", "Designer import kept the undo steps"
+    DoCmd.Close acForm, DZ_FORM, acSaveNo
+    DoCmd.DeleteObject acForm, DZ_FORM
+    CurrentDb.TableDefs.Delete "kit_layout_item": CurrentDb.TableDefs.Delete "kit_layout"
+End Sub
+
+' Form designer layout files: a layout writes as JSON and reads back the
+' same (quotes, backslashes and accents too) under a name of its own; a file
+' that isn't a layout, or is from a newer version, is refused and changes
+' nothing; elements the kit can't build are left out; Generate's control
+' warning and the stretch-across warning.
+Private Sub TestDesignerFiles()
+    Const DZ_FORM As String = "pgDesignerFiles"
+    Dim frm As Form, json As String, before As String, i As Long, hand As String
+    BuildDesigner DZ_FORM, px(32), px(1056), px(560)
+    DoCmd.OpenForm DZ_FORM, WindowMode:=acHidden
+    Set frm = Forms(DZ_FORM)
+    Check DesignerPlace(frm, "button", 100, 50) = 1 And DesignerPlace(frm, "card", 400, 200) = 2 _
+        And DesignerPlace(frm, "accordion", 600, 250) = 3, "Designer file elements not placed"
+    Check DesignerSetProps(1, "Say ""hi"" \ " & ChrW(233) & ChrW(&H2603), "", "", "outline", , "br") = "" _
+        And DesignerSetForm("Crew ""roster""", "776", "408", "page", "") = "", "Designer file settings refused"
+    frm("txtDzName").Value = "Round trip"
+    json = DesignerLayoutJson(frm)
+    Check InStr(json, """format"": ""kit-layout""") > 0 And InStr(json, """version"": 1") > 0 _
+        And InStr(json, """text"": ""Say \""hi\"" \\ ") > 0 And InStr(json, """anchor"": ""br""") > 0, "Designer layout JSON wrong: " & json
+    For i = 1 To DesignerCount()
+        before = before & DesignerItem(i) & "|" & DesignerItemData(i) & ";"
+    Next
+    ' Read back: the same elements, form and text, as a new unsaved layout.
+    Check DesignerImportJson(frm, json) = "", "Designer didn't read its own layout file"
+    hand = ""
+    For i = 1 To DesignerCount()
+        hand = hand & DesignerItem(i) & "|" & DesignerItemData(i) & ";"
+    Next
+    Check hand = before And DesignerFormData() = "page 776x408 |Crew ""roster""" And frm("txtDzName").Value = "Round trip" _
+        And DesignerLayoutJson(frm) = json, "Designer layout file didn't read back the same: " & hand
+    ' A saved layout's name gets a number.
+    Check DesignerSave(frm), "Designer file layout not saved"
+    Check DesignerImportJson(frm, json) = "" And frm("txtDzName").Value = "Round trip (2)", "Designer import took a saved layout's name"
+    ' Not a layout, not JSON, or a newer version: refused, the canvas as it was.
+    Check InStr(DesignerImportJson(frm, "{""format"": ""kit-layout"", ""version"": 1, ""items"": ["), "isn't a form designer layout") > 0 _
+        And DesignerImportJson(frm, "not a layout") <> "" And DesignerImportJson(frm, "{""format"": ""other"", ""items"": []}") <> "" _
+        And InStr(DesignerImportJson(frm, "{""format"": ""kit-layout"", ""version"": 2, ""items"": []}"), "newer") > 0 _
+        And DesignerCount() = 3 And frm("txtDzName").Value = "Round trip (2)", "Designer took a file that isn't a layout"
+    ' A hand-written file: defaults fill what it leaves out; an unknown kind, a
+    ' rating of 12 stars and a second tab strip are left out; a bad anchor is dropped.
+    hand = "{""format"":""kit-layout"",""version"":1,""name"":""Hand"",""form"":{""kind"":""dialog"",""width"":400,""height"":300}," & _
+        """items"":[{""kind"":""card"",""x"":8,""y"":8,""w"":200,""h"":120},{""kind"":""widget""},{""kind"":""rating"",""text"":""12""}," & _
+        "{""kind"":""tabs"",""x"":0,""y"":200},{""kind"":""tabs"",""x"":0,""y"":250}," & _
+        "{""kind"":""text"",""x"":16,""y"":160,""field"":""crew"",""anchor"":""nowhere""}," & _
+        "{""kind"":""label"",""text"":""Tab\tand \u00e9"",""x"":220,""y"":8}]}"
+    Check DesignerImportJson(frm, hand) = "" And DesignerCount() = 4 And DesignerFormData() = "dialog 400x300 |" _
+        And frm("txtDzName").Value = "Hand", "Designer hand-written layout read as " & DesignerCount() & " " & DesignerFormData()
+    Check DesignerItem(1) = "card 8,8 200x120 Card title" And DesignerItem(2) = "tabs 0,200 360x32 Overview;Details;History" _
+        And DesignerItem(3) = "text 16,160 200x30 " And DesignerItemData(3) = "crew||0" _
+        And DesignerItem(4) = "label 220,8 120x24 Tab" & vbTab & "and " & ChrW(233), _
+        "Designer hand-written elements wrong: " & DesignerItem(2) & " / " & DesignerItem(4)
+    ' Keys in any order, characters past U+7FFF, and a rating too big for a number.
+    hand = "{""form"":{""kind"":""page""},""format"":""kit-layout"",""version"":1,""name"":""Order " & ChrW(&HD55C) & """," & _
+        """items"":[{""kind"":""label"",""text"":""" & ChrW(&HD55C) & ChrW(&HAE00) & """},{""kind"":""rating"",""text"":""999999999999999""}]}"
+    Check DesignerImportJson(frm, hand) = "" And DesignerCount() = 1 And DesignerItem(1) = "label 0,0 120x24 " & ChrW(&HD55C) & ChrW(&HAE00) _
+        And frm("txtDzName").Value = "Order " & ChrW(&HD55C), "Designer layout with keys out of order or Hangul read as " & DesignerCount()
+    Check DesignerImportJson(frm, DesignerLayoutJson(frm)) = "" And DesignerItem(1) = "label 0,0 120x24 " & ChrW(&HD55C) & ChrW(&HAE00), _
+        "Designer didn't read back its own Hangul layout"
+    ' Back to the hand-written layout for the stretch checks.
+    hand = "{""format"":""kit-layout"",""version"":1,""name"":""Hand"",""form"":{""kind"":""dialog"",""width"":400,""height"":300}," & _
+        """items"":[{""kind"":""card"",""x"":8,""y"":8,""w"":200,""h"":120},{""kind"":""tabs"",""x"":0,""y"":200}," & _
+        "{""kind"":""text"",""x"":16,""y"":160},{""kind"":""label"",""text"":""Tab\tand \u00e9"",""x"":220,""y"":8}]}"
+    Check DesignerImportJson(frm, hand) = "" And DesignerCount() = 4, "Designer hand-written layout not read back"
+    ' A card stretched across with a label to its right: warned until the label anchors right.
+    Check DesignerStretchClash(1) = "", "Designer warned about stretching on a dialog"
+    Check DesignerSetForm("", "400", "300", "page", "") = "" And DesignerSetProps(1, "Card title", "", "", "", , "across") = "", _
+        "Designer file card not stretched"
+    Check InStr(DesignerStretchClash(1), "a label") > 0, "Designer didn't warn that a stretched card runs over a label"
+    Check DesignerSetProps(4, "Tab" & vbTab & "and " & ChrW(233), "", "", "", , "tr") = "" And DesignerStretchClash(1) = "", _
+        "Designer still warned with the label anchored right"
+    ' Generate warns as a form nears Access's 754 controls.
+    Check DesignerControlsWarning(499) = "" And InStr(DesignerControlsWarning(500), "754") > 0, "Designer control warning wrong"
+    DoCmd.Close acForm, DZ_FORM, acSaveNo
+    DoCmd.DeleteObject acForm, DZ_FORM
+    CurrentDb.TableDefs.Delete "kit_layout_item": CurrentDb.TableDefs.Delete "kit_layout"
 End Sub
 
 Private Sub TestEventLog()
