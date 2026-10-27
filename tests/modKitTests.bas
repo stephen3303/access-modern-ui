@@ -972,16 +972,28 @@ Public Function TestKit(ByVal root As String) As String
     Check DLookup("body", HELP_SHARED_TABLE, "topic_key='detail'") = "Edited **text**." And _
         DLookup("search_text", HELP_TABLE, "topic_key='detail'") Like "Edited text.*", "Saved help topic not in both tables"
     Check DLookup("updated_by", HELP_SHARED_TABLE, "topic_key='detail'") = KitUser(), "Saved help topic not stamped"
-    LoadHelpTopics helpPath
+    ' Start-ups below run without LoadHelpTopics, as in an app: zz_help then holds the shared text.
     Check KitHelpSync() = 0 And DLookup("body", HELP_TABLE, "topic_key='detail'") = "Edited **text**.", "Start-up sync replaced an edited topic"
     CurrentDb.Execute "DELETE FROM " & HELP_SHARED_TABLE & " WHERE topic_key='detail.roles'", dbFailOnError
-    LoadHelpTopics helpPath
     Check KitHelpSync() = 1 And DCount("*", HELP_TABLE) = 3, "A topic missing from the shared table not added back"
     KitHelpSave "extra", "Extra", "New."
     Check DLookup("sort_order", HELP_TABLE, "topic_key='extra'") = 4 And DCount("*", HELP_SHARED_TABLE) = 4, "New help topic not added after the last"
     KitHelpSave "detail.more", "More", "Under detail."
     Check DLookup("sort_order", HELP_SHARED_TABLE, "topic_key='detail.more'") = 4 And _
         DLookup("sort_order", HELP_TABLE, "topic_key='extra'") = 5, "New subtopic not placed after its parent's last subtopic"
+    CurrentDb.Execute "DELETE FROM " & HELP_SHARED_TABLE & " WHERE topic_key='detail'", dbFailOnError
+    Check KitHelpSync() = 1 And DLookup("updated_by", HELP_SHARED_TABLE, "topic_key='detail'") = "help.txt" And _
+        Nz(DLookup("body", HELP_TABLE, "topic_key='detail'"), "") <> "Edited **text**.", "A deleted topic not restored from the help file"
+    Check DLookup("sort_order", HELP_SHARED_TABLE, "topic_key='detail'") = 2 And _
+        DLookup("sort_order", HELP_SHARED_TABLE, "topic_key='detail.roles'") = 4, "A restored topic not put back after the topic before it"
+    WriteTextFile helpPath, "=== start | Getting Started" & vbCrLf & "Intro." & vbCrLf & "=== guide | Guide" & vbCrLf & _
+        "=== detail | Detail" & vbCrLf & "=== detail.roles | Roles" & vbCrLf & "Who can sign."
+    LoadHelpTopics helpPath
+    Check KitHelpSync() = 1 And DLookup("sort_order", HELP_SHARED_TABLE, "topic_key='guide'") = 2 And _
+        DLookup("sort_order", HELP_SHARED_TABLE, "topic_key='detail'") = 3 And DCount("*", HELP_SHARED_TABLE, "sort_order=3") = 1, _
+        "A newer build's topic not placed after the topic before it"
+    WriteTextFile helpPath, "=== start | Getting Started" & vbCrLf & "Intro." & vbCrLf & "=== detail | Detail" & vbCrLf & _
+        "=== detail.roles | Roles" & vbCrLf & "Who can sign."
     helpErr = 0: On Error Resume Next: KitHelpSave "", "No key", "x": helpErr = Err.Number: On Error GoTo 0
     Check helpErr = 5, "Help topic with no key saved"
     CurrentDb.TableDefs.Delete HELP_SHARED_TABLE
