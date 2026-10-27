@@ -352,19 +352,24 @@ End Function
 
 ' Make column i of the table in sf dx twips wider (narrower when negative),
 ' as the user sees it, and save the widths. The shown columns to its right
-' give up (or take) the difference in proportion to their widths, down to
-' MIN_COL_PX, so the columns to its left and the table's width stay; the
-' last column takes it from the rest of the table. Every shown column's
-' width goes into the layout, so the table now fills by these widths.
+' give up the difference in proportion to what they have above MIN_COL_PX
+' (or share what it gives up, in proportion to their widths), so the
+' columns to its left and the table's width stay and the divider lands
+' where it was dropped. A column can grow only by what the columns to its
+' right can give up. The last shown column has none: its right edge is the
+' table's, so dragging it changes nothing. Every shown column's width goes
+' into the layout, so the table now fills by these widths; a hidden
+' column keeps the width saved for it.
 Public Sub ResizeGridColumn(sf As Control, ByVal prefix As String, ByVal i As Long, ByVal dx As Long)
-    Dim g As Form, n As Long, layout As String, order() As Long, shown() As Boolean, w() As Double
-    Dim k As Long, pos As Long, ratio As Double, d As Double, rightW As Double, take As Double, out As String
+    Dim g As Form, n As Long, layout As String, order() As Long, shown() As Boolean, w() As Double, saved As Variant
+    Dim k As Long, pos As Long, ratio As Double, d As Double, spare As Double, rightW As Double, donors As Long, out As String
     Set g = sf.Form
     CheckFitGrid g
     n = ColumnCount(g)
     layout = SavedLayout(sf)
     If Len(layout) = 0 Then layout = DefaultLayout(n)
     ParseLayout layout, n, order, shown
+    saved = LayoutWidths(layout, n)
     ' Each shown column's width now, in design px (part 2 of its Tag, which
     ' GridFit scales by ratio to what shows).
     ReDim w(n - 1)
@@ -373,25 +378,38 @@ Public Sub ResizeGridColumn(sf As Control, ByVal prefix As String, ByVal i As Lo
         If w(k) <= 0 Then w(k) = MIN_COL_PX
         If order(k) = i Then pos = k
     Next
+    For k = pos + 1 To n - 1
+        If shown(k) Then
+            donors = donors + 1
+            rightW = rightW + w(order(k))
+            spare = spare + w(order(k)) - MIN_COL_PX
+        End If
+    Next
+    If donors = 0 Then Exit Sub                     ' the last shown column
+    If spare < 0 Then spare = 0
     ratio = (g.Controls("txtCol" & i).Width + px(8)) / px(w(i))
     If ratio <= 0 Then ratio = 1
     d = dx / ratio / px(1)                          ' design px
     If w(i) + d < MIN_COL_PX Then d = MIN_COL_PX - w(i)
+    If d > spare Then d = spare                     ' the columns to the right stop at MIN_COL_PX
+    If d = 0 Then Exit Sub
     For k = pos + 1 To n - 1
-        If shown(k) Then rightW = rightW + w(order(k)) - MIN_COL_PX
+        If shown(k) Then
+            If d > 0 Then
+                w(order(k)) = w(order(k)) - d * (w(order(k)) - MIN_COL_PX) / spare
+            Else
+                w(order(k)) = w(order(k)) - d * w(order(k)) / rightW
+            End If
+        End If
     Next
-    ' The columns to the right can give up only what they have above MIN_COL_PX.
-    If rightW > 0 Then
-        take = d
-        If take > rightW Then take = rightW
-        For k = pos + 1 To n - 1
-            If shown(k) Then w(order(k)) = w(order(k)) - take * (w(order(k)) - MIN_COL_PX) / rightW
-        Next
-    End If
     w(i) = w(i) + d
     For k = 0 To n - 1
         out = out & IIf(k > 0, ",", "") & order(k) & IIf(shown(k), "", "h")
-        If shown(k) Then out = out & ":" & ClampW(w(order(k)))
+        If shown(k) Then
+            out = out & ":" & ClampW(w(order(k)))
+        ElseIf saved(order(k)) > 0 Then
+            out = out & ":" & saved(order(k))
+        End If
     Next
     SetGridColumns sf, prefix, out
     SaveSetting APP_NAME, SETTINGS_KEY, g.Name, out

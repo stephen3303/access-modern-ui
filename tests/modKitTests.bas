@@ -814,7 +814,7 @@ Public Function TestKit(ByVal root As String) As String
     Check Not ParseLayout("0,1", 3, order, shown), "Short column layout accepted"
     Check Not ParseLayout("0h,1h,2h", 3, order, shown), "Layout with no shown column accepted"
     ' Column widths in a layout (":<px>").
-    Dim lw As Variant, w0 As Long, right0 As Long
+    Dim lw As Variant, w0 As Long, right0 As Long, fitLayout As String
     Check ParseLayout("2:120,0,1h:80", 3, order, shown), "Layout with widths rejected"
     Check order(0) = 2 And Not shown(2), "Layout with widths parsed wrongly"
     Check Not ParseLayout("0:abc,1,2", 3, order, shown), "Layout with a bad width accepted"
@@ -870,6 +870,25 @@ Public Function TestKit(ByVal root As String) As String
     Check Abs(host.fitSize0.Left - (sf.Left + grid.txtCol0.Left + grid.txtCol0.Width)) <= px(2), "Width grip didn't follow its column"
     Check InStr(GetSetting(APP_NAME, "Columns", "subTestFit", ""), ":") > 0, "Column widths weren't saved"
     Check GridHasWidths(sf), "GridHasWidths missed the saved widths"
+    ' More than the columns to the right can give: they stop at their
+    ' least width and the right edge stays; the last column has no divider
+    ' to move; a hidden column keeps its saved width.
+    ResizeGridColumn sf, "fit", 0, px(2000)
+    Set grid = sf.Form
+    Check Abs(grid.txtCol2.Left + grid.txtCol2.Width - right0) <= px(2) And _
+        Abs(grid.txtCol1.Left - (grid.txtCol0.Left + grid.txtCol0.Width)) <= px(12), "An over-wide drag moved the table's edge or overlapped a column"
+    fitLayout = GetSetting(APP_NAME, "Columns", "subTestFit", "")
+    ResizeGridColumn sf, "fit", 2, px(40)
+    Check GetSetting(APP_NAME, "Columns", "subTestFit", "") = fitLayout, "Dragging the last column changed the widths"
+    SetGridColumns sf, "fit", "0:120,1h:150,2:120"
+    SaveSetting APP_NAME, "Columns", "subTestFit", "0:120,1h:150,2:120"
+    ResizeGridColumn sf, "fit", 0, px(20)
+    Check InStr(GetSetting(APP_NAME, "Columns", "subTestFit", ""), "1h:150") > 0, "A resize dropped a hidden column's width: " & _
+        GetSetting(APP_NAME, "Columns", "subTestFit", "")
+    DeleteSetting APP_NAME, "Columns", "subTestFit"
+    SetGridColumns sf, "fit", DefaultLayout(3)
+    ResizeGridColumn sf, "fit", 0, px(40)
+    Set grid = sf.Form
     SetGridColumns sf, "fit", DefaultLayout(3)
     RestoreGridColumns sf, "fit"
     Set grid = sf.Form
