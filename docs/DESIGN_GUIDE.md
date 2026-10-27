@@ -159,7 +159,7 @@ them, and the shell (`frmMain`) last.
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
 | modGridCols (kit) | Column chooser: `ChooseGridColumns`, `RestoreGridColumns`, `SetGridColumns`, and `BuildColumnsDialog` for `dlgColumns` |
 | modGridFilter (kit) | Header filters: `GridFilter`, `SetGridFilter`, `SetColumnFilter`, `ClearGridFilters`, `GridFilterWhere`, and `BuildFilterDialog` for `dlgFilter` |
-| modKitHelp (kit) | In-app help: `LoadHelpTopics` (help.txt into `zz_help`), `BuildHelpDialog`, `BuildHelpKey` (F1), `KitHelp` (the topic for what is on screen, search) |
+| modKitHelp (kit) | In-app help: `LoadHelpTopics` (help.txt into `zz_help`), `BuildHelpDialog`, `BuildHelpKey` (F1), `KitHelp` (the topic for what is on screen, search), and help the admin edits in the app (`KitHelpSync`, `KitHelpSave`, `HelpSharedTableSql`) |
 | modTrust (kit) | `BuildTrustCheck` startup, `TrustNeeded`, `InTrustedLocation`, `ShowTrustHelp` (the `dlgTrust` page on trusting the folder) |
 | modKitUtil (kit) | `FileExists`, `FolderExists`, `EnsureFolder`, `IsFormOpen`, `RunDialog`, `CenterOnApp`, `SetVisible`, `SetEnabled` |
 | modBackdrop (kit) | `DimApp`, `UndimApp`: the dimmed backdrop behind modal dialogs |
