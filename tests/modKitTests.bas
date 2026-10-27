@@ -813,10 +813,19 @@ Public Function TestKit(ByVal root As String) As String
     Check Not ParseLayout("0,0,1", 3, order, shown), "Repeated column accepted"
     Check Not ParseLayout("0,1", 3, order, shown), "Short column layout accepted"
     Check Not ParseLayout("0h,1h,2h", 3, order, shown), "Layout with no shown column accepted"
+    ' Column widths in a layout (":<px>").
+    Dim lw As Variant, w0 As Long, right0 As Long
+    Check ParseLayout("2:120,0,1h:80", 3, order, shown), "Layout with widths rejected"
+    Check order(0) = 2 And Not shown(2), "Layout with widths parsed wrongly"
+    Check Not ParseLayout("0:abc,1,2", 3, order, shown), "Layout with a bad width accepted"
+    Check Not ParseLayout("0:5,1,2", 3, order, shown), "Layout with a too narrow width accepted"
+    lw = LayoutWidths("2:120,0,1h:80", 3)
+    Check lw(2) = 120 And lw(0) = 0 And lw(1) = 80, "Layout widths read wrongly"
+    Check StripWidths("2:120,0,1h:80") = "2,0,1h", "Widths not taken out of a layout"
     cols = Array("category|Category|160|", "description|Description|200|", "id|Id|80|r")
     BuildGrid "subTestFit", cols, px(600), fit:=True
     NewForm "", 0, px(700), px(300)
-    GridHeaders "fit", cols, px(24), px(20)
+    GridHeaders "fit", cols, px(24), px(20), fit:=True, resizeSf:="sfFit"
     SubF "sfFit", "Form.subTestFit", px(24), px(42), px(600), px(180)
     SaveForm "frmTestFit", "testHost"
     DoCmd.OpenForm "frmTestFit"
@@ -845,6 +854,33 @@ Public Function TestKit(ByVal root As String) As String
     SetGridColumns sf, "fit", DefaultLayout(3)
     Check grid.txtCol0.Left < grid.txtCol1.Left And grid.txtCol1.Left < grid.txtCol2.Left, "Default layout lost design order"
     Check grid.txtCol1.Visible And host.fit1.Visible, "Default layout left a column hidden"
+    ' Width grips: one after each caption, following its column; a drag
+    ' (ResizeGridColumn) widens the column from its right-hand neighbours,
+    ' is saved, and Reset widths puts the design back.
+    On Error Resume Next
+    DeleteSetting APP_NAME, "Columns", "subTestFit"
+    On Error GoTo 0
+    Check Abs(host.fitSize0.Left - (sf.Left + grid.txtCol0.Left + grid.txtCol0.Width)) <= px(2), "Width grip not after its column"
+    w0 = grid.txtCol0.Width
+    right0 = grid.txtCol2.Left + grid.txtCol2.Width
+    ResizeGridColumn sf, "fit", 0, px(40)
+    Set grid = sf.Form
+    Check Abs(grid.txtCol0.Width - (w0 + px(40))) <= px(2), "A dragged column didn't take the dragged width"
+    Check Abs(grid.txtCol2.Left + grid.txtCol2.Width - right0) <= px(2), "Widening a column moved the table's right edge"
+    Check Abs(host.fitSize0.Left - (sf.Left + grid.txtCol0.Left + grid.txtCol0.Width)) <= px(2), "Width grip didn't follow its column"
+    Check InStr(GetSetting(APP_NAME, "Columns", "subTestFit", ""), ":") > 0, "Column widths weren't saved"
+    Check GridHasWidths(sf), "GridHasWidths missed the saved widths"
+    SetGridColumns sf, "fit", DefaultLayout(3)
+    RestoreGridColumns sf, "fit"
+    Set grid = sf.Form
+    Check Abs(grid.txtCol0.Width - (w0 + px(40))) <= px(2), "Saved column widths weren't put back"
+    ResetGridWidths sf, "fit"
+    Set grid = sf.Form
+    Check Abs(grid.txtCol0.Width - w0) <= px(2), "Reset widths didn't put the design width back"
+    Check Not GridHasWidths(sf), "Reset widths left widths saved"
+    On Error Resume Next
+    DeleteSetting APP_NAME, "Columns", "subTestFit"
+    On Error GoTo 0
     DoCmd.Close acForm, "frmTestFit", acSaveNo
     ' Header filters (modGridFilter): funnels, value lists, and filters kept
     ' alongside the page's filter, sorting and the column chooser.

@@ -274,7 +274,7 @@ Private Sub Build_pgTables()
     Set c = Cbo("cboCategory", "", "(All categories);Engineering;Weapons;Supply;Navigation;Medical", x + px(240), y, px(170), px(28))
     Ev c, "AfterUpdate"
     y = px(170)
-    GridHeaders "hdrOpt", OptionCols(), CX, y, "", True, CW(), "sfOptions", "sfOptions", "HeaderFiltered", True
+    GridHeaders "hdrOpt", OptionCols(), CX, y, "", True, CW(), "sfOptions", "sfOptions", "HeaderFiltered", True, "sfOptions"
     Set c = SubF("sfOptions", "subGridOptions", CX, y + px(22), CW(), PAGE_H - y - px(38)): Anchor c, 2, 2
     GridHeaders "hdrPlain", PlainCols(), CX, y, w:=CW(), sortSf:="sfPlain"
     Set c = SubF("sfPlain", "subGridPlain", CX, y + px(22), CW(), PAGE_H - y - px(38)): Anchor c, 2, 2
