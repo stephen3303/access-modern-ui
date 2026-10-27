@@ -963,6 +963,29 @@ Public Function TestKit(ByVal root As String) As String
     WriteTextFile helpPath, "=== start | Getting Started" & vbCrLf & "Intro." & vbCrLf & "=== detail | Detail" & vbCrLf & _
         "=== detail.roles | Roles" & vbCrLf & "Who can sign."
     LoadHelpTopics helpPath
+    ' Shared topics (KitHelpSync, KitHelpSave): seeded once from the help file, then the shared text wins.
+    On Error Resume Next: CurrentDb.TableDefs.Delete HELP_SHARED_TABLE: On Error GoTo 0
+    CurrentDb.Execute HelpSharedTableSql(), dbFailOnError
+    Check KitHelpSync() = 3 And DCount("*", HELP_SHARED_TABLE) = 3, "Shared help not seeded from the help file"
+    Check DLookup("updated_by", HELP_SHARED_TABLE, "topic_key='start'") = "help.txt", "Seeded help topic not marked as from the help file"
+    KitHelpSave "detail", "Detail", "Edited **text**."
+    Check DLookup("body", HELP_SHARED_TABLE, "topic_key='detail'") = "Edited **text**." And _
+        DLookup("search_text", HELP_TABLE, "topic_key='detail'") Like "Edited text.*", "Saved help topic not in both tables"
+    Check DLookup("updated_by", HELP_SHARED_TABLE, "topic_key='detail'") = KitUser(), "Saved help topic not stamped"
+    LoadHelpTopics helpPath
+    Check KitHelpSync() = 0 And DLookup("body", HELP_TABLE, "topic_key='detail'") = "Edited **text**.", "Start-up sync replaced an edited topic"
+    CurrentDb.Execute "DELETE FROM " & HELP_SHARED_TABLE & " WHERE topic_key='detail.roles'", dbFailOnError
+    LoadHelpTopics helpPath
+    Check KitHelpSync() = 1 And DCount("*", HELP_TABLE) = 3, "A topic missing from the shared table not added back"
+    KitHelpSave "extra", "Extra", "New."
+    Check DLookup("sort_order", HELP_TABLE, "topic_key='extra'") = 4 And DCount("*", HELP_SHARED_TABLE) = 4, "New help topic not added after the last"
+    KitHelpSave "detail.more", "More", "Under detail."
+    Check DLookup("sort_order", HELP_SHARED_TABLE, "topic_key='detail.more'") = 4 And _
+        DLookup("sort_order", HELP_TABLE, "topic_key='extra'") = 5, "New subtopic not placed after its parent's last subtopic"
+    helpErr = 0: On Error Resume Next: KitHelpSave "", "No key", "x": helpErr = Err.Number: On Error GoTo 0
+    Check helpErr = 5, "Help topic with no key saved"
+    CurrentDb.TableDefs.Delete HELP_SHARED_TABLE
+    LoadHelpTopics helpPath
     Kill helpPath
     BuildHelpDialog
     DoCmd.OpenForm "dlgHelp", OpenArgs:="detail"
