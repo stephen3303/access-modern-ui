@@ -157,7 +157,7 @@ them, and the shell (`frmMain`) last.
 | modUIKit (kit) | Build-time control builders (section 6) |
 | modKitUI (kit) | Run-time page helpers: `GridFit`, `GridSort`, `SelectFirstRow`, `ShowDetail`, `ClearDetail`, `PickDate`, `MarkDate`, `FederalHoliday`, `ToggleSwitch`, `ToggleFocus`, `SegmentClick`, `SetSegment`, `SegmentValue`, `ShowAlert`, `HideAlert`, `SetBreadcrumb`, `CrumbClick`, `SetStep`, `CurrentStep`, `OpenSection`, `SectionOpen`, `ShowEmpty`, `SearchText`, `SetSearch`, `SetRating`, `RatingValue`, `SetSlider`, `SliderValue`, `KitPopover`, `ToggleSecret`, `HideSecrets`, `KitMsgBox`, `KitToast`, `KitInputBox`, `CheckRequired`, `SetCount`, `StyleChip` |
 | modGridOut (kit) | `PrintGrid`, `ExportGrid`: a table as the user sees it, to paper, CSV or Excel |
-| modGridCols (kit) | Column chooser: `ChooseGridColumns`, `RestoreGridColumns`, `SetGridColumns`, and `BuildColumnsDialog` for `dlgColumns` |
+| modGridCols (kit) | Column chooser and widths: `ChooseGridColumns`, `RestoreGridColumns`, `SetGridColumns`, `GridColumnsMenu`, `ResetGridWidths`, `ResizeGridColumn`, the grips' `GridSizeDown`, and `BuildColumnsDialog` for `dlgColumns` |
 | modGridFilter (kit) | Header filters: `GridFilter`, `SetGridFilter`, `SetColumnFilter`, `ClearGridFilters`, `GridFilterWhere`, and `BuildFilterDialog` for `dlgFilter` |
 | modKitHelp (kit) | In-app help: `LoadHelpTopics` (help.txt into `zz_help`), `BuildHelpDialog`, `BuildHelpKey` (F1), `KitHelp` (the topic for what is on screen, search), and help the admin edits in the app (`KitHelpSync`, `KitHelpSave`, `HelpSharedTableSql`) |
 | modTrust (kit) | `BuildTrustCheck` startup, `TrustNeeded`, `InTrustedLocation`, `ShowTrustHelp` (the `dlgTrust` page on trusting the folder) |
@@ -590,6 +590,17 @@ End Sub
       shows every caption (such as a tab switch calling `SetVisible` on them). A saved
       layout that no longer matches the table's columns (a rebuild added or removed
       one) is ignored.
+    - Column widths: pass the table's subform control as `GridHeaders ..., resizeSf` and
+      a thin divider sits in the gap after each caption. Dragging it changes that
+      column's width; the shown columns to its right give up the difference, so the
+      table's right edge stays. The pointer shows the left-right arrows over a divider.
+      Widths are saved with the column layout (`"2:180,0,1h:96"`, in design px) and put
+      back by `RestoreGridColumns`. `GridFit` scales them like design widths, and below
+      them when the window is too narrow, so they never overflow the table: the
+      captions sit on the host, which can't scroll sideways with the rows.
+    - With widths, the Columns button calls `GridColumnsMenu Me.btnColumns, Me.sfList,
+      "hdrList"`: **Choose columns…** opens the chooser (widths stay) and **Reset
+      widths** (shown once a width changed) puts the design widths back.
     - Build `dlgColumns` with `BuildColumnsDialog` alongside the app's other dialogs.
   - `PrintGrid gridForm, title, [subtitle]` and `ExportGrid gridForm, path` (modGridOut)
     print or export a table as the user sees it: its visible columns with their

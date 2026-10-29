@@ -1718,11 +1718,15 @@ End Sub
 ' stops short of it. After the user changes a filter, the form's Public Sub
 ' onFilter (if given) is called with the subform control's name. Each funnel,
 ' prefix & "Filter" & i, has the Tag "x|offset|width|field|sort field|onFilter".
+' resizeSf (a fit table's subform control, on the same form) puts a grip in
+' the gap after each caption, prefix & "Size" & i (Tag "x|offset|width" as
+' the caption's): dragging it changes the column's width, which is kept per
+' Windows user (modGridCols GridSizeDown).
 Public Sub GridHeaders(ByVal prefix As String, ByVal cols As Variant, ByVal x As Long, ByVal y As Long, _
                        Optional ByVal parentCtl As String = "", Optional ByVal band As Boolean = False, _
                        Optional ByVal w As Long = 0, Optional ByVal sortSf As String = "", _
                        Optional ByVal filterSf As String = "", Optional ByVal onFilter As String = "", _
-                       Optional ByVal fit As Boolean = False)
+                       Optional ByVal fit As Boolean = False, Optional ByVal resizeSf As String = "")
     Dim c As Control, i As Long, p() As String, cx As Long, cy As Long, cw As Long, opts As String, key As String
     Dim funnel As Boolean, srt As String, fill As Boolean
     ' The last column's cells stretch to the table's right edge (BuildGrid),
@@ -1783,6 +1787,17 @@ Public Sub GridHeaders(ByVal prefix As String, ByVal cols As Variant, ByVal x As
             srt = ""
             If UBound(p) >= 4 Then srt = p(4)
             c.Tag = x & "|" & (cx - x) & "|" & cw & "|" & p(0) & "|" & srt & "|" & onFilter
+        End If
+        If Len(resizeSf) > 0 And fit Then
+            ' A thin divider in the 8px gap after the caption (GridFit keeps it
+            ' there); its whole 8px box takes the drag.
+            Set c = Lbl(prefix & "Size" & i, ChrW(&H2502), cx + px(Val(p(2))) - px(8), cy, px(8), px(16), 8, False, _
+                CLR_BORDER, acDetail, parentCtl)
+            c.TextAlign = 2
+            c.ControlTipText = "Drag to change the column's width"
+            c.OnMouseDown = "=GridSizeDown([Form],""" & resizeSf & """,""" & prefix & """," & i & ")"
+            c.OnMouseMove = "=GridSizeHover()"
+            c.Tag = x & "|" & (cx - x) & "|" & (px(Val(p(2))) - px(8))
         End If
         cx = cx + px(Val(p(2)))
     Next

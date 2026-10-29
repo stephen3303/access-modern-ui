@@ -99,7 +99,9 @@ Public Sub GridFit(sf As Control, Optional ByVal prefix As String = "")
     avail = sf.Width
     If sf.HorizontalAnchor = 2 Then avail = avail + host.InsideWidth - host.Width
     ratio = (avail - SCROLL_W) / (design - SCROLL_W)
-    If ratio < 1 Then ratio = 1
+    ' Columns never get narrower than designed, unless the user set their
+    ' widths (modGridCols, Tag "...|u"): those shrink to fit rather than overflow.
+    If ratio < 1 And InStr(g.Tag, "|u") = 0 Then ratio = 1
     If design * ratio > MAX_FORM_W Then ratio = MAX_FORM_W / design
     newW = CLng(design * ratio)
     ' Access ignores g.Width = n on a form shown in a subform: the form only
@@ -197,7 +199,8 @@ Private Sub ShrinkHost(host As Form, ByVal prefix As String)
 End Sub
 
 ' Place caption prefix & i (GridHeaders, Tag "x|offset|width|...") over its
-' column scaled by ratio, with its filter funnel if it has one.
+' column scaled by ratio, with its filter funnel and its width grip (in the
+' 8px gap after it) if it has them.
 Private Sub PlaceCaption(host As Form, ByVal prefix As String, ByVal i As Long, ByVal ratio As Double)
     Dim t() As String, capX As Long, capW As Long
     If Len(prefix) = 0 Then Exit Sub
@@ -206,6 +209,7 @@ Private Sub PlaceCaption(host As Form, ByVal prefix As String, ByVal i As Long, 
     If UBound(t) < 2 Then Exit Sub
     capX = CLng(Val(t(0)) + Val(t(1)) * ratio)
     capW = CLng((Val(t(2)) + px(8)) * ratio) - px(8)
+    If HasCtl(host, prefix & "Size" & i) Then FitCtl host.Controls(prefix & "Size" & i), capX + capW, px(8)
     ' A filter funnel (GridHeaders filterSf) keeps the right end of the
     ' caption's space; the text stops short of it.
     If HasCtl(host, prefix & "Filter" & i) Then
