@@ -63,7 +63,9 @@ if (-not $OutFile) {
     $OutFile = Join-Path (Split-Path -Parent (Resolve-Path -LiteralPath $Path)) `
         ([IO.Path]::GetFileNameWithoutExtension($Path) + ' - linked.csv')
 }
-$keep = $headers | Where-Object { $_ -ne $upnCol -and $_ -ne $idCol -and (Get-Key $_) -notin @('windowsaccount', 'windowssid') }
+# Every UPN and DoD ID column goes, not just the one used: the DoD ID never leaves this script.
+$drop = @('userprincipalname', 'upn', 'dodid', 'edipi', 'dodidnumber', 'windowsaccount', 'windowssid')
+$keep = $headers | Where-Object { (Get-Key $_) -notin $drop }
 $missing = New-Object System.Collections.Generic.List[string]
 $n = 1
 $out = foreach ($r in $rows) {
