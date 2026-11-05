@@ -1434,7 +1434,7 @@ Public Function TestKit(ByVal root As String) As String
     Print #peFile, "Ann,Lee,,alee,"
     Close #peFile
     peMsg = PersonnelImport(root & "\people.csv", "TEST")
-    Check InStr(peMsg, "Added 1 person") > 0 And InStr(peMsg, "Skipped 2") > 0 And InStr(peMsg, "Row 4") > 0, "CSV import summary wrong: " & peMsg
+    Check InStr(peMsg, "Added 1 person") > 0 And InStr(peMsg, "1 already up to date") > 0 And InStr(peMsg, "Skipped 1") > 0 And InStr(peMsg, "Row 3") > 0, "CSV import summary wrong: " & peMsg
     Check PersonCanUse(PersonIdFor("bchen"), "TEST"), "Imported person can't open the app"
     CurrentDb.Execute "CREATE TABLE zz_pe_people (first_name TEXT(60), last_name TEXT(60), username TEXT(64))", dbFailOnError
     CurrentDb.Execute "INSERT INTO zz_pe_people VALUES ('Cy', 'Diaz', 'cdiaz')", dbFailOnError
@@ -1479,12 +1479,105 @@ Public Function TestKit(ByVal root As String) As String
     Set peFrm = Forms(PERSON_FORM)
     Check peFrm.txtUser = "alee" And peFrm.txtAccount = "TESTDOM\alee" And peFrm.txtMiddle = "B" And Not peFrm.lblUserHint.Visible, "Change person didn't show the person"
     DoCmd.Close acForm, PERSON_FORM, acSaveNo
+    TestPersonnelPeople root, peId, pe2
     TestMore
     PersonnelSignOut
     CurrentDb.TableDefs.Delete PERSON_TABLE: CurrentDb.TableDefs.Delete PERSON_APP_TABLE
     g_Silent = False
     TestKit = checks & " kit checks passed"
 End Function
+
+' Personnel import (Outlook headers, filling in, linking by Active Directory),
+' export, and admin password reset with a one-time password. Its own
+' procedure: TestKit is at VBA's procedure size limit. Starts and ends with
+' the admin (peId) signed in; pe2 is Ann Lee (alee). Synthetic people only.
+Private Sub TestPersonnelPeople(ByVal root As String, ByVal peId As Long, ByVal pe2 As Long)
+    Dim f As Integer, msg As String, acct As String, sid As String, tmp As String, n As Long, er As Long, txt As String
+    ' A UPN made from a DoD ID; Windows finds the account running the tests.
+    Check PersonnelUpnFor("1234567890") = "1234567890" & PERSONNEL_UPN_SUFFIX And PersonnelUpnFor("12345") = "" And _
+        PersonnelUpnFor("12345678ab") = "", "DoD ID not made into a UPN, or a bad one accepted"
+    Check PersonnelFindAccount(WinAccount(), acct, sid) And sid = WinSid() And StrComp(acct, WinAccount(), vbTextCompare) = 0, _
+        "Windows account not found by name: " & acct & " " & sid
+    Check Not PersonnelFindAccount("0000000000" & PERSONNEL_UPN_SUFFIX, acct, sid) And acct = "" And sid = "", "A made-up UPN was found"
+    ' An Outlook contacts export: its headers, a display name for the names, Mr. not taken as a rank.
+    f = FreeFile
+    Open root & "\outlook.csv" For Output As #f
+    Print #f, "Title,First Name,Middle Name,Last Name,Company,E-mail Address,E-mail Display Name"
+    Print #f, "Mr.,Dee,Edward,Fox,USS Test,dee.fox@test.mil,Dee Fox (dee.fox@test.mil)"
+    Print #f, ",,,,,gil.ho@test.mil,""HO, GIL K (USN)"""
+    Print #f, "LT,Ann,,Lee,USS Other,ann.lee@test.mil,"
+    Close #f
+    msg = PersonnelImport(root & "\outlook.csv", "TEST")
+    Check InStr(msg, "Added 2 people") > 0 And InStr(msg, "1 already up to date") > 0 And InStr(msg, "Skipped") = 0, "Outlook import summary wrong: " & msg
+    Check DLookup("middle_initial", PERSON_TABLE, "email='dee.fox@test.mil'") = "E" And IsNull(DLookup("rank", PERSON_TABLE, "email='dee.fox@test.mil'")) And _
+        DLookup("command", PERSON_TABLE, "email='dee.fox@test.mil'") = "USS Test", "Outlook columns not read"
+    Check DLookup("first_name", PERSON_TABLE, "email='gil.ho@test.mil'") = "GIL" And DLookup("last_name", PERSON_TABLE, "email='gil.ho@test.mil'") = "HO" And _
+        DLookup("middle_initial", PERSON_TABLE, "email='gil.ho@test.mil'") = "K", "Names not taken from the display name"
+    Check DLookup("command", PERSON_TABLE, "person_id=" & pe2) = "USS Test" And DLookup("rank", PERSON_TABLE, "person_id=" & pe2) = "YN1" And _
+        Not PersonCanUse(pe2, "TEST"), "Import changed what a person already had, or their app access"
+    ' Fill in what someone is missing.
+    f = FreeFile
+    Open root & "\fill.csv" For Output As #f
+    Print #f, "First name,Last name,Sign-in name,Command"
+    Print #f, "Bo,Chen,bchen,USS Fill"
+    Close #f
+    msg = PersonnelImport(root & "\fill.csv", "TEST")
+    Check InStr(msg, "Filled in details for 1") > 0 And DLookup("command", PERSON_TABLE, "username='bchen'") = "USS Fill", "Import didn't fill in a blank: " & msg
+    ' Link by the UPN column (here the test account's own DOMAIN\user), and a DoD ID nobody has.
+    CurrentDb.Execute "UPDATE " & PERSON_TABLE & " SET windows_sid=Null WHERE person_id=" & peId, dbFailOnError
+    f = FreeFile
+    Open root & "\link.csv" For Output As #f
+    Print #f, "First name,Last name,UPN,DoD ID"
+    Print #f, "Pat,O'Neil," & WinAccount() & ","
+    Print #f, "Zed,Zulu,,0000000000"
+    Close #f
+    msg = PersonnelImport(root & "\link.csv", "TEST")
+    Check DLookup("windows_sid", PERSON_TABLE, "person_id=" & peId) = WinSid() And InStr(msg, "Linked 1") > 0, "Import didn't link the SID: " & msg
+    Check InStr(msg, "Not found in Active Directory") > 0 And InStr(msg, "Row 3") > 0 And DCount("*", PERSON_TABLE, "last_name='Zulu'") = 1, _
+        "A DoD ID not found wasn't reported, or its person not added: " & msg
+    ' Export everyone, with no password data, and import it back with nothing added.
+    n = PersonnelExport(root & "\export.csv")
+    txt = ReadTextFile(root & "\export.csv")
+    Check n = DCount("*", PERSON_TABLE) And InStr(txt, "Windows SID") > 0 And InStr(txt, WinSid()) > 0 And InStr(txt, "sha256") = 0, "Export wrong"
+    msg = PersonnelImport(root & "\export.csv", "TEST")
+    Check InStr(msg, "Added 0 people") > 0 And InStr(msg, "Skipped") = 0, "Export didn't import back cleanly: " & msg
+    ' Admin reset: a one-time password, then the person chooses their own.
+    er = 0: On Error Resume Next: PersonnelResetPassword peId: er = Err.Number: On Error GoTo 0
+    Check er = 5, "An admin reset their own password"
+    tmp = PersonnelResetPassword(pe2)
+    Check Len(tmp) = 12 And PersonnelPasswordIsTemporary(pe2) And PersonnelHasPassword(pe2), "Reset gave no one-time password"
+    SetPersonApp pe2, "TEST", True
+    PersonnelSignOut
+    er = 0: On Error Resume Next: PersonnelResetPassword pe2: er = Err.Number: On Error GoTo 0
+    Check er = 5, "A password reset with no admin signed in"
+    Check PersonnelSignIn("alee", "long enough 1", "TEST") <> "", "The old password still works after a reset"
+    Check PersonnelSignIn("alee", tmp, "TEST") = "" And SignedInPersonID() = pe2, "The one-time password didn't sign in"
+    Check PersonnelChangePassword(pe2, tmp, tmp) <> "" And PersonnelChangePassword(pe2, "wrong one", "new pass 22") <> "", "Same or wrong-current password accepted"
+    Check PersonnelChangePassword(pe2, tmp, "new pass 22") = "" And Not PersonnelPasswordIsTemporary(pe2), "Own password not saved, or still one-time"
+    PersonnelSignOut
+    Check PersonnelSignIn("alee", "new pass 22", "TEST") = "" And SignedInPersonID() = pe2, "New password doesn't sign in"
+    PersonnelSignOut
+    Check PersonnelSignIn("alee", tmp, "TEST") <> "", "The one-time password still works"
+    Check PersonnelSetPassword(pe2, "typed pass 1", True) = "" And PersonnelPasswordIsTemporary(pe2) And PersonnelSignIn("alee", "typed pass 1", "TEST") = "", _
+        "An admin-typed password isn't one-time, or doesn't sign in"
+    PersonnelSignOut
+    SetPersonApp pe2, "TEST", False
+    Check PersonnelSignInWindows("TEST", True) And SignedInPersonID() = peId, "Admin not signed back in after the password checks"
+    ' The screens: Export on the Personnel page; Reset password only for someone else.
+    DoCmd.OpenForm PERSONNEL_FORM
+    Check Forms(PERSONNEL_FORM).btnExport.Visible, "Personnel page has no Export"
+    DoCmd.Close acForm, PERSONNEL_FORM, acSaveNo
+    DoCmd.OpenForm PERSON_FORM, , , , , , "new"
+    Check Not Forms(PERSON_FORM).btnResetPwd.Visible, "Reset password shown while adding"
+    DoCmd.Close acForm, PERSON_FORM, acSaveNo
+    DoCmd.OpenForm PERSON_FORM, , , , , , CStr(pe2)
+    Check Forms(PERSON_FORM).btnResetPwd.Visible, "Reset password missing for someone else"
+    DoCmd.Close acForm, PERSON_FORM, acSaveNo
+    DoCmd.OpenForm PERSON_FORM, , , , , , CStr(peId)
+    Check Not Forms(PERSON_FORM).btnResetPwd.Visible, "Reset password shown for the admin's own record"
+    DoCmd.Close acForm, PERSON_FORM, acSaveNo
+    Kill root & "\outlook.csv": Kill root & "\fill.csv": Kill root & "\link.csv": Kill root & "\export.csv"
+End Sub
 
 ' Dropdown menu (KitMenu, KitMenuAt). Its own procedure: TestKit is at VBA's
 ' procedure size limit.
