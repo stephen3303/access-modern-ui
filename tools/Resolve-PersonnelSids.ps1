@@ -13,10 +13,13 @@
     (<DoD ID>.A@smil.mil by default), and asks Active Directory for that
     user: Get-ADUser when the ActiveDirectory module (RSAT) is installed,
     otherwise Windows' own name lookup, which needs no RSAT. It writes the
-    rows to -OutFile with "Windows account" (DOMAIN\user) and "Windows SID"
-    filled in and the UPN and DoD ID columns left out, so the DoD ID never
-    reaches the Personnel file. Rows it can't find are listed at the end and
-    written with the two columns blank.
+    rows to -OutFile with "Windows account" (DOMAIN\user), "Windows SID" and
+    one "User principal name" column filled in, and the DoD ID and EDIPI
+    columns left out. Import keeps the UPN with the person (kit_person_upn,
+    which only Personnel admins can read) so the account can be found again.
+    The UPN holds the DoD ID: treat the output file as you would the input.
+    Rows it can't find are listed at the end and written with the account
+    and SID blank.
 
 .PARAMETER Path
     The people list: a CSV, such as an Outlook contacts export with a DoD ID
@@ -63,7 +66,7 @@ if (-not $OutFile) {
     $OutFile = Join-Path (Split-Path -Parent (Resolve-Path -LiteralPath $Path)) `
         ([IO.Path]::GetFileNameWithoutExtension($Path) + ' - linked.csv')
 }
-# Every UPN and DoD ID column goes, not just the one used: the DoD ID never leaves this script.
+# Every UPN and DoD ID column goes, not just the one used; one "User principal name" column replaces them.
 $drop = @('userprincipalname', 'upn', 'dodid', 'edipi', 'dodidnumber', 'windowsaccount', 'windowssid')
 $keep = $headers | Where-Object { (Get-Key $_) -notin $drop }
 $missing = New-Object System.Collections.Generic.List[string]
@@ -92,6 +95,7 @@ $out = foreach ($r in $rows) {
     if (-not $sid) { $missing.Add("Row $n") }
     $o = [ordered]@{}
     foreach ($h in $keep) { $o[$h] = $r.$h }
+    $o['User principal name'] = $upn
     $o['Windows account'] = $account
     $o['Windows SID'] = $sid
     [pscustomobject] $o

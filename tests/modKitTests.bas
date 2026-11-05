@@ -1493,6 +1493,7 @@ End Function
 ' the admin (peId) signed in; pe2 is Ann Lee (alee). Synthetic people only.
 Private Sub TestPersonnelPeople(ByVal root As String, ByVal peId As Long, ByVal pe2 As Long)
     Dim f As Integer, msg As String, acct As String, sid As String, tmp As String, n As Long, er As Long, txt As String
+    Dim zId As Long
     ' A UPN made from a DoD ID; Windows finds the account running the tests.
     Check PersonnelUpnFor("1234567890") = "1234567890" & PERSONNEL_UPN_SUFFIX And PersonnelUpnFor("12345") = "" And _
         PersonnelUpnFor("12345678ab") = "", "DoD ID not made into a UPN, or a bad one accepted"
@@ -1535,10 +1536,34 @@ Private Sub TestPersonnelPeople(ByVal root As String, ByVal peId As Long, ByVal 
     Check DLookup("windows_sid", PERSON_TABLE, "person_id=" & peId) = WinSid() And InStr(msg, "Linked 1") > 0, "Import didn't link the SID: " & msg
     Check InStr(msg, "Not found in Active Directory") > 0 And InStr(msg, "Row 3") > 0 And DCount("*", PERSON_TABLE, "last_name='Zulu'") = 1, _
         "A DoD ID not found wasn't reported, or its person not added: " & msg
+    ' The UPN is kept, for admins only, in a table no front end links; a DOMAIN\user in the column isn't.
+    zId = Nz(DLookup("person_id", PERSON_TABLE, "last_name='Zulu'"), 0)
+    Check PersonnelUpn(zId) = "0000000000" & PERSONNEL_UPN_SUFFIX And PersonnelUpn(peId) = "", _
+        "The UPN wasn't kept, or a DOMAIN\user was kept as one"
+    er = 0: On Error Resume Next: n = Len(CurrentDb.TableDefs(PERSON_UPN_TABLE).Name): er = Err.Number: On Error GoTo 0
+    Check er <> 0, "The UPN table is linked into the front end"
+    Check UBound(PersonnelDataTables()) = 2, "Emptying Personnel would leave the UPN table"
+    ' A row with only the same DoD ID is the same person.
+    f = FreeFile
+    Open root & "\upn.csv" For Output As #f
+    Print #f, "First name,Last name,EDIPI"
+    Print #f, "Zed,Zulu-Two,0000000000"
+    Close #f
+    msg = PersonnelImport(root & "\upn.csv", "TEST")
+    Check InStr(msg, "Added 0 people") > 0 And DCount("*", PERSON_TABLE, "last_name='Zulu-Two'") = 0, _
+        "The saved UPN didn't find its person: " & msg
+    ' Set by an admin: a DoD ID becomes its UPN; a bad one, or someone else's, is refused.
+    Check PersonnelSetUpn(pe2, "not a upn") <> "" And PersonnelSetUpn(pe2, "0000000000") <> "", "A bad or someone else's UPN was saved"
+    Check PersonnelSetUpn(pe2, "1111111111") = "" And PersonnelUpn(pe2) = "1111111111" & PERSONNEL_UPN_SUFFIX, "A DoD ID wasn't saved as its UPN"
+    Check PersonnelSetUpn(pe2, "") = "" And PersonnelUpn(pe2) = "", "The UPN wasn't removed"
+    er = 0: On Error Resume Next: PersonnelSetUpn 999999, "2222222222": er = Err.Number: On Error GoTo 0
+    Check er = 5, "A UPN was saved for a person who isn't in Personnel"
+    Check Not PersonnelLinkFromUpn(zId), "A UPN nobody has linked a Windows account"
     ' Export everyone, with no password data, and import it back with nothing added.
     n = PersonnelExport(root & "\export.csv")
     txt = ReadTextFile(root & "\export.csv")
     Check n = DCount("*", PERSON_TABLE) And InStr(txt, "Windows SID") > 0 And InStr(txt, WinSid()) > 0 And InStr(txt, "sha256") = 0, "Export wrong"
+    Check InStr(txt, PERSONNEL_UPN_SUFFIX) = 0 And InStr(txt, "0000000000") = 0 And InStr(txt, "principal") = 0, "Export has the UPN"
     msg = PersonnelImport(root & "\export.csv", "TEST")
     Check InStr(msg, "Added 0 people") > 0 And InStr(msg, "Skipped") = 0, "Export didn't import back cleanly: " & msg
     ' Admin reset: a one-time password, then the person chooses their own.
@@ -1550,6 +1575,8 @@ Private Sub TestPersonnelPeople(ByVal root As String, ByVal peId As Long, ByVal 
     PersonnelSignOut
     er = 0: On Error Resume Next: PersonnelResetPassword pe2: er = Err.Number: On Error GoTo 0
     Check er = 5, "A password reset with no admin signed in"
+    er = 0: On Error Resume Next: txt = PersonnelUpn(zId): er = Err.Number: On Error GoTo 0
+    Check er = 5, "A UPN was read with no admin signed in"
     Check PersonnelSignIn("alee", "long enough 1", "TEST") <> "", "The old password still works after a reset"
     Check PersonnelSignIn("alee", tmp, "TEST") = "" And SignedInPersonID() = pe2, "The one-time password didn't sign in"
     Check PersonnelChangePassword(pe2, tmp, tmp) <> "" And PersonnelChangePassword(pe2, "wrong one", "new pass 22") <> "", "Same or wrong-current password accepted"
@@ -1576,7 +1603,14 @@ Private Sub TestPersonnelPeople(ByVal root As String, ByVal peId As Long, ByVal 
     DoCmd.OpenForm PERSON_FORM, , , , , , CStr(peId)
     Check Not Forms(PERSON_FORM).btnResetPwd.Visible, "Reset password shown for the admin's own record"
     DoCmd.Close acForm, PERSON_FORM, acSaveNo
+    DoCmd.OpenForm PERSON_FORM, , , , , , CStr(zId)
+    Check Forms(PERSON_FORM).txtUpn = "0000000000" & PERSONNEL_UPN_SUFFIX, "The Person form doesn't show the UPN"
+    With Forms(PERSON_FORM)
+        Check .lblUpn.Top - (.txtUser.Top + .txtUser.Height) = Sp(SP_ROW_GAP), "Change person has a gap above the UPN row"
+    End With
+    DoCmd.Close acForm, PERSON_FORM, acSaveNo
     Kill root & "\outlook.csv": Kill root & "\fill.csv": Kill root & "\link.csv": Kill root & "\export.csv"
+    Kill root & "\upn.csv"
 End Sub
 
 ' Dropdown menu (KitMenu, KitMenuAt). Its own procedure: TestKit is at VBA's
