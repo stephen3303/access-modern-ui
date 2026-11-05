@@ -1556,6 +1556,8 @@ Private Sub TestPersonnelPeople(ByVal root As String, ByVal peId As Long, ByVal 
     Check PersonnelSetUpn(pe2, "not a upn") <> "" And PersonnelSetUpn(pe2, "0000000000") <> "", "A bad or someone else's UPN was saved"
     Check PersonnelSetUpn(pe2, "1111111111") = "" And PersonnelUpn(pe2) = "1111111111" & PERSONNEL_UPN_SUFFIX, "A DoD ID wasn't saved as its UPN"
     Check PersonnelSetUpn(pe2, "") = "" And PersonnelUpn(pe2) = "", "The UPN wasn't removed"
+    er = 0: On Error Resume Next: PersonnelSetUpn 999999, "2222222222": er = Err.Number: On Error GoTo 0
+    Check er = 5, "A UPN was saved for a person who isn't in Personnel"
     Check Not PersonnelLinkFromUpn(zId), "A UPN nobody has linked a Windows account"
     ' Export everyone, with no password data, and import it back with nothing added.
     n = PersonnelExport(root & "\export.csv")
@@ -1603,6 +1605,9 @@ Private Sub TestPersonnelPeople(ByVal root As String, ByVal peId As Long, ByVal 
     DoCmd.Close acForm, PERSON_FORM, acSaveNo
     DoCmd.OpenForm PERSON_FORM, , , , , , CStr(zId)
     Check Forms(PERSON_FORM).txtUpn = "0000000000" & PERSONNEL_UPN_SUFFIX, "The Person form doesn't show the UPN"
+    With Forms(PERSON_FORM)
+        Check .lblUpn.Top - (.txtUser.Top + .txtUser.Height) = Sp(SP_ROW_GAP), "Change person has a gap above the UPN row"
+    End With
     DoCmd.Close acForm, PERSON_FORM, acSaveNo
     Kill root & "\outlook.csv": Kill root & "\fill.csv": Kill root & "\link.csv": Kill root & "\export.csv"
     Kill root & "\upn.csv"
