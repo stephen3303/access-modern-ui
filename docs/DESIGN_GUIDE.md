@@ -34,7 +34,10 @@ app that shows every builder working.
 - **One Personnel directory for every app.** People live once, in a shared, encrypted
   `Personnel_be.accdb` in its own restricted folder (`modPersonnel`), never in an app's data
   file. Apps link to it, sign the Windows user in with no questions, and keep only their own
-  roles, linked by `person_id`. No SSN or DoD ID.
+  roles, linked by `person_id`. No SSN. The one exception for the DoD ID: a person's user
+  principal name (`<DoD ID>.A@smil.mil`) is kept in `kit_person_upn` so their Windows account
+  can be found again. That table is never linked into a front end; only an active Personnel
+  admin reads or writes it, and it is never exported or written to a log.
   `KitPersonnelStart` at startup finds or sets up the file and signs the user in;
   `KitPersonnelSignOut` behind the Sign out button shows the sign-in screen for the next person,
   and `KitPersonnelManage` opens the Personnel page for admins. Each site's Personnel file is
