@@ -1453,7 +1453,7 @@ Public Function TestKit(ByVal root As String) As String
     BuildPersonnelDialogs
     DoCmd.OpenForm SETUP_FORM
     Set peFrm = Forms(SETUP_FORM)
-    Check peFrm.btnFind.Visible And peFrm.btnCreate.Visible And Not peFrm.txtFirst.Visible And Not peFrm.txtAsk.Visible, "Setup did not open on its choices"
+    Check peFrm.btnFind.Visible And peFrm.btnCreate.Visible And peFrm.btnDemo.Visible And Not peFrm.txtFirst.Visible And Not peFrm.txtAsk.Visible And Not peFrm.btnDemoGo.Visible, "Setup did not open on its choices"
     peLow = 0
     For Each peCtl In peFrm.Controls
         If peCtl.Visible And peCtl.Top + peCtl.Height > peLow Then peLow = peCtl.Top + peCtl.Height
@@ -1611,6 +1611,54 @@ Private Sub TestPersonnelPeople(ByVal root As String, ByVal peId As Long, ByVal 
     DoCmd.Close acForm, PERSON_FORM, acSaveNo
     Kill root & "\outlook.csv": Kill root & "\fill.csv": Kill root & "\link.csv": Kill root & "\export.csv"
     Kill root & "\upn.csv"
+    TestPersonnelDemo root
+End Sub
+
+' Demo Personnel (CreateDemoPersonnelFile): the made-up people, all with the
+' demo password, hashed and salted one by one. Unlinks the tests' Personnel
+' file for its own and links it back, with the admin signed in again.
+Private Sub TestPersonnelDemo(ByVal root As String)
+    Dim realPath As String, dPath As String, er As Long, id As Long, rs As DAO.Recordset, hashes As Object
+    realPath = PersonnelPath()
+    dPath = root & "\pedemo\" & PERSONNEL_FILE
+    On Error Resume Next                        ' left by an earlier run
+    Kill dPath: Kill PersonnelKeyPath(dPath)
+    On Error GoTo 0
+    PersonnelSignOut
+    CurrentDb.TableDefs.Delete PERSON_TABLE: CurrentDb.TableDefs.Delete PERSON_APP_TABLE
+    id = CreateDemoPersonnelFile(dPath, "TEST")
+    Check PersonnelPath() = dPath And FileExists(PersonnelKeyPath(dPath)) And InStr(CurrentDb.TableDefs(PERSON_TABLE).Connect, ";PWD=") > 0, _
+        "Demo Personnel file not made, keyed or linked"
+    Check DCount("*", PERSON_TABLE, "is_active") = DEMO_PEOPLE And DCount("*", PERSON_TABLE) = DEMO_PEOPLE And _
+        DCount("*", PERSON_APP_TABLE, "is_active AND app_code='TEST'") = DEMO_PEOPLE, "Demo people not all added with access"
+    Check DCount("*", PERSON_TABLE, "is_admin") = 2 And DLookup("username", PERSON_TABLE, "person_id=" & id) = DEMO_ADMIN_USER And _
+        DLookup("is_admin", PERSON_TABLE, "person_id=" & id), "Demo admins wrong"
+    Check DCount("*", PERSON_TABLE, "command='" & DEMO_COMMAND & "' AND email Like '*@demo.invalid'") = DEMO_PEOPLE And _
+        DCount("*", PERSON_TABLE, "windows_account Is Not Null Or windows_sid Is Not Null") = 0, "Demo people not marked demo, or tied to Windows"
+    Set hashes = CreateObject("Scripting.Dictionary")
+    Set rs = CurrentDb.OpenRecordset("SELECT password_hash FROM " & PERSON_TABLE, dbOpenSnapshot)
+    Do While Not rs.EOF
+        If InStr(Nz(rs!password_hash, DEMO_PASSWORD), DEMO_PASSWORD) = 0 And Left$(rs!password_hash, 1) <> "!" Then hashes(CStr(rs!password_hash)) = True
+        rs.MoveNext
+    Loop
+    rs.Close
+    Check hashes.Count = DEMO_PEOPLE, "Demo passwords not hashed and salted one by one, or marked temporary"
+    Check Not PersonnelSignInWindows("TEST", True) And PersonnelWindowsWhy("TEST") = "notset", "The demo file signed the Windows user in"
+    Check PersonnelSignIn("demo05", DEMO_PASSWORD, "TEST") = "" And Not SignedInIsAdmin() And PersonnelSignIn("demo06", "wrong pass", "TEST") <> "", _
+        "Demo person's sign-in with the demo password wrong"
+    PersonnelSignOut
+    Check PersonnelSignIn(DEMO_ADMIN_USER, DEMO_PASSWORD, "TEST") = "" And PersonnelIsAdminNow(), "Demo admin couldn't sign in"
+    Check PersonnelUpn(id) = "0000000001" & PERSONNEL_UPN_SUFFIX And PersonnelUpn(PersonIdFor("demo20")) = "0000000020" & PERSONNEL_UPN_SUFFIX, _
+        "Demo DoD IDs not saved as UPNs"
+    Check InStr(PersonnelSignInWhyText("demo"), DEMO_PASSWORD) > 0 And InStr(PersonnelSignInWhyText("demo"), DEMO_ADMIN_USER) > 0, _
+        "Sign-in screen doesn't say how to sign in to the demo"
+    er = 0: On Error Resume Next: CreateDemoPersonnelFile root & "\pedemo2\" & PERSONNEL_FILE, "TEST": er = Err.Number: On Error GoTo 0
+    Check er = 5 And Not FileExists(root & "\pedemo2\" & PERSONNEL_FILE), "Demo file created while one is linked"
+    PersonnelSignOut
+    CurrentDb.TableDefs.Delete PERSON_TABLE: CurrentDb.TableDefs.Delete PERSON_APP_TABLE
+    Kill dPath: Kill PersonnelKeyPath(dPath)
+    LinkPersonnelFile realPath
+    Check PersonnelSignInWindows("TEST", True) And PersonnelIsAdminNow(), "Admin not signed back in after the demo checks"
 End Sub
 
 ' Dropdown menu (KitMenu, KitMenuAt). Its own procedure: TestKit is at VBA's
