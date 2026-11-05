@@ -349,8 +349,8 @@ Private Sub Build_dlgPersonnelSetup()
     Set c = Lbl("lblDemoBadge", "DEMO DATA", x, y, px(84), px(22), 9, True, CLR_WARNING_FG)
     c.BackStyle = 1: c.BackColor = CLR_WARNING_BG: c.TextAlign = 2: c.Tag = "demo"
     y = y + px(22) + gap
-    Lbl("lblDemoWhat", "", x, y, w, px(128)).Tag = "demo"
-    y = y + px(128) + gap
+    Lbl("lblDemoWhat", "", x, y, w, px(112)).Tag = "demo"
+    y = y + px(112) + gap
     Lbl("lblDemoNote", "Use it only on a demo or test copy, never for real people. To start over with real " & _
         "people, an admin deletes all data with the Personnel box ticked.", x, y, w, px(36), 9, False, CLR_MUTED_FG).Tag = "demo"
     y = y + px(36) + Sp(SP_DIALOG)
