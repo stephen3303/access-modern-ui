@@ -15,10 +15,42 @@ Option Explicit
 ' 0, then 3, and hides 1. A layout must name every column once and show at
 ' least one; anything else (say, saved before a rebuild added a column) is
 ' ignored and the table keeps its design.
+'
+' Widths: GridHeaders(..., resizeSf:=) puts a grip in the gap after each
+' caption, and dragging it (GridSizeDown) changes that column's width. The
+' widths go into the same layout, as ":<px>" after a column
+' ("2:180,0:96,1h,3:120"), in the table's design pixels; a column without one
+' keeps its design width. GridFit scales user widths like design ones, and
+' also below them when the window is too narrow, so they never overflow the
+' table (its captions sit on the host, which can't scroll sideways with the
+' rows). Widening a column takes the width from the shown columns to its
+' right, so the table's right edge stays. GridColumnsMenu offers the chooser
+' and Reset widths.
 
 Private Const SETTINGS_KEY As String = "Columns"
 ' Width GridFit leaves for the table's vertical scroll bar (modKitUI SCROLL_W).
 Private Const SCROLL_W As Long = 300
+' Narrowest a dragged column gets (px), and the widest width a layout keeps.
+Private Const MIN_COL_PX As Long = 40
+Private Const MAX_COL_PX As Long = 2000
+
+Private Type POINTAPI
+    x As Long
+    y As Long
+End Type
+
+Private Declare PtrSafe Function GetCursorPos Lib "user32" (lpPoint As POINTAPI) As Long
+Private Declare PtrSafe Function GetAsyncKeyState Lib "user32" (ByVal vKey As Long) As Integer
+Private Declare PtrSafe Function LoadCursor Lib "user32" Alias "LoadCursorW" (ByVal hInstance As LongPtr, ByVal lpCursorName As LongPtr) As LongPtr
+Private Declare PtrSafe Function SetCursor Lib "user32" (ByVal hCursor As LongPtr) As LongPtr
+Private Declare PtrSafe Function GetDC Lib "user32" (ByVal hWnd As LongPtr) As LongPtr
+Private Declare PtrSafe Function ReleaseDC Lib "user32" (ByVal hWnd As LongPtr, ByVal hdc As LongPtr) As Long
+Private Declare PtrSafe Function GetDeviceCaps Lib "gdi32" (ByVal hdc As LongPtr, ByVal nIndex As Long) As Long
+Private Declare PtrSafe Sub Sleep Lib "kernel32" (ByVal ms As Long)
+
+Private Const VK_LBUTTON As Long = 1
+Private Const IDC_SIZEWE As Long = 32644
+Private Const LOGPIXELSX As Long = 88
 
 ' The table the open dlgColumns is for (ChooseGridColumns), and the layout
 ' chosen in it ("" while none is).
@@ -45,14 +77,14 @@ Fail:
     LogError "modGridCols.RestoreGridColumns", sf.Name
 End Sub
 
-' Show the table's columns in the order and visibility layout gives (see the
-' top of this module), and move its captions with them. The columns keep
-' their design widths and GridFit scales them to fill the table, so hiding
-' one widens the rest. Raises error 5 for a layout that doesn't fit the table
-' and for a table not built with fit:=True.
+' Show the table's columns in the order, visibility and widths layout gives
+' (see the top of this module), and move its captions with them. Without
+' widths the columns keep their design widths and GridFit scales them to
+' fill the table, so hiding one widens the rest. Raises error 5 for a layout
+' that doesn't fit the table and for a table not built with fit:=True.
 Public Sub SetGridColumns(sf As Control, ByVal prefix As String, ByVal layout As String)
     Dim g As Form, host As Form, order() As Long, shown() As Boolean, n As Long, k As Long
-    Dim c As Control, t() As String, x As Long, w As Long, allW As Long, design As Long
+    Dim c As Control, t() As String, x As Long, w As Long, allW As Long, design As Long, widths As Variant, userW As Boolean
     Set g = sf.Form
     Set host = OwnerForm(sf)
     CheckFitGrid g
@@ -60,6 +92,7 @@ Public Sub SetGridColumns(sf As Control, ByVal prefix As String, ByVal layout As
     If Not ParseLayout(layout, n, order, shown) Then
         Err.Raise 5, "modGridCols.SetGridColumns", "The layout """ & layout & """ doesn't fit the " & n & " columns of " & g.Name & "."
     End If
+    widths = LayoutWidths(layout, n)
     ' Rewrite each column's design position (Tag "caption|left|width", which
     ' GridFit scales) in the new order, keeping its design width as a fourth
     ' part. A hidden column gets no width at the left edge: GridFit scales
@@ -71,24 +104,34 @@ Public Sub SetGridColumns(sf As Control, ByVal prefix As String, ByVal layout As
         t = Split(c.Tag & "|||", "|")
         w = Val(t(2))
         If Val(t(3)) > 0 Then w = Val(t(3))
+        allW = allW + w                     ' the design widths, shown or not
+        ' Part 3 keeps the design width; part 2 is the width shown.
         If shown(k) Then
-            c.Tag = SetTagParts(c.Tag, 1, x, w, w)
+            If widths(order(k)) > 0 Then
+                c.Tag = SetTagParts(c.Tag, 1, x, px(widths(order(k))), w)
+                w = px(widths(order(k)))
+                userW = True
+            Else
+                c.Tag = SetTagParts(c.Tag, 1, x, w, w)
+            End If
             SetCaption host, prefix, order(k), x, w, True
             x = x + w
         Else
             c.Tag = SetTagParts(c.Tag, 1, 0, 0, w)
             SetCaption host, prefix, order(k), px(8), px(8), False     ' no width, as the column
         End If
-        allW = allW + w
         SetVisible c, shown(k)
     Next
     ' The table's Tag "grid:<width>" is the width GridFit scales from. Shrink
     ' it so the shown columns (x - px(8) wide) take the share of the table
     ' that all the columns take in the design, scroll bar aside: then they
     ' fill the table as far as the full set would. The design width is kept
-    ' after a "|" (GridFit reads only the number before it).
+    ' after a "|" (GridFit reads only the number before it). User widths
+    ' that add up to the design's fill the same space, so a drag that moves
+    ' width between columns doesn't move the table's right edge; "|u" lets
+    ' GridFit scale them below their widths when they wouldn't fit.
     design = DesignWidth(g)
-    g.Tag = "grid:" & (SCROLL_W + CLng(CDbl(design - SCROLL_W) * x / (allW + px(8)))) & "|" & design
+    g.Tag = "grid:" & (SCROLL_W + CLng(CDbl(design - SCROLL_W) * x / (allW + px(8)))) & "|" & design & IIf(userW, "|u", "")
     GridFit sf, prefix
 End Sub
 
@@ -102,8 +145,9 @@ Private Sub SetCaption(host As Form, ByVal prefix As String, ByVal i As Long, By
     Set c = host.Controls(prefix & i)
     c.Tag = SetTagParts(c.Tag, 1, offset, w - px(8))   ' later parts (a sort field) stay
     SetVisible c, visible
-    ' Its filter funnel (GridHeaders filterSf) goes with it; GridFit places it.
+    ' Its filter funnel (GridHeaders filterSf) and width grip go with it; GridFit places them.
     If CtlExists(host, prefix & "Filter" & i) Then SetVisible host.Controls(prefix & "Filter" & i), visible
+    If CtlExists(host, prefix & "Size" & i) Then SetVisible host.Controls(prefix & "Size" & i), visible
 End Sub
 
 ' tag with its "|"-separated parts from index first on replaced by vals; the
@@ -134,6 +178,8 @@ Public Sub ChooseGridColumns(sf As Control, Optional ByVal prefix As String = ""
     DoCmd.OpenForm "dlgColumns", WindowMode:=acDialog
     Set m_sf = Nothing
     If Len(m_choice) > 0 Then
+        ' The chooser sets order and visibility; widths dragged earlier stay.
+        m_choice = WithWidths(m_choice, LayoutWidths(SavedLayout(sf), ColumnCount(sf.Form)))
         SetGridColumns sf, prefix, m_choice
         SaveSetting APP_NAME, SETTINGS_KEY, sf.Form.Name, m_choice
     End If
@@ -161,7 +207,7 @@ End Function
 
 Public Function GridColumnLayout() As String
     If m_sf Is Nothing Then Exit Function
-    GridColumnLayout = SavedLayout(m_sf)
+    GridColumnLayout = StripWidths(SavedLayout(m_sf))
     If Len(GridColumnLayout) = 0 Then GridColumnLayout = DefaultLayout(ColumnCount(m_sf.Form))
 End Function
 
@@ -188,6 +234,10 @@ Public Function ParseLayout(ByVal layout As String, ByVal n As Long, order() As 
     ReDim order(n - 1): ReDim shown(n - 1): ReDim seen(n - 1)
     For k = 0 To n - 1
         s = LCase$(Trim$(parts(k)))
+        If InStr(s, ":") > 0 Then               ' a width (see the top of the module)
+            If Not WidthPart(Mid$(s, InStr(s, ":") + 1)) Then Exit Function
+            s = Left$(s, InStr(s, ":") - 1)
+        End If
         shown(k) = Right$(s, 1) <> "h"
         If Not shown(k) Then s = Left$(s, Len(s) - 1)
         If Len(s) = 0 Or Len(s) > 4 Or Not s Like String(Len(s), "#") Then Exit Function
@@ -199,6 +249,236 @@ Public Function ParseLayout(ByVal layout As String, ByVal n As Long, order() As 
         If shown(k) Then anyShown = True
     Next
     ParseLayout = anyShown
+End Function
+
+' True when s is a layout width: 1 to 4 digits, MIN_COL_PX to MAX_COL_PX.
+Private Function WidthPart(ByVal s As String) As Boolean
+    If Len(s) = 0 Or Len(s) > 4 Or Not s Like String(Len(s), "#") Then Exit Function
+    WidthPart = CLng(s) >= MIN_COL_PX And CLng(s) <= MAX_COL_PX
+End Function
+
+' The widths a layout gives, by column index (0 to n - 1, in px; 0 where a
+' column has none). All zeros for a layout that doesn't fit n columns.
+Public Function LayoutWidths(ByVal layout As String, ByVal n As Long) As Variant
+    Dim w() As Long, order() As Long, shown() As Boolean, parts() As String, k As Long, s As String
+    If n < 1 Then LayoutWidths = Array(): Exit Function
+    ReDim w(n - 1)
+    If ParseLayout(layout, n, order, shown) Then
+        parts = Split(layout, ",")
+        For k = 0 To n - 1
+            s = Trim$(parts(k))
+            If InStr(s, ":") > 0 Then w(order(k)) = CLng(Mid$(s, InStr(s, ":") + 1))
+        Next
+    End If
+    LayoutWidths = w
+End Function
+
+' layout without its widths: "2:180,0,1h:96" gives "2,0,1h".
+Public Function StripWidths(ByVal layout As String) As String
+    Dim parts() As String, k As Long, s As String
+    If Len(layout) = 0 Then Exit Function
+    parts = Split(layout, ",")
+    For k = 0 To UBound(parts)
+        s = Trim$(parts(k))
+        If InStr(s, ":") > 0 Then s = Left$(s, InStr(s, ":") - 1)
+        StripWidths = StripWidths & IIf(k > 0, ",", "") & s
+    Next
+End Function
+
+' layout (order and visibility) with widths (by column index, 0 for none)
+' added to its columns.
+Private Function WithWidths(ByVal layout As String, widths As Variant) As String
+    Dim parts() As String, k As Long, s As String, i As Long
+    parts = Split(StripWidths(layout), ",")
+    For k = 0 To UBound(parts)
+        s = parts(k)
+        i = Val(s)
+        If i <= UBound(widths) Then
+            If widths(i) > 0 Then s = s & ":" & widths(i)
+        End If
+        WithWidths = WithWidths & IIf(k > 0, ",", "") & s
+    Next
+End Function
+
+' ---------------------------------------------------------------------------
+' Column widths
+' ---------------------------------------------------------------------------
+
+' A width grip's mouse down (GridHeaders resizeSf): follow the pointer while
+' the left button is held, the grip showing where the column will end, then
+' set the width (ResizeGridColumn). frm is the form holding the captions,
+' sfName the table's subform control on it, i the column.
+Public Function GridSizeDown(frm As Form, ByVal sfName As String, ByVal prefix As String, ByVal i As Long)
+    Dim grip As Control, pt As POINTAPI, x0 As Long, left0 As Long, minLeft As Long, maxLeft As Long
+    Dim tpp As Double, newLeft As Long, oldBack As Integer
+    On Error GoTo Fail
+    If (GetAsyncKeyState(VK_LBUTTON) And &H8000) = 0 Then Exit Function    ' another button
+    Set grip = frm.Controls(prefix & "Size" & i)
+    tpp = TwipsPerPixel()
+    GetCursorPos pt
+    x0 = pt.x
+    left0 = grip.Left
+    ' The column can't get narrower than MIN_COL_PX, and the grip stays on the form.
+    minLeft = frm.Controls(prefix & i).Left + px(MIN_COL_PX) - px(8)
+    maxLeft = frm.Width - grip.Width
+    oldBack = grip.BackStyle
+    grip.BackStyle = 1
+    grip.BackColor = Th(CLR_PRIMARY_SOFT)
+    newLeft = left0
+    Do While (GetAsyncKeyState(VK_LBUTTON) And &H8000) <> 0
+        SetCursor LoadCursor(0, IDC_SIZEWE)
+        GetCursorPos pt
+        newLeft = left0 + CLng((pt.x - x0) * tpp)
+        If newLeft < minLeft Then newLeft = minLeft
+        If newLeft > maxLeft Then newLeft = maxLeft
+        If grip.Left <> newLeft Then grip.Left = newLeft
+        DoEvents
+        Sleep 15
+    Loop
+    grip.BackStyle = oldBack
+    If Abs(newLeft - left0) >= px(2) Then ResizeGridColumn frm.Controls(sfName), prefix, i, newLeft - left0 Else grip.Left = left0
+    Exit Function
+Fail:
+    On Error Resume Next
+    If Not grip Is Nothing Then grip.BackStyle = 0
+    On Error GoTo 0
+    HandleError "modGridCols.GridSizeDown", sfName & " column " & i
+End Function
+
+' The pointer over a width grip shows the left-right sizing arrows.
+Public Function GridSizeHover()
+    SetCursor LoadCursor(0, IDC_SIZEWE)
+End Function
+
+' Make column i of the table in sf dx twips wider (narrower when negative),
+' as the user sees it, and save the widths. The shown columns to its right
+' give up the difference in proportion to what they have above MIN_COL_PX
+' (or share what it gives up, in proportion to their widths), so the
+' columns to its left and the table's width stay and the divider lands
+' where it was dropped. A column can grow only by what the columns to its
+' right can give up. The last shown column has none: its right edge is the
+' table's, so dragging it changes nothing. Every shown column's width goes
+' into the layout, so the table now fills by these widths; a hidden
+' column keeps the width saved for it.
+Public Sub ResizeGridColumn(sf As Control, ByVal prefix As String, ByVal i As Long, ByVal dx As Long)
+    Dim g As Form, n As Long, layout As String, order() As Long, shown() As Boolean, w() As Double, saved As Variant
+    Dim k As Long, pos As Long, ratio As Double, d As Double, spare As Double, rightW As Double, donors As Long, out As String
+    Set g = sf.Form
+    CheckFitGrid g
+    n = ColumnCount(g)
+    layout = SavedLayout(sf)
+    If Len(layout) = 0 Then layout = DefaultLayout(n)
+    ParseLayout layout, n, order, shown
+    saved = LayoutWidths(layout, n)
+    ' Each shown column's width now, in design px (part 2 of its Tag, which
+    ' GridFit scales by ratio to what shows).
+    ReDim w(n - 1)
+    For k = 0 To n - 1
+        w(k) = Val(Split(g.Controls("txtCol" & k).Tag & "|||", "|")(2)) / px(1)
+        If w(k) <= 0 Then w(k) = MIN_COL_PX
+        If order(k) = i Then pos = k
+    Next
+    For k = pos + 1 To n - 1
+        If shown(k) Then
+            donors = donors + 1
+            rightW = rightW + w(order(k))
+            spare = spare + w(order(k)) - MIN_COL_PX
+        End If
+    Next
+    If donors = 0 Then Exit Sub                     ' the last shown column
+    If spare < 0 Then spare = 0
+    ratio = (g.Controls("txtCol" & i).Width + px(8)) / px(w(i))
+    If ratio <= 0 Then ratio = 1
+    d = dx / ratio / px(1)                          ' design px
+    If w(i) + d < MIN_COL_PX Then d = MIN_COL_PX - w(i)
+    If d > spare Then d = spare                     ' the columns to the right stop at MIN_COL_PX
+    If d = 0 Then Exit Sub
+    For k = pos + 1 To n - 1
+        If shown(k) Then
+            If d > 0 Then
+                w(order(k)) = w(order(k)) - d * (w(order(k)) - MIN_COL_PX) / spare
+            Else
+                w(order(k)) = w(order(k)) - d * w(order(k)) / rightW
+            End If
+        End If
+    Next
+    w(i) = w(i) + d
+    For k = 0 To n - 1
+        out = out & IIf(k > 0, ",", "") & order(k) & IIf(shown(k), "", "h")
+        If shown(k) Then
+            out = out & ":" & ClampW(w(order(k)))
+        ElseIf saved(order(k)) > 0 Then
+            out = out & ":" & saved(order(k))
+        End If
+    Next
+    SetGridColumns sf, prefix, out
+    SaveSetting APP_NAME, SETTINGS_KEY, g.Name, out
+End Sub
+
+' A width for a layout: whole px within MIN_COL_PX to MAX_COL_PX.
+Private Function ClampW(ByVal w As Double) As Long
+    ClampW = CLng(w)
+    If ClampW < MIN_COL_PX Then ClampW = MIN_COL_PX
+    If ClampW > MAX_COL_PX Then ClampW = MAX_COL_PX
+End Function
+
+' Back to the design widths, keeping the chosen order and hidden columns.
+Public Sub ResetGridWidths(sf As Control, Optional ByVal prefix As String = "")
+    Dim layout As String
+    On Error GoTo Fail
+    CheckFitGrid sf.Form
+    layout = StripWidths(SavedLayout(sf))
+    If Len(layout) = 0 Then layout = DefaultLayout(ColumnCount(sf.Form))
+    SetGridColumns sf, prefix, layout
+    If layout = DefaultLayout(ColumnCount(sf.Form)) Then
+        DeleteLayout sf.Form.Name
+    Else
+        SaveSetting APP_NAME, SETTINGS_KEY, sf.Form.Name, layout
+    End If
+    Exit Sub
+Fail:
+    HandleError "modGridCols.ResetGridWidths", sf.Name
+End Sub
+
+' True when the user has set widths on the table in sf.
+Public Function GridHasWidths(sf As Control) As Boolean
+    GridHasWidths = InStr(SavedLayout(sf), ":") > 0
+End Function
+
+' A Columns button's click when the table's widths can be dragged: a menu
+' under the button with Choose columns (ChooseGridColumns) and Reset widths
+' (ResetGridWidths, shown once widths were changed).
+Public Sub GridColumnsMenu(btn As Control, sf As Control, Optional ByVal prefix As String = "")
+    Dim pick As String
+    On Error GoTo Fail
+    If GridHasWidths(sf) Then
+        pick = KitMenu(btn, "cols|Choose columns" & ChrW(8230) & "|E8A9", "widths|Reset widths|E72C")
+    Else
+        pick = KitMenu(btn, "cols|Choose columns" & ChrW(8230) & "|E8A9")
+    End If
+    Select Case pick
+        Case "cols": ChooseGridColumns sf, prefix
+        Case "widths": ResetGridWidths sf, prefix
+    End Select
+    Exit Sub
+Fail:
+    HandleError "modGridCols.GridColumnsMenu", sf.Name
+End Sub
+
+' Remove a table's saved layout (none saved is fine).
+Private Sub DeleteLayout(ByVal formName As String)
+    On Error Resume Next
+    DeleteSetting APP_NAME, SETTINGS_KEY, formName
+End Sub
+
+' Twips in one screen pixel (15 at 96 dpi).
+Private Function TwipsPerPixel() As Double
+    Dim hdc As LongPtr, dpi As Long
+    hdc = GetDC(0)
+    dpi = GetDeviceCaps(hdc, LOGPIXELSX)
+    ReleaseDC 0, hdc
+    If dpi <= 0 Then dpi = 96
+    TwipsPerPixel = 1440 / dpi
 End Function
 
 ' ---------------------------------------------------------------------------
@@ -219,11 +499,12 @@ Private Function ColumnCount(g As Form) As Long
     Loop
 End Function
 
-' The width BuildGrid gave the table, kept in its Tag "grid:<width>[|<design>]".
+' The width BuildGrid gave the table, kept in its Tag "grid:<width>[|<design>
+' [|u]]".
 Private Function DesignWidth(g As Form) As Long
     Dim t() As String
     t = Split(Mid$(g.Tag, 6), "|")
-    DesignWidth = Val(t(UBound(t)))
+    DesignWidth = Val(t(IIf(UBound(t) >= 1, 1, 0)))
 End Function
 
 ' Raise error 5 unless g is a BuildGrid table built with fit:=True. Only those

@@ -37,10 +37,11 @@ Err_Handler:
     HandleError "pgTables.Form_Resize"
 End Sub
 
-' Hide, restore or reorder the first table's columns (modGridCols).
+' Hide, restore or reorder the first table's columns, or put back the widths
+' dragged on its captions (modGridCols).
 Private Sub btnColumns_Click()
     On Error GoTo Err_Handler
-    ChooseGridColumns Me.sfOptions, "hdrOpt"
+    GridColumnsMenu Me.btnColumns, Me.sfOptions, "hdrOpt"
     Exit Sub
 Err_Handler:
     HandleError "pgTables.btnColumns_Click"
