@@ -10,14 +10,20 @@ every app cites, in Access and on the web. Add a publication once and every app
 can cite it.
 
 # Find a reference
-- Type part of its number, title, revision or notes in the search box.
+- Type part of its short title, title, publisher, change or notes in the search box.
+- The columns are in the library's order: Short title, Title, Publisher, Classification, Edition, Change, Revised.
 - **Show retired** adds superseded and cancelled references. Citations to them still work.
 - **Document** says whether a file or web address is linked. **Open** shows it.
 
 # Add a reference
 Anyone signed in can add one with **Add reference**. If the library already has
-the same document (the same number and revision, however it is typed), that one
-is used instead of adding it twice.
+the same publication (the same short title, however it is typed, whatever its
+edition or change), that one is used instead of adding it twice.
+
+# Import and export
+- **Export** saves the whole library as an Excel workbook or CSV file, in these columns: Short Title (Publication Number), Title, Publisher, Classification, Current Edition, Current Change, Date of current Revision, then Document, Notes, Status and Superseded by. The web's Reference library page uses the same layout.
+- **Import** (Library editors) reads a sheet in that layout. It checks every row first and says what it would add and change. A row whose short title is already in the library updates that record; a blank cell keeps what the library has.
+- If any row has a problem, nothing is imported: fix the rows it names and import again.
 
 # Change or retire a reference
 Only Library editors and Personnel admins can. Double-click a reference, or pick
@@ -25,9 +31,12 @@ it and choose **Change**. A Personnel admin chooses the editors with **Library
 editors**.
 
 === reflib.reference | Add or change a reference
-- **Number** is the publication's number, such as OPNAVINST 3120.32D. Leave it blank for a document without one; then its title tells it apart.
-- **Revision or change** is the change it is at, such as CH-1. A new revision is its own reference.
-- **Marking** is the document's classification marking. A REL TO marking can be typed, such as SECRET//REL TO USA, FVEY.
+- **Short title (publication number)** is the publication without its edition letter, such as OPNAVINST 3120.32. Leave it blank for a document without one; then its title tells it apart.
+- **Publisher** is who issues it, such as OPNAV.
+- **Classification** is the document's classification marking. A REL TO marking can be typed, such as SECRET//REL TO USA, FVEY.
+- **Current edition** (such as D) and **Current change** (such as CH-1) are kept on this one record. When a new edition or change comes out, change them here rather than adding another reference: everything that cites it stays current.
+- A citation prints the short title with its edition: OPNAVINST 3120.32 with edition D prints OPNAVINST 3120.32D.
+- **Date of current revision** is the date of the edition or change it is at.
 - **Document** is a file on the shared drive (\\server\share\... or S:\...) or a web address. **Browse** opens the Windows file picker. Choose the copy on the shared drive, so everyone can open it.
 - A PDF opens at the page a citation names. Other documents open in their usual program. Programs and scripts are never opened from the library.
 

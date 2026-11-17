@@ -39,14 +39,22 @@ Private Sub Form_Load()
         m_id = 0
         Me.lblTitle.Caption = "Add reference"
         Me.cboMarking = "UNCLASSIFIED"
-        If InStr(a, "|") > 0 Then Me.txtTitle = Mid$(a, InStr(a, "|") + 1)
+        If InStr(a, "|") > 0 Then
+            ' What was typed in a citation: a short title (OPNAVINST 3120.32, SORM) goes in Short title, words in Title.
+            If LooksLikeShortTitle(Mid$(a, InStr(a, "|") + 1)) Then
+                Me.txtNumber = Trim$(Mid$(a, InStr(a, "|") + 1))
+            Else
+                Me.txtTitle = Mid$(a, InStr(a, "|") + 1)
+            End If
+        End If
         ShowChangeRows False
     Else
         m_id = CLng(a)
-        Set rs = CurrentDb.OpenRecordset("SELECT * FROM " & REF_TABLE & " WHERE ref_id=" & m_id, dbOpenSnapshot)
+        Set rs = CurrentDb.OpenRecordset("SELECT r.*, d.ref_publisher, d.ref_edition FROM " & RefFromSql() & " WHERE r.ref_id=" & m_id, dbOpenSnapshot)
         If rs.EOF Then rs.Close: KitMsgBox "That reference is no longer in the library.", vbExclamation: DoCmd.Close acForm, Me.Name, acSaveNo: Exit Sub
-        Me.lblTitle.Caption = "Change " & RefLabelOf(Nz(rs!ref_number, ""), rs!ref_title, Nz(rs!ref_revision, ""))
+        Me.lblTitle.Caption = "Change " & RefLabelOf(Nz(rs!ref_number, ""), rs!ref_title, Nz(rs!ref_revision, ""), Nz(rs!ref_edition, ""))
         Me.txtNumber = rs!ref_number: Me.txtRevision = rs!ref_revision: Me.txtTitle = rs!ref_title
+        Me.txtPublisher = rs!ref_publisher: Me.txtEdition = rs!ref_edition
         Me.txtDate = rs!pub_date: Me.cboMarking = Nz(rs!ref_marking, "UNCLASSIFIED")
         Me.txtLink = rs!doc_link: Me.txtNotes = rs!ref_notes
         Me.cboStatus = Nz(rs!ref_status, REF_ACTIVE)
@@ -61,6 +69,23 @@ Private Sub Form_Load()
 Err_Handler:
     HandleError "dlgReference.Form_Load"
 End Sub
+
+' True when s reads as a short title rather than a title: one to five
+' words with a digit and no lower-case word ("OPNAVINST 3120.32D",
+' "NAVSEA S9086-AB"), or a single capitalised word ("SORM").
+Private Function LooksLikeShortTitle(ByVal s As String) As Boolean
+    Dim w As Variant, hasDigit As Boolean, n As Long
+    s = Trim$(s)
+    If Len(s) = 0 Or Len(s) > 100 Then Exit Function
+    For Each w In Split(s, " ")
+        If Len(w) > 0 Then
+            n = n + 1
+            If StrComp(w, UCase$(w), vbBinaryCompare) <> 0 Then Exit Function
+            If w Like "*#*" Then hasDigit = True
+        End If
+    Next
+    LooksLikeShortTitle = (n <= 5 And (hasDigit Or n = 1))
+End Function
 
 ' The status row, its hint and History show only when changing; adding
 ' closes the gap they leave so Save sits under the notes.
@@ -181,7 +206,7 @@ Private Sub btnSave_Click()
     Me.lblError.Caption = ""
     If m_id = 0 Then
         id = RefAdd(Nz(Me.txtNumber, ""), Nz(Me.txtTitle, ""), Nz(Me.txtRevision, ""), Me.txtDate.Value, Nz(Me.txtLink, ""), _
-            Nz(Me.cboMarking, ""), Nz(Me.txtNotes, ""), RefUiAppCode(), added)
+            Nz(Me.cboMarking, ""), Nz(Me.txtNotes, ""), RefUiAppCode(), added, Nz(Me.txtPublisher, ""), Nz(Me.txtEdition, ""))
         TempVars("RefId") = id
         TempVars("DialogResult") = "ok"
         lbl = RefLabel(id)
@@ -193,7 +218,8 @@ Private Sub btnSave_Click()
     Else
         If Not IsNull(Me.txtSupKey) Then sup = CLng(Me.txtSupKey)
         RefUpdate m_id, Nz(Me.txtNumber, ""), Nz(Me.txtTitle, ""), Nz(Me.txtRevision, ""), Me.txtDate.Value, Nz(Me.txtLink, ""), _
-            Nz(Me.cboMarking, ""), Nz(Me.txtNotes, ""), Nz(Me.cboStatus, REF_ACTIVE), sup, m_ver, RefUiAppCode()
+            Nz(Me.cboMarking, ""), Nz(Me.txtNotes, ""), Nz(Me.cboStatus, REF_ACTIVE), sup, m_ver, RefUiAppCode(), _
+            Nz(Me.txtPublisher, ""), Nz(Me.txtEdition, "")
         TempVars("RefId") = m_id
         TempVars("DialogResult") = "ok"
         KitToast "Saved " & RefLabel(m_id), "success"

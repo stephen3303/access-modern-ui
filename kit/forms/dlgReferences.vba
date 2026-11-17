@@ -15,6 +15,7 @@ Private Sub Form_Load()
     On Error GoTo Err_Handler
     m_editor = RefIsEditor()
     SetVisible Me.btnEdit, m_editor
+    SetVisible Me.btnImport, m_editor
     SetVisible Me.btnEditors, PersonnelIsAdminNow()
     If m_editor Then
         Me.lblTip.Caption = "Double-click a reference to change, retire or supersede it. Open shows its document."
@@ -113,6 +114,53 @@ End Sub
 Private Sub OpenSelected()
     If IsNull(Me.lstRefs.Value) Then KitMsgBox "Pick a reference in the list first.", vbInformation: Exit Sub
     KitRefOpen Me.lstRefs.Value
+End Sub
+
+' The whole library (retired references too) in Stephen's seven columns,
+' then Document, Notes, Status and Superseded by: an Excel workbook or CSV.
+Private Sub btnExport_Click()
+    On Error GoTo Err_Handler
+    Dim path As String, n As Long
+    path = KitSaveAs("Export the Reference library", "Reference library " & Format$(Date, "yyyy-mm-dd") & ".xlsx", _
+        "Excel workbook|*.xlsx|CSV file|*.csv", "references-export")
+    If Len(path) = 0 Then Exit Sub
+    n = RefExport(path)
+    KitToast "Exported " & n & IIf(n = 1, " reference", " references") & " to " & Mid$(path, InStrRev(path, "\") + 1), "success"
+    Exit Sub
+Err_Handler:
+    HandleError "dlgReferences.btnExport_Click"
+End Sub
+
+' A sheet in the export's layout (Library editors): checked first, then
+' written whole after a yes, or not at all when a row has a problem.
+Private Sub btnImport_Click()
+    On Error GoTo Err_Handler
+    Dim path As String, rows As Collection, report As String, done As String
+    path = KitPickFile("Import references (the first row names the columns, as the export writes them)", _
+        "Spreadsheets|*.xlsx;*.xls;*.csv", "references-import")
+    If Len(path) = 0 Then Exit Sub
+    KitBusy "Checking the file..."
+    Set rows = RefImportCheck(RefImportRead(path))
+    KitBusyEnd
+    If rows.Count = 0 Then KitMsgBox "The sheet has a header row but no references under it.", vbInformation, "Import references": Exit Sub
+    report = RefImportReport(rows)
+    If RefImportCount(rows, "error") > 0 Then
+        KitMsgBox report & vbCrLf & vbCrLf & "Nothing was imported. Fix these rows and import the file again.", vbExclamation, "Import references"
+        Exit Sub
+    End If
+    If RefImportCount(rows, "add") + RefImportCount(rows, "update") = 0 Then
+        KitMsgBox "Every row is already in the library as it is. Nothing to import.", vbInformation, "Import references"
+        Exit Sub
+    End If
+    If KitMsgBox(report & vbCrLf & vbCrLf & "Import these now?", vbQuestion + vbYesNo, "Import references") <> vbYes Then Exit Sub
+    done = RefImportApply(rows)
+    KitToast "Imported: " & done, "success"
+    LoadRefs
+    Exit Sub
+Err_Handler:
+    KitBusyEnd
+    If Err.Number = 5 Then KitMsgBox Err.Description, vbExclamation, "Import references": Exit Sub
+    HandleError "dlgReferences.btnImport_Click"
 End Sub
 
 Private Sub btnEditors_Click()
