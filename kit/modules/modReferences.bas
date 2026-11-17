@@ -17,41 +17,61 @@ Option Explicit
 '
 ' Tables (made with CREATE TABLE when missing, so an older file catches up on
 ' its own):
-'   kit_reference         one row per document: ref_number (OPNAVINST
-'                         3120.32D), ref_title, ref_revision (CH-1), pub_date,
-'                         ref_status (active, superseded, cancelled),
+'   kit_reference         one row per publication, kept current (Stephen,
+'                         2026-11-17): ref_number, the short title (OPNAVINST
+'                         3120.32), ref_title, ref_revision (the current
+'                         change, CH-1), pub_date (the date of the current
+'                         revision), ref_status (active, superseded, cancelled),
 '                         superseded_by (the ref_id that replaced it),
 '                         doc_link (a shared-drive path or an http(s)
 '                         address), ref_marking, ref_notes, source_app (the
 '                         app it was first added from), row_version (+1 on
 '                         every change, for the stale-save check), created_*
 '                         and updated_*.
+'   kit_reference_detail  ref_id, ref_publisher (OPNAV), ref_edition (the
+'                         current edition, D): its own table so an older file
+'                         gains them with CREATE TABLE while others have it
+'                         open (ALTER TABLE needs the file to itself).
 '   kit_reference_editor  who may change and retire references (Library
 '                         editors). Personnel admins always may, and they
 '                         choose the editors.
 '   kit_reference_audit   every add, change, status change and editor change,
 '                         with who and from which PC.
 '   kit_reference_setting name/value, used by the web's first-run import.
-' The first three are linked into the front end; the settings table is not.
+' All but the settings table are linked into the front end.
+'
+' Stephen's fields (2026-11-17), with the columns that keep them: Short Title
+' (Publication Number) ref_number, Title ref_title, Publisher ref_publisher,
+' Classification ref_marking, Current Edition ref_edition, Current Change
+' ref_revision, Date of current Revision pub_date. Import and export use
+' those seven columns in that order, then Document, Notes, Status and
+' Superseded by (RefExport; RefImportRead, RefImportCheck, RefImportApply).
 '
 ' Who may do what (Stephen, 2026-11-09): anyone signed in to an app adds a
 ' reference, so drafting is never held up; Library editors and Personnel
 ' admins change, retire and supersede. Nobody deletes: a reference other
 ' files cite is retired (cancelled or superseded), never removed.
 '
-' The same document twice: two references are the same when their numbers
-' match (case, spaces, dashes, underscores and dots ignored) and their
-' revisions match; a reference without a number matches on its title
-' instead. RefAdd hands back the one already there rather than adding it
-' again.
+' The same publication twice: two references are the same when their short
+' titles match (case, spaces, dashes, underscores and dots ignored), whatever
+' their edition and change, since one record is kept current through new
+' editions and changes; a reference without a short title matches on its
+' title instead. RefAdd hands back the one already there rather than adding
+' it again.
+'
+' A citation prints the short title with its edition (RefCiteText): a one-
+' or two-letter edition joins it (OPNAVINST 3120.32 + D = OPNAVINST
+' 3120.32D), any other follows after a space; the title when there is no
+' short title.
 '
 ' Startup, after KitPersonnelStart (modReferencesUI wraps this):
 '   ReferencesStatus()     links the file found beside the Personnel file
 ' For app code (a citation keeps a ref_id and a page number in the app's own
 ' data file, as the web's comment_citation does):
-'   RefAdd number, title, revision, pubDate, link, marking, notes, appCode, added
-'   RefUpdate id, ..., status, supersededBy, version     editors only
-'   RefLabel(id)            "NUMBER Title (REV)", as a citation reads
+'   RefAdd number, title, revision, pubDate, link, marking, notes, appCode, added, publisher, edition
+'   RefUpdate id, ..., status, supersededBy, version, appCode, publisher, edition     editors only
+'   RefLabel(id)            "NUMBERED Title (CHANGE)", for lists
+'   RefCiteText(id)         "OPNAVINST 3120.32D", as a citation prints
 '   RefPickSql()            the active references, for a PickBox
 '   RefOpen(id, page)       opens the document (a PDF in Edge at the page)
 '   RefIsEditor()           may the signed-in person change references
@@ -66,6 +86,7 @@ Public Const REF_TABLE As String = "kit_reference"
 Public Const REF_EDITOR_TABLE As String = "kit_reference_editor"
 Public Const REF_AUDIT_TABLE As String = "kit_reference_audit"
 Public Const REF_SETTING_TABLE As String = "kit_reference_setting"
+Public Const REF_DETAIL_TABLE As String = "kit_reference_detail"
 
 ' ReferencesStatus results.
 Public Const REFS_READY As Long = 0           ' linked and reachable
@@ -118,7 +139,13 @@ Public Function ReferencesStatus() As Long
     Dim def As String
     On Error GoTo Fail
     If Len(ReferencesPath()) > 0 Then
-        If KitBackendReachable(REF_TABLE) Then ReferencesStatus = REFS_READY: Exit Function
+        If KitBackendReachable(REF_TABLE) Then
+            ' A front end linked before publisher and edition came: link (and
+            ' make, when the file lacks it) kit_reference_detail too.
+            If Len(KitBackendPath(REF_DETAIL_TABLE)) = 0 Then LinkReferencesFile ReferencesPath()
+            ReferencesStatus = REFS_READY
+            Exit Function
+        End If
     End If
     def = ReferencesDefaultPath()
     If Len(def) > 0 Then
@@ -173,7 +200,7 @@ Public Sub LinkReferencesFile(ByVal path As String)
     problem = ReferencesFileProblem(path)
     If Len(problem) > 0 Then Err.Raise 5, "modReferences.LinkReferencesFile", problem
     EnsureReferencesTables path
-    KitLinkTables path, Array(REF_TABLE, REF_EDITOR_TABLE, REF_AUDIT_TABLE)
+    KitLinkTables path, Array(REF_TABLE, REF_EDITOR_TABLE, REF_AUDIT_TABLE, REF_DETAIL_TABLE)
     KitBusyEnd
     Exit Sub
 Fail:
@@ -246,6 +273,10 @@ Private Sub CreateReferencesTables(db As DAO.Database)
             "created_by_id LONG, created_by TEXT(100), created_at DATETIME, updated_by TEXT(100), updated_at DATETIME)", dbFailOnError
         db.Execute "CREATE INDEX ix_kit_reference_number ON " & REF_TABLE & " (ref_number)", dbFailOnError
     End If
+    If Not RefHasTable(db, REF_DETAIL_TABLE) Then
+        db.Execute "CREATE TABLE " & REF_DETAIL_TABLE & " (ref_id LONG CONSTRAINT pk_kit_reference_detail PRIMARY KEY, " & _
+            "ref_publisher TEXT(100), ref_edition TEXT(30))", dbFailOnError
+    End If
     If Not RefHasTable(db, REF_EDITOR_TABLE) Then
         db.Execute "CREATE TABLE " & REF_EDITOR_TABLE & " (person_id LONG CONSTRAINT pk_kit_reference_editor PRIMARY KEY, " & _
             "person_name TEXT(100), granted_by TEXT(100), granted_at DATETIME)", dbFailOnError
@@ -304,72 +335,143 @@ Private Function RefOneSpace(ByVal s As String) As String
     RefOneSpace = Trim$(s)
 End Function
 
-' The reference that is the same document as number, title and revision
-' (see the top of the module), leaving out exceptId; 0 when there is none.
-Public Function RefFindSame(ByVal number As String, ByVal title As String, ByVal revision As String, _
+' The reference that is the same publication (see the top of the module),
+' leaving out exceptId; 0 when there is none: the same short title, an
+' active one first, whatever the edition and change; with no short title,
+' the same title. revision is no longer compared (kept so callers need not
+' change).
+Public Function RefFindSame(ByVal number As String, ByVal title As String, Optional ByVal revision As String = "", _
         Optional ByVal exceptId As Long = 0) As Long
-    Dim rs As DAO.Recordset, nk As String, rk As String, tk As String
-    nk = RefKey(number): rk = RefKey(revision): tk = RefTitleKey(title)
-    Set rs = CurrentDb.OpenRecordset("SELECT ref_id, ref_number, ref_title, ref_revision FROM " & REF_TABLE, dbOpenSnapshot)
+    Dim rs As DAO.Recordset, nk As String, tk As String, same As Boolean
+    nk = RefKey(number): tk = RefTitleKey(title)
+    Set rs = CurrentDb.OpenRecordset("SELECT ref_id, ref_number, ref_title, ref_status FROM " & REF_TABLE & " ORDER BY ref_id", dbOpenSnapshot)
     Do While Not rs.EOF
-        If rs!ref_id <> exceptId And StrComp(RefKey(Nz(rs!ref_revision, "")), rk, vbBinaryCompare) = 0 Then
+        same = False
+        If rs!ref_id <> exceptId Then
             If Len(nk) > 0 Then
-                If StrComp(RefKey(Nz(rs!ref_number, "")), nk, vbBinaryCompare) = 0 Then RefFindSame = rs!ref_id: Exit Do
+                same = (StrComp(RefKey(Nz(rs!ref_number, "")), nk, vbBinaryCompare) = 0)
             ElseIf Len(Nz(rs!ref_number, "")) = 0 Then
-                If StrComp(RefTitleKey(Nz(rs!ref_title, "")), tk, vbBinaryCompare) = 0 Then RefFindSame = rs!ref_id: Exit Do
+                same = (StrComp(RefTitleKey(Nz(rs!ref_title, "")), tk, vbBinaryCompare) = 0)
             End If
+        End If
+        If same Then
+            If Nz(rs!ref_status, REF_ACTIVE) = REF_ACTIVE Then RefFindSame = rs!ref_id: Exit Do
+            If RefFindSame = 0 Then RefFindSame = rs!ref_id
         End If
         rs.MoveNext
     Loop
     rs.Close
 End Function
 
-' "NUMBER Title (REV)", as a citation reads (the web's Format-KitReference).
-Public Function RefLabelOf(ByVal number As String, ByVal title As String, ByVal revision As String) As String
-    Dim s As String
+' The short title with its edition, as a citation prints it (the web's
+' Join-KitRefNumber): a one- or two-letter edition joins the number
+' (OPNAVINST 3120.32 + D = OPNAVINST 3120.32D), any other follows after a
+' space (NAVSEA S9086 Rev 3). "" with no short title.
+Public Function RefNumberOf(ByVal number As String, ByVal edition As String) As String
+    number = Trim$(number): edition = Trim$(edition)
+    If Len(number) = 0 Then Exit Function
+    If Len(edition) = 0 Then
+        RefNumberOf = number
+    ElseIf edition Like "[A-Za-z]" Or edition Like "[A-Za-z][A-Za-z]" Then
+        RefNumberOf = number & edition
+    Else
+        RefNumberOf = number & " " & edition
+    End If
+End Function
+
+' What a citation prints: the short title with its edition, or the title
+' when there is no short title (Stephen, 2026-11-17).
+Public Function RefCiteOf(ByVal number As String, ByVal edition As String, ByVal title As String) As String
+    RefCiteOf = RefNumberOf(number, edition)
+    If Len(RefCiteOf) = 0 Then RefCiteOf = Trim$(title)
+End Function
+
+' "NUMBERED Title (CHANGE)", for lists (the web's Format-KitReference): the
+' short title with its edition, the title, the change in brackets.
+Public Function RefLabelOf(ByVal number As String, ByVal title As String, ByVal revision As String, _
+        Optional ByVal edition As String = "") As String
+    Dim s As String, n As String
+    n = RefNumberOf(number, edition)
     s = title
-    If Len(number) > 0 Then s = number & " " & title
+    If Len(n) > 0 Then s = n & " " & title
     If Len(revision) > 0 Then s = s & " (" & revision & ")"
     RefLabelOf = s
+End Function
+
+' kit_reference (r) with its publisher and edition (d), for a FROM clause.
+Public Function RefFromSql() As String
+    RefFromSql = REF_TABLE & " AS r LEFT JOIN " & REF_DETAIL_TABLE & " AS d ON r.ref_id = d.ref_id"
 End Function
 
 ' The label of reference id, or "" when there is none.
 Public Function RefLabel(ByVal id As Long) As String
     Dim rs As DAO.Recordset
     If id <= 0 Then Exit Function
-    Set rs = CurrentDb.OpenRecordset("SELECT ref_number, ref_title, ref_revision FROM " & REF_TABLE & " WHERE ref_id=" & id, dbOpenSnapshot)
-    If Not rs.EOF Then RefLabel = RefLabelOf(Nz(rs!ref_number, ""), Nz(rs!ref_title, ""), Nz(rs!ref_revision, ""))
+    Set rs = CurrentDb.OpenRecordset("SELECT r.ref_number, r.ref_title, r.ref_revision, d.ref_edition FROM " & RefFromSql() & _
+        " WHERE r.ref_id=" & id, dbOpenSnapshot)
+    If Not rs.EOF Then RefLabel = RefLabelOf(Nz(rs!ref_number, ""), Nz(rs!ref_title, ""), Nz(rs!ref_revision, ""), Nz(rs!ref_edition, ""))
     rs.Close
 End Function
 
-' The label as an Access SQL expression over kit_reference's columns.
+' What a citation of reference id prints (RefCiteOf), or "" when there is none.
+Public Function RefCiteText(ByVal id As Long) As String
+    Dim rs As DAO.Recordset
+    If id <= 0 Then Exit Function
+    Set rs = CurrentDb.OpenRecordset("SELECT r.ref_number, r.ref_title, d.ref_edition FROM " & RefFromSql() & _
+        " WHERE r.ref_id=" & id, dbOpenSnapshot)
+    If Not rs.EOF Then RefCiteText = RefCiteOf(Nz(rs!ref_number, ""), Nz(rs!ref_edition, ""), Nz(rs!ref_title, ""))
+    rs.Close
+End Function
+
+' The publisher and the edition of reference id ("" for none).
+Public Function RefPublisher(ByVal id As Long) As String
+    RefPublisher = Nz(DLookup("ref_publisher", REF_DETAIL_TABLE, "ref_id=" & id), "")
+End Function
+
+Public Function RefEdition(ByVal id As Long) As String
+    RefEdition = Nz(DLookup("ref_edition", REF_DETAIL_TABLE, "ref_id=" & id), "")
+End Function
+
+' The short title with its edition as an Access SQL expression over r and d
+' (RefFromSql), as RefNumberOf. Like ignores case in Access SQL.
+Private Function RefNumberSql() As String
+    RefNumberSql = "IIf(Nz(r.ref_number,'')='','',r.ref_number & IIf(Nz(d.ref_edition,'')='',''," & _
+        "IIf(d.ref_edition Like '[A-Z]' Or d.ref_edition Like '[A-Z][A-Z]',d.ref_edition,' ' & d.ref_edition)))"
+End Function
+
+' The label as an Access SQL expression over r and d (RefFromSql).
 Public Function RefLabelSql() As String
-    RefLabelSql = "IIf(Nz(ref_number,'')='','',ref_number & ' ') & ref_title & IIf(Nz(ref_revision,'')='','',' (' & ref_revision & ')')"
+    RefLabelSql = "IIf(" & RefNumberSql() & "='',''," & RefNumberSql() & " & ' ') & r.ref_title & " & _
+        "IIf(Nz(r.ref_revision,'')='','',' (' & r.ref_revision & ')')"
 End Function
 
 ' The active references for a PickBox (modMenu): ref_id, the label, and
 ' "Document" in muted text when a document is linked.
 Public Function RefPickSql() As String
-    RefPickSql = "SELECT ref_id, " & RefLabelSql() & " AS ref_label, IIf(Nz(doc_link,'')='','','Document') AS ref_doc FROM " & _
-        REF_TABLE & " WHERE ref_status='" & REF_ACTIVE & "'"
+    RefPickSql = "SELECT r.ref_id, " & RefLabelSql() & " AS ref_label, IIf(Nz(r.doc_link,'')='','','Document') AS ref_doc FROM " & _
+        RefFromSql() & " WHERE r.ref_status='" & REF_ACTIVE & "'"
 End Function
 
-' The rows of the library page: ref_id, Number, Title, Revision, Date,
-' Status, Document; matching term (number, title, revision or notes) and, unless
+' The rows of the library page, in Stephen's order: ref_id, Short title,
+' Title, Publisher, Classification, Edition, Change, Revised, Status,
+' Document; matching term
+' (short title, title, publisher, edition, change or notes) and, unless
 ' withRetired, active only. term is matched as typed: [ * ? # are not wildcards.
 Public Function RefLibrarySql(ByVal term As String, ByVal withRetired As Boolean) As String
     Dim w As String, t As String
-    If Not withRetired Then w = "ref_status='" & REF_ACTIVE & "'"
+    If Not withRetired Then w = "r.ref_status='" & REF_ACTIVE & "'"
     term = Trim$(term)
     If Len(term) > 0 Then
         t = "'*" & RefLikeText(term) & "*'"
-        w = IIf(Len(w) > 0, w & " AND ", "") & "(ref_number LIKE " & t & " OR ref_title LIKE " & t & _
-            " OR ref_revision LIKE " & t & " OR ref_notes LIKE " & t & ")"
+        w = IIf(Len(w) > 0, w & " AND ", "") & "(r.ref_number LIKE " & t & " OR r.ref_title LIKE " & t & _
+            " OR r.ref_revision LIKE " & t & " OR r.ref_notes LIKE " & t & " OR d.ref_publisher LIKE " & t & _
+            " OR " & RefNumberSql() & " LIKE " & t & ")"
     End If
-    RefLibrarySql = "SELECT ref_id, ref_number AS [Number], ref_title AS [Title], ref_revision AS [Revision], " & _
-        "Format(pub_date,'yyyy-mm-dd') AS [Date], StrConv(ref_status,3) AS [Status], " & _
-        "IIf(Nz(doc_link,'')='','','Linked') AS [Document] FROM " & REF_TABLE & _
-        IIf(Len(w) > 0, " WHERE " & w, "") & " ORDER BY ref_number, ref_title, ref_revision"
+    RefLibrarySql = "SELECT r.ref_id, r.ref_number AS [Short title], r.ref_title AS [Title], d.ref_publisher AS [Publisher], " & _
+        "r.ref_marking AS [Classification], d.ref_edition AS [Edition], r.ref_revision AS [Change], " & _
+        "Format(r.pub_date,'yyyy-mm-dd') AS [Revised], StrConv(r.ref_status,3) AS [Status], " & _
+        "IIf(Nz(r.doc_link,'')='','','Linked') AS [Document] FROM " & RefFromSql() & _
+        IIf(Len(w) > 0, " WHERE " & w, "") & " ORDER BY r.ref_number, r.ref_title"
 End Function
 
 ' s for a LIKE pattern, quoted for SQL: [ * ? # are matched as themselves.
@@ -450,13 +552,16 @@ End Function
 ' Why these can't be a reference ("" when they can): the web's rules and
 ' words. pubDate is Null or a date.
 Public Function RefInputProblem(ByVal number As String, ByVal title As String, ByVal revision As String, _
-        ByVal pubDate As Variant, ByVal link As String, ByVal marking As String, ByVal notes As String) As String
+        ByVal pubDate As Variant, ByVal link As String, ByVal marking As String, ByVal notes As String, _
+        Optional ByVal publisher As String = "", Optional ByVal edition As String = "") As String
     Dim p As String
     title = RefOneSpace(title)
     If Len(title) = 0 Then p = "Enter the reference's title."
     If Len(p) = 0 And Len(title) > 255 Then p = "A title can be at most 255 characters."
-    If Len(p) = 0 And Len(Trim$(number)) > 100 Then p = "A number can be at most 100 characters."
-    If Len(p) = 0 And Len(Trim$(revision)) > 30 Then p = "A revision can be at most 30 characters."
+    If Len(p) = 0 And Len(Trim$(number)) > 100 Then p = "A short title can be at most 100 characters."
+    If Len(p) = 0 And Len(RefOneSpace(publisher)) > 100 Then p = "A publisher can be at most 100 characters."
+    If Len(p) = 0 And Len(Trim$(edition)) > 30 Then p = "An edition can be at most 30 characters."
+    If Len(p) = 0 And Len(Trim$(revision)) > 30 Then p = "A change can be at most 30 characters."
     If Len(p) = 0 And Not IsNull(pubDate) Then
         If Not IsDate(pubDate) Then
             p = "The date must be a real date."
@@ -536,20 +641,21 @@ End Function
 ' (RefInputProblem).
 Public Function RefAdd(ByVal number As String, ByVal title As String, ByVal revision As String, ByVal pubDate As Variant, _
         ByVal link As String, ByVal marking As String, ByVal notes As String, ByVal appCode As String, _
-        Optional added As Boolean) As Long
+        Optional added As Boolean, Optional ByVal publisher As String = "", Optional ByVal edition As String = "") As Long
     Dim ws As DAO.Workspace, db As DAO.Database, rs As DAO.Recordset, problem As String, id As Long, inTrans As Boolean, who As String
     On Error GoTo Fail
     added = False
     If SignedInPersonID() = 0 Then Err.Raise 5, "modReferences", "Sign in first to add a reference."
-    problem = RefInputProblem(number, title, revision, pubDate, link, marking, notes)
+    problem = RefInputProblem(number, title, revision, pubDate, link, marking, notes, publisher, edition)
     If Len(problem) > 0 Then Err.Raise 5, "modReferences", problem
     number = Trim$(number): title = RefOneSpace(title): revision = Trim$(revision)
     link = RefLinkText(link): marking = RefMarkingText(marking): notes = Trim$(notes)
+    publisher = RefOneSpace(publisher): edition = Trim$(edition)
     who = RefActorName()
     Set ws = DBEngine.Workspaces(0)
     Set db = CurrentDb
     ws.BeginTrans: inTrans = True
-    id = RefFindSame(number, title, revision)
+    id = RefFindSame(number, title)
     If id = 0 Then
         Set rs = db.OpenRecordset(REF_TABLE, dbOpenDynaset, dbAppendOnly)
         rs.AddNew
@@ -563,7 +669,8 @@ Public Function RefAdd(ByVal number As String, ByVal title As String, ByVal revi
         rs.Bookmark = rs.LastModified
         id = rs!ref_id
         rs.Close
-        RefAudit db, id, "Added", RefLabelOf(number, title, revision) & IIf(Len(appCode) > 0, ", from " & appCode, "") & ".", appCode
+        RefSetDetail db, id, publisher, edition
+        RefAudit db, id, "Added", RefLabelOf(number, title, revision, edition) & IIf(Len(appCode) > 0, ", from " & appCode, "") & ".", appCode
         added = True
     End If
     ws.CommitTrans: inTrans = False
@@ -585,18 +692,24 @@ End Function
 ' row_version read when the change began (RefVersion). Library editors and
 ' Personnel admins only. Refused (error 5, with the reason) for anyone else,
 ' a field that breaks the rules, a change someone else saved first, a
-' number and revision another reference already has, or a supersede that
-' points at itself, nothing, or a reference superseded by this one.
-' appCode goes in the audit row.
+' short title another reference already has, or a supersede that points at
+' itself, nothing, or a reference superseded by this one. appCode goes in
+' the audit row. publisher and edition left out keep what the reference has
+' (a caller written before they came).
 Public Sub RefUpdate(ByVal id As Long, ByVal number As String, ByVal title As String, ByVal revision As String, _
         ByVal pubDate As Variant, ByVal link As String, ByVal marking As String, ByVal notes As String, _
-        ByVal status As String, ByVal supersededBy As Long, ByVal version As Long, Optional ByVal appCode As String = "")
+        ByVal status As String, ByVal supersededBy As Long, ByVal version As Long, Optional ByVal appCode As String = "", _
+        Optional ByVal publisher As Variant, Optional ByVal edition As Variant)
     Dim ws As DAO.Workspace, db As DAO.Database, rs As DAO.Recordset, problem As String, inTrans As Boolean
     Dim before As String, after As String, oldStatus As String, what As String, action As String, who As String, toSup As Variant
+    Dim pub As String, ed As String, oldEd As String
     On Error GoTo Fail
     If Not RefIsEditor() Then Err.Raise 5, "modReferences", _
         "Only Library editors and Personnel admins can change a reference. Ask one to make the change."
-    problem = RefInputProblem(number, title, revision, pubDate, link, marking, notes)
+    oldEd = RefEdition(id)
+    If IsMissing(publisher) Then pub = RefPublisher(id) Else pub = RefOneSpace(Nz(publisher, ""))
+    If IsMissing(edition) Then ed = oldEd Else ed = Trim$(Nz(edition, ""))
+    problem = RefInputProblem(number, title, revision, pubDate, link, marking, notes, pub, ed)
     If Len(problem) > 0 Then Err.Raise 5, "modReferences", problem
     status = LCase$(Trim$(status))
     If Len(status) = 0 Then status = REF_ACTIVE
@@ -613,8 +726,8 @@ Public Sub RefUpdate(ByVal id As Long, ByVal number As String, ByVal title As St
     If rs.EOF Then Err.Raise 5, "modReferences", "No such reference."
     If rs!row_version <> version Then Err.Raise 5, "modReferences", Nz(rs!updated_by, "Someone") & _
         " changed this reference after you opened it. Close it and open it again to see their change, then make yours again."
-    If RefFindSame(number, title, revision, id) <> 0 Then Err.Raise 5, "modReferences", _
-        RefLabelOf(number, title, revision) & " is already in the library."
+    If RefFindSame(number, title, "", id) <> 0 Then Err.Raise 5, "modReferences", _
+        IIf(Len(number) > 0, number, title) & " is already in the library: keep one record for it and change that one."
     If status = REF_SUPERSEDED Then
         If supersededBy <= 0 Then Err.Raise 5, "modReferences", "Choose the reference that replaced it."
         If supersededBy = id Then Err.Raise 5, "modReferences", "A reference can't supersede itself."
@@ -624,7 +737,7 @@ Public Sub RefUpdate(ByVal id As Long, ByVal number As String, ByVal title As St
         If Nz(toSup, 0) = id Then Err.Raise 5, "modReferences", RefLabel(supersededBy) & _
             " is marked as superseded by this one; two references can't supersede each other."
     End If
-    before = RefLabelOf(Nz(rs!ref_number, ""), Nz(rs!ref_title, ""), Nz(rs!ref_revision, ""))
+    before = RefLabelOf(Nz(rs!ref_number, ""), Nz(rs!ref_title, ""), Nz(rs!ref_revision, ""), oldEd)
     oldStatus = Nz(rs!ref_status, REF_ACTIVE)
     rs.Edit
     rs!ref_number = RefNull(number): rs!ref_title = title: rs!ref_revision = RefNull(revision)
@@ -635,7 +748,8 @@ Public Sub RefUpdate(ByVal id As Long, ByVal number As String, ByVal title As St
     rs!row_version = rs!row_version + 1: rs!updated_by = who: rs!updated_at = Now()
     rs.Update
     rs.Close
-    after = RefLabelOf(number, title, revision)
+    RefSetDetail db, id, pub, ed
+    after = RefLabelOf(number, title, revision, ed)
     If status <> oldStatus Then what = "status " & oldStatus & " -> " & status
     If StrComp(before, after, vbBinaryCompare) <> 0 Then what = what & IIf(Len(what) > 0, "; ", "") & "was " & before
     If status = oldStatus Then
@@ -651,6 +765,19 @@ Public Sub RefUpdate(ByVal id As Long, ByVal number As String, ByVal title As St
 Fail:
     If inTrans Then RefRollback ws
     RaiseAgain "modReferences.RefUpdate", CStr(id)
+End Sub
+
+' Publisher and edition of reference id (kit_reference_detail), in the
+' caller's transaction: the row is replaced, or dropped when both are blank.
+Private Sub RefSetDetail(db As DAO.Database, ByVal id As Long, ByVal publisher As String, ByVal edition As String)
+    Dim rs As DAO.Recordset
+    db.Execute "DELETE FROM " & REF_DETAIL_TABLE & " WHERE ref_id=" & id, dbFailOnError
+    If Len(publisher) = 0 And Len(edition) = 0 Then Exit Sub
+    Set rs = db.OpenRecordset(REF_DETAIL_TABLE, dbOpenDynaset, dbAppendOnly)
+    rs.AddNew
+    rs!ref_id = id: rs!ref_publisher = RefNull(Left$(publisher, 100)): rs!ref_edition = RefNull(Left$(edition, 30))
+    rs.Update
+    rs.Close
 End Sub
 
 ' One kit_reference_audit row, in the caller's transaction: who (the
@@ -724,11 +851,11 @@ Public Function RefOpenCheck(ByVal id As Long, ByVal page As Long, target As Str
     Dim link As String, rest As String, ext As String, rs As DAO.Recordset, lbl As String
     target = ""
     If page < 1 Or page > REF_PAGE_MAX Then page = 0
-    Set rs = CurrentDb.OpenRecordset("SELECT ref_number, ref_title, ref_revision, doc_link FROM " & REF_TABLE & " WHERE ref_id=" & id, dbOpenSnapshot)
+    Set rs = CurrentDb.OpenRecordset("SELECT doc_link FROM " & REF_TABLE & " WHERE ref_id=" & id, dbOpenSnapshot)
     If rs.EOF Then rs.Close: RefOpenCheck = "No such reference.": Exit Function
-    lbl = RefLabelOf(Nz(rs!ref_number, ""), Nz(rs!ref_title, ""), Nz(rs!ref_revision, ""))
     link = Nz(rs!doc_link, "")
     rs.Close
+    lbl = RefLabel(id)
     If Len(link) = 0 Then RefOpenCheck = lbl & " has no document linked in the library.": Exit Function
     If LCase$(link) Like "http://?*" Or LCase$(link) Like "https://?*" Then
         target = link
@@ -878,4 +1005,473 @@ Public Function RefPageProblem(ByVal page As Variant) As String
     If Not IsNumeric(page) Then RefPageProblem = "The page must be a whole number from 1 to " & REF_PAGE_MAX & ".": Exit Function
     If CDbl(page) <> Int(CDbl(page)) Or CDbl(page) < 1 Or CDbl(page) > REF_PAGE_MAX Then _
         RefPageProblem = "The page must be a whole number from 1 to " & REF_PAGE_MAX & "."
+End Function
+
+' ---------------------------------------------------------------------------
+' Import and export (Stephen, 2026-11-17)
+' ---------------------------------------------------------------------------
+'
+' The columns, in this order: Short Title (Publication Number), Title,
+' Publisher, Classification, Current Edition, Current Change, Date of
+' current Revision; then Document, Notes, Status and Superseded by, which a
+' file may leave out. The same layout as the web's Reference library page,
+' so a sheet exported from one imports into the other. Import reads the
+' older headings too (Number, Revision, Date, Marking, SABER's
+' instruction_number ...).
+'
+' Import is checked first (RefImportCheck, nothing written) and written
+' only when no row has a problem (RefImportApply, one transaction). One
+' record is kept per short title: a row whose short title is in the library
+' updates that record (a new edition or change, a new date), and a blank
+' cell keeps what the library has.
+
+Private Const REF_EXPORT_QUERY As String = "zz_qryRefExport"
+Private Const REF_IMPORT_TABLE As String = "zz_reference_import"
+
+' The export's headings, in Stephen's order, for a sheet's first row.
+Public Function RefExportHeadings() As Variant
+    RefExportHeadings = Array("Short Title (Publication Number)", "Title", "Publisher", "Classification", "Current Edition", _
+        "Current Change", "Date of current Revision", "Document", "Notes", "Status", "Superseded by")
+End Function
+
+' The whole library (retired references too) in the export's columns.
+Public Function RefExportSql() As String
+    Dim h As Variant
+    h = RefExportHeadings()
+    RefExportSql = "SELECT r.ref_number AS [" & h(0) & "], r.ref_title AS [" & h(1) & "], d.ref_publisher AS [" & h(2) & "], " & _
+        "r.ref_marking AS [" & h(3) & "], d.ref_edition AS [" & h(4) & "], r.ref_revision AS [" & h(5) & "], " & _
+        "r.pub_date AS [" & h(6) & "], r.doc_link AS [" & h(7) & "], r.ref_notes AS [" & h(8) & "], " & _
+        "r.ref_status AS [" & h(9) & "], s.ref_number AS [" & h(10) & "] " & _
+        "FROM (" & RefFromSql() & ") LEFT JOIN " & REF_TABLE & " AS s ON r.superseded_by = s.ref_id " & _
+        "ORDER BY r.ref_number, r.ref_title"
+End Function
+
+' Write the library to path: an Excel workbook when path ends in .xlsx,
+' else CSV. Replaces a file already there. Returns the references written.
+Public Function RefExport(ByVal path As String) As Long
+    Dim n As Long, d As String, src As String
+    KitBusy "Exporting the Reference library..."
+    On Error GoTo Fail
+    If FileExists(path) Then Kill path
+    If LCase$(Right$(path, 5)) = ".xlsx" Then
+        RefDropQuery
+        CurrentDb.CreateQueryDef REF_EXPORT_QUERY, RefExportSql()
+        DoCmd.TransferSpreadsheet acExport, acSpreadsheetTypeExcel12Xml, REF_EXPORT_QUERY, path, True
+        RefExport = DCount("*", REF_EXPORT_QUERY)
+        RefDropQuery
+    Else
+        RefExport = ExportSqlToCsv(RefExportSql(), path)
+    End If
+    KitBusyEnd
+    Exit Function
+Fail:
+    n = Err.Number: d = Err.Description: src = Err.Source        ' clean-up resets Err
+    RefDropQuery
+    KitBusyEnd
+    Err.Number = n: Err.Description = d: Err.Source = src
+    RaiseAgain "modReferences.RefExport", path
+End Function
+
+Private Sub RefDropQuery()
+    On Error Resume Next
+    CurrentDb.QueryDefs.Delete REF_EXPORT_QUERY
+End Sub
+
+' A heading as it is compared: lower case letters and digits only
+' ("Short Title (Publication Number)" is "shorttitlepublicationnumber"), as
+' the web's headerKey.
+Public Function RefHeaderKey(ByVal s As String) As String
+    Dim i As Long, ch As String
+    s = LCase$(s)
+    For i = 1 To Len(s)
+        ch = Mid$(s, i, 1)
+        If ch Like "[a-z0-9]" Then RefHeaderKey = RefHeaderKey & ch
+    Next
+End Function
+
+' The headings each field may have in a sheet (after RefHeaderKey), as the
+' web's ALIASES.
+Private Function RefImportAliases(ByVal field As String) As Variant
+    Select Case field
+        Case "number": RefImportAliases = Array("shorttitlepublicationnumber", "shorttitle", "number", "refnumber", "referencenumber", _
+            "instructionnumber", "publicationnumber", "pubnumber", "docnumber", "designator")
+        Case "title": RefImportAliases = Array("title", "reftitle", "instructionname", "publicationtitle", "publication", "name", "subject")
+        Case "publisher": RefImportAliases = Array("publisher", "issuedby", "issuer", "originator")
+        Case "edition": RefImportAliases = Array("currentedition", "edition")
+        Case "revision": RefImportAliases = Array("currentchange", "change", "revision", "rev")
+        Case "date": RefImportAliases = Array("dateofcurrentrevision", "date", "publicationdate", "pubdate", "dated", "effectivedate", "revisiondate")
+        Case "link": RefImportAliases = Array("link", "documenturl", "url", "documentlink", "path", "document", "file")
+        Case "marking": RefImportAliases = Array("marking", "classification")
+        Case "notes": RefImportAliases = Array("notes", "note", "remarks", "comments")
+        Case "status": RefImportAliases = Array("status")
+        Case "sup": RefImportAliases = Array("supersededby", "replacedby")
+        Case "active": RefImportAliases = Array("isactive", "active")
+    End Select
+End Function
+
+' The first of field's headings the row has a value for, or "".
+Private Function RefImportPick(ByVal d As Object, ByVal field As String) As String
+    Dim k As Variant
+    For Each k In RefImportAliases(field)
+        If d.Exists(k) Then
+            If Len(d(k)) > 0 Then RefImportPick = d(k): Exit Function
+        End If
+    Next
+End Function
+
+' A cell as text: a date as yyyy-mm-dd, trimmed.
+Private Function RefCellText(ByVal v As Variant) As String
+    If IsNull(v) Or IsEmpty(v) Then Exit Function
+    If VarType(v) = vbDate Then RefCellText = Format$(v, "yyyy-mm-dd") Else RefCellText = Trim$(CStr(v))
+End Function
+
+' The rows of a .xlsx, .xls or .csv file whose first row names the columns
+' (at least Title), as dictionaries with line (its row in the sheet),
+' number, title, publisher, marking, edition, revision, date (as written),
+' link, notes, status and sup (the short title in Superseded by). Rows with
+' nothing in them are left out. Error 5 for a file it can't use.
+Public Function RefImportRead(ByVal path As String) As Collection
+    Dim raw As New Collection, out As New Collection, d As Object, src As Variant, k As Variant, ext As String
+    Dim rs As DAO.Recordset, fld As DAO.Field, row As Object, f As Variant, hasTitle As Boolean, hasAny As Boolean, i As Long, act As String
+    Dim n As Long, ds As String, so As String, hdr As Collection
+    On Error GoTo Fail
+    ext = LCase$(Mid$(path, InStrRev(path, ".") + 1))
+    Select Case ext
+    Case "csv"
+        For Each src In ReadCsvDicts(path)
+            Set d = CreateObject("Scripting.Dictionary")
+            For Each k In src.Keys
+                d(RefHeaderKey(k)) = RefCellText(src(k))
+            Next
+            raw.Add d
+        Next
+        ' The headings, even with no rows under them.
+        Set d = CreateObject("Scripting.Dictionary")
+        Set hdr = ParseCsv(ReadTextFile(path))
+        If hdr.Count > 0 Then
+            For Each k In hdr(1)
+                d(RefHeaderKey(k)) = ""
+            Next
+        End If
+        hasTitle = RefHasTitleHeading(d)
+    Case "xlsx", "xls"
+        On Error Resume Next                    ' left from an earlier import that failed
+        CurrentDb.TableDefs.Delete REF_IMPORT_TABLE
+        On Error GoTo Fail
+        DoCmd.TransferSpreadsheet acImport, IIf(ext = "xls", acSpreadsheetTypeExcel8, acSpreadsheetTypeExcel12Xml), REF_IMPORT_TABLE, path, True
+        Set rs = CurrentDb.OpenRecordset(REF_IMPORT_TABLE, dbOpenSnapshot)
+        Set d = CreateObject("Scripting.Dictionary")
+        For Each fld In rs.Fields
+            d(RefHeaderKey(fld.Name)) = ""
+        Next
+        hasTitle = RefHasTitleHeading(d)
+        Do Until rs.EOF
+            Set d = CreateObject("Scripting.Dictionary")
+            For Each fld In rs.Fields
+                d(RefHeaderKey(fld.Name)) = RefCellText(fld.Value)
+            Next
+            raw.Add d
+            rs.MoveNext
+        Loop
+        rs.Close
+        CurrentDb.TableDefs.Delete REF_IMPORT_TABLE
+    Case Else
+        Err.Raise 5, "modReferences", "Import reads .xlsx, .xls or .csv files."
+    End Select
+    If Not hasTitle Then Err.Raise 5, "modReferences", _
+        "The first row must name the columns, with at least Title. Export the library to see the layout."
+    For Each d In raw
+        i = i + 1
+        Set row = CreateObject("Scripting.Dictionary")
+        row("line") = i + 1                         ' row 1 is the headings
+        hasAny = False
+        For Each f In Array("number", "title", "publisher", "marking", "edition", "revision", "date", "link", "notes", "status", "sup")
+            row(f) = RefImportPick(d, f)
+            If Len(row(f)) > 0 Then hasAny = True
+        Next
+        row("status") = LCase$(row("status"))
+        act = LCase$(RefImportPick(d, "active"))
+        If Len(row("status")) = 0 And (act = "false" Or act = "no" Or act = "0" Or act = "n") Then row("status") = REF_CANCELLED
+        row("marking") = UCase$(row("marking"))
+        If hasAny Then out.Add row
+    Next
+    Set RefImportRead = out
+    Exit Function
+Fail:
+    n = Err.Number: ds = Err.Description: so = Err.Source
+    On Error Resume Next
+    If Not rs Is Nothing Then rs.Close
+    CurrentDb.TableDefs.Delete REF_IMPORT_TABLE
+    On Error GoTo 0
+    Err.Number = n: Err.Description = ds: Err.Source = so
+    RaiseAgain "modReferences.RefImportRead", path
+End Function
+
+Private Function RefHasTitleHeading(ByVal headings As Object) As Boolean
+    Dim k As Variant
+    For Each k In RefImportAliases("title")
+        If headings.Exists(k) Then RefHasTitleHeading = True: Exit Function
+    Next
+End Function
+
+' A row's date: Null when blank, the date, or "bad".
+Private Function RefImportDate(ByVal s As String) As Variant
+    If Len(s) = 0 Then RefImportDate = Null: Exit Function
+    If s Like "####-##-##*" Then s = Left$(s, 10)
+    If IsDate(s) Then RefImportDate = DateValue(CDate(s)) Else RefImportDate = "bad"
+End Function
+
+' The key that makes two rows the same publication: the short title's
+' (RefKey), or "t:" and the title's when there is none.
+Private Function RefRowKey(ByVal number As String, ByVal title As String) As String
+    If Len(RefKey(number)) > 0 Then RefRowKey = RefKey(number) Else RefRowKey = "t:" & RefTitleKey(title)
+End Function
+
+' Check rows read by RefImportRead against the library, writing nothing.
+' Each row gets result ("add", "update", "unchanged" or "error"), note (why
+' an error), changes (what an update changes, comma separated) and id (the
+' library reference it updates). Library editors and Personnel admins only.
+Public Function RefImportCheck(ByVal rows As Collection) As Collection
+    Dim row As Object, seen As Object, rs As DAO.Recordset, k As String, problem As String, ch As String
+    Dim dt As Variant, cur As Long, other As Object, libC As Long, fileC As Long, fileId As Long, fileFree As Boolean, target As Long
+    If Not RefIsEditor() Then Err.Raise 5, "modReferences", "Only Library editors and Personnel admins can import references."
+    Set seen = CreateObject("Scripting.Dictionary")
+    For Each row In rows
+        row("result") = "add": row("note") = "": row("changes") = "": row("id") = 0
+        row("title") = RefOneSpace(row("title")): row("publisher") = RefOneSpace(row("publisher"))
+        row("link") = RefLinkText(row("link"))
+        dt = RefImportDate(row("date"))
+        problem = ""
+        If Not IsNull(dt) Then
+            If VarType(dt) = vbString Then problem = "The date must be a real date (yyyy-mm-dd)."
+        End If
+        If Len(problem) = 0 Then problem = RefInputProblem(row("number"), row("title"), row("revision"), IIf(IsNull(dt), Null, dt), _
+            row("link"), row("marking"), row("notes"), row("publisher"), row("edition"))
+        If Len(problem) = 0 And Len(row("status")) > 0 Then
+            If row("status") <> REF_ACTIVE And row("status") <> REF_SUPERSEDED And row("status") <> REF_CANCELLED Then _
+                problem = "Status must be active, superseded or cancelled (or blank)."
+        End If
+        If Len(problem) = 0 And Len(row("sup")) > 0 Then
+            If Len(row("status")) > 0 And row("status") <> REF_SUPERSEDED Then
+                problem = """Superseded by"" is only for a superseded reference."
+            Else
+                row("status") = REF_SUPERSEDED
+            End If
+        End If
+        If Len(problem) = 0 And row("status") = REF_SUPERSEDED And Len(row("sup")) = 0 Then _
+            problem = "A superseded reference needs ""Superseded by"" (the short title of the one that replaced it)."
+        k = RefRowKey(row("number"), row("title"))
+        If Len(problem) = 0 And seen.Exists(k) Then problem = "The same publication is on row " & seen(k) & " of this file."
+        If Len(problem) > 0 Then
+            row("result") = "error": row("note") = problem
+        Else
+            seen(k) = row("line")
+            row("dateValue") = dt
+            cur = RefFindSame(row("number"), row("title"))
+            If cur > 0 Then
+                row("id") = cur
+                Set rs = CurrentDb.OpenRecordset("SELECT r.*, d.ref_publisher, d.ref_edition FROM " & RefFromSql() & " WHERE r.ref_id=" & cur, dbOpenSnapshot)
+                row("curStatus") = Nz(rs!ref_status, REF_ACTIVE): row("curSup") = Nz(rs!superseded_by, 0)
+                ch = ""
+                If StrComp(row("title"), Nz(rs!ref_title, ""), vbBinaryCompare) <> 0 Then ch = ch & ",title"
+                ' One record is kept current: a new edition or change updates it; blank cells keep what it has.
+                If Len(row("publisher")) > 0 And StrComp(row("publisher"), Nz(rs!ref_publisher, ""), vbBinaryCompare) <> 0 Then ch = ch & ",publisher"
+                If Len(row("edition")) > 0 And StrComp(row("edition"), Nz(rs!ref_edition, ""), vbBinaryCompare) <> 0 Then ch = ch & ",edition"
+                If Len(row("revision")) > 0 And StrComp(row("revision"), Nz(rs!ref_revision, ""), vbBinaryCompare) <> 0 Then ch = ch & ",change"
+                If Not IsNull(dt) Then
+                    If IsNull(rs!pub_date) Then
+                        ch = ch & ",date"
+                    ElseIf DateValue(rs!pub_date) <> dt Then
+                        ch = ch & ",date"
+                    End If
+                End If
+                If Len(row("link")) > 0 And row("link") <> Nz(rs!doc_link, "") Then ch = ch & ",link"
+                If Len(row("marking")) > 0 And RefMarkingText(row("marking")) <> Nz(rs!ref_marking, "UNCLASSIFIED") Then ch = ch & ",marking"
+                If Len(row("notes")) > 0 And row("notes") <> Nz(rs!ref_notes, "") Then ch = ch & ",notes"
+                If Len(row("status")) > 0 And row("status") <> row("curStatus") And Len(row("sup")) = 0 Then ch = ch & ",status"
+                rs.Close
+                row("changes") = Mid$(ch, 2)
+                row("result") = IIf(Len(ch) > 0, "update", "unchanged")
+            End If
+        End If
+    Next
+    ' "Superseded by" names a publication by short title: in the library, or added by this file.
+    For Each row In rows
+        If row("result") <> "error" And Len(row("sup")) > 0 Then
+            k = RefKey(row("sup"))
+            libC = 0: fileC = 0: fileId = 0: fileFree = False
+            Set rs = CurrentDb.OpenRecordset("SELECT ref_id, ref_number, ref_status, superseded_by FROM " & REF_TABLE & _
+                " ORDER BY IIf(ref_status='" & REF_ACTIVE & "',0,1), ref_id DESC", dbOpenSnapshot)
+            Do While Not rs.EOF
+                If StrComp(RefKey(Nz(rs!ref_number, "")), k, vbBinaryCompare) = 0 And rs!ref_id <> row("id") Then
+                    If libC = 0 Then libC = rs!ref_id
+                End If
+                rs.MoveNext
+            Loop
+            rs.Close
+            ' A row of this file with that short title is the one it means (RefImportApply does the same).
+            For Each other In rows
+                If Not other Is row And other("result") <> "error" Then
+                    If StrComp(RefKey(other("number")), k, vbBinaryCompare) = 0 Then
+                        fileC = fileC + 1
+                        If fileC = 1 Then
+                            fileId = other("id")
+                            ' Left as it is by this file (not superseded or restored by it).
+                            fileFree = (Len(other("sup")) = 0 And (Len(other("status")) = 0 Or other("status") = REF_SUPERSEDED))
+                        End If
+                    End If
+                End If
+            Next
+            If fileC > 0 Then target = fileId Else target = libC      ' 0: a reference this file adds
+            If libC = 0 And fileC = 0 Then
+                row("result") = "error"
+                If StrComp(RefKey(row("number")), k, vbBinaryCompare) = 0 Then
+                    row("note") = "A reference can't supersede itself."
+                Else
+                    row("note") = "Superseded by " & row("sup") & ": no reference has that short title."
+                End If
+            Else
+                ' Two references can't supersede each other (as the change page refuses).
+                For Each other In rows
+                    If Not other Is row And other("result") <> "error" And Len(other("sup")) > 0 And Len(RefKey(row("number"))) > 0 Then
+                        If StrComp(RefKey(other("sup")), RefKey(row("number")), vbBinaryCompare) = 0 And _
+                           StrComp(RefKey(other("number")), k, vbBinaryCompare) = 0 Then
+                            row("result") = "error"
+                            row("note") = "Superseded by " & row("sup") & ", which this file marks as superseded by this one; two references can't supersede each other."
+                        End If
+                    End If
+                Next
+                If row("result") <> "error" And row("id") > 0 And target > 0 And (fileC = 0 Or fileFree) Then
+                    If Nz(DLookup("superseded_by", REF_TABLE, "ref_id=" & target), 0) = row("id") Then
+                        row("result") = "error"
+                        row("note") = row("sup") & " is marked as superseded by this one; two references can't supersede each other."
+                    End If
+                End If
+                If row("result") <> "error" And row("id") > 0 Then
+                    ' Already superseded by that one: nothing to change.
+                    If Not (target > 0 And row("curStatus") = REF_SUPERSEDED And row("curSup") = target) Then
+                        row("changes") = row("changes") & IIf(Len(row("changes")) > 0, ",", "") & "superseded by"
+                        row("result") = "update"
+                    End If
+                End If
+            End If
+        End If
+    Next
+    Set RefImportCheck = rows
+End Function
+
+' How many checked rows have result ("add", "update", "unchanged" or "error").
+Public Function RefImportCount(ByVal checked As Collection, ByVal result As String) As Long
+    Dim row As Object
+    For Each row In checked
+        If row("result") = result Then RefImportCount = RefImportCount + 1
+    Next
+End Function
+
+' What a check found, for a message: the counts, then the problem rows (up
+' to 12) or the changes.
+Public Function RefImportReport(ByVal checked As Collection) As String
+    Dim row As Object, s As String, n As Long
+    s = RefImportCount(checked, "add") & " new, " & RefImportCount(checked, "update") & " to change, " & _
+        RefImportCount(checked, "unchanged") & " already there"
+    If RefImportCount(checked, "error") > 0 Then s = s & ", " & RefImportCount(checked, "error") & " with a problem"
+    s = s & "."
+    For Each row In checked
+        If n >= 12 Then s = s & vbCrLf & "...": Exit For
+        If row("result") = "error" Then
+            s = s & vbCrLf & "Row " & row("line") & ": " & row("note"): n = n + 1
+        ElseIf row("result") = "update" And RefImportCount(checked, "error") = 0 Then
+            s = s & vbCrLf & "Row " & row("line") & ": " & IIf(Len(row("number")) > 0, row("number"), row("title")) & " (" & row("changes") & ")": n = n + 1
+        End If
+    Next
+    RefImportReport = s
+End Function
+
+' Write checked rows (RefImportCheck) in one transaction: the new ones, the
+' changes, then what supersedes what. Refused (error 5) when a row has a
+' problem, so a file goes in whole or not at all. Returns "Added N, changed N."
+' Library editors and Personnel admins only.
+Public Function RefImportApply(ByVal checked As Collection) As String
+    Dim ws As DAO.Workspace, db As DAO.Database, rs As DAO.Recordset, row As Object, other As Object, inTrans As Boolean
+    Dim who As String, added As Long, changed As Long, ch As String, k As String, toId As Long, st As String
+    On Error GoTo Fail
+    If Not RefIsEditor() Then Err.Raise 5, "modReferences", "Only Library editors and Personnel admins can import references."
+    If RefImportCount(checked, "error") > 0 Then Err.Raise 5, "modReferences", _
+        "Some rows have a problem, so nothing was imported. Fix them and import the file again."
+    who = RefActorName()
+    Set ws = DBEngine.Workspaces(0)
+    Set db = CurrentDb
+    ws.BeginTrans: inTrans = True
+    For Each row In checked
+        If row("result") = "add" Then
+            st = row("status")
+            If st <> REF_CANCELLED Then st = REF_ACTIVE         ' superseded is set below
+            Set rs = db.OpenRecordset(REF_TABLE, dbOpenDynaset, dbAppendOnly)
+            rs.AddNew
+            rs!ref_number = RefNull(Trim$(row("number"))): rs!ref_title = row("title"): rs!ref_revision = RefNull(Trim$(row("revision")))
+            rs!pub_date = row("dateValue")
+            rs!ref_status = st: rs!doc_link = RefNull(row("link")): rs!ref_marking = RefMarkingText(row("marking"))
+            rs!ref_notes = RefNull(Trim$(row("notes"))): rs!source_app = "import": rs!row_version = 1
+            rs!created_by_id = SignedInPersonID(): rs!created_by = who: rs!created_at = Now()
+            rs!updated_by = who: rs!updated_at = Now()
+            rs.Update
+            rs.Bookmark = rs.LastModified
+            row("id") = rs!ref_id
+            rs.Close
+            RefSetDetail db, row("id"), row("publisher"), Trim$(row("edition"))
+            RefAudit db, row("id"), "Imported", "Import added " & RefLabelOf(row("number"), row("title"), row("revision"), row("edition")) & ".", "import"
+            added = added + 1
+        ElseIf row("result") = "update" Then
+            ch = "," & row("changes") & ","
+            Set rs = db.OpenRecordset("SELECT * FROM " & REF_TABLE & " WHERE ref_id=" & row("id"), dbOpenDynaset)
+            rs.Edit
+            If InStr(ch, ",title,") > 0 Then rs!ref_title = row("title")
+            If InStr(ch, ",change,") > 0 Then rs!ref_revision = RefNull(Trim$(row("revision")))
+            If InStr(ch, ",date,") > 0 Then rs!pub_date = row("dateValue")
+            If InStr(ch, ",link,") > 0 Then rs!doc_link = RefNull(row("link"))
+            If InStr(ch, ",marking,") > 0 Then rs!ref_marking = RefMarkingText(row("marking"))
+            If InStr(ch, ",notes,") > 0 Then rs!ref_notes = RefNull(Trim$(row("notes")))
+            If InStr(ch, ",status,") > 0 Then rs!ref_status = row("status"): rs!superseded_by = Null
+            rs!row_version = rs!row_version + 1: rs!updated_by = who: rs!updated_at = Now()
+            rs.Update
+            rs.Close
+            If InStr(ch, ",publisher,") > 0 Or InStr(ch, ",edition,") > 0 Then
+                ' Blank cells keep what the library has.
+                RefSetDetail db, row("id"), IIf(Len(row("publisher")) > 0, row("publisher"), RefPublisher(row("id"))), _
+                    IIf(Len(row("edition")) > 0, Trim$(row("edition")), RefEdition(row("id")))
+            End If
+            RefAudit db, row("id"), "Imported", "Import changed " & Replace(row("changes"), ",", ", ") & " of " & _
+                RefLabelOf(row("number"), row("title"), row("revision"), row("edition")) & ".", "import"
+            changed = changed + 1
+        End If
+    Next
+    ' What supersedes what: a row of this file first, else the library's (an active one first).
+    For Each row In checked
+        If Len(row("sup")) > 0 And (row("result") = "add" Or InStr("," & row("changes") & ",", ",superseded by,") > 0) Then
+            k = RefKey(row("sup")): toId = 0
+            For Each other In checked
+                If Not other Is row And other("id") > 0 Then
+                    If StrComp(RefKey(other("number")), k, vbBinaryCompare) = 0 Then toId = other("id"): Exit For
+                End If
+            Next
+            If toId = 0 Then
+                Set rs = db.OpenRecordset("SELECT ref_id, ref_number FROM " & REF_TABLE & " WHERE ref_id<>" & row("id") & _
+                    " ORDER BY IIf(ref_status='" & REF_ACTIVE & "',0,1), ref_id DESC", dbOpenSnapshot)
+                Do While Not rs.EOF
+                    If StrComp(RefKey(Nz(rs!ref_number, "")), k, vbBinaryCompare) = 0 Then toId = rs!ref_id: Exit Do
+                    rs.MoveNext
+                Loop
+                rs.Close
+            End If
+            db.Execute "UPDATE " & REF_TABLE & " SET ref_status='" & REF_SUPERSEDED & "', superseded_by=" & toId & _
+                IIf(row("result") = "add", "", ", row_version=row_version+1") & " WHERE ref_id=" & row("id"), dbFailOnError
+        End If
+    Next
+    RefAudit db, 0, "Import", "Import: " & added & " added, " & changed & " changed, " & RefImportCount(checked, "unchanged") & " already there.", "import"
+    ws.CommitTrans: inTrans = False
+    RefImportApply = "Added " & added & ", changed " & changed & "."
+    Exit Function
+Fail:
+    If inTrans Then RefRollback ws
+    RaiseAgain "modReferences.RefImportApply"
 End Function

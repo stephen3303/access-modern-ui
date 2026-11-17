@@ -127,7 +127,7 @@ End Function
 ' the form's code as PickBox says.
 Public Function RefPickBox(ByVal nm As String, ByVal keyField As String, ByVal x As Long, ByVal y As Long, _
         ByVal w As Long, Optional ByVal h As Long = 450) As Control
-    Set RefPickBox = PickBox(nm, keyField, RefPickSql(), x, y, w, h, "Type a number or title")
+    Set RefPickBox = PickBox(nm, keyField, RefPickSql(), x, y, w, h, "Type a short title or title")
 End Function
 
 ' Add a missing reference (dlgReference), with title typed in already.
@@ -185,13 +185,14 @@ End Sub
 
 ' dlgReferences, the library page: a search box, Show retired, Library
 ' editors (Personnel admins), Add reference; the list (double-click or Change
-' to change one); Open, Change and Close.
+' to change one); Export... (anyone) and Import... (Library editors), in
+' Stephen's seven columns (RefExport); Open, Change and Close.
 Private Sub Build_dlgReferences()
     Const DLG_W As Long = 13200         ' 880 px
     Dim c As Control, pad As Long, w As Long, x As Long, y As Long, btnW As Long, listH As Long, colW As String
     pad = Sp(SP_DIALOG)
     x = pad: w = DLG_W - 2 * pad: btnW = px(120): listH = px(360)
-    NewDialog "Reference library", DLG_W, px(560)
+    NewDialog "Reference library", DLG_W, px(600)
     Ev F, "OnLoad", "OnKeyDown": F.KeyPreview = True   ' F1 (RefF1)
     y = pad
     Lbl "lblTitle", "Reference library", x, y, w - px(300), px(26), 13, True
@@ -200,7 +201,7 @@ Private Sub Build_dlgReferences()
         x, y, w, px(18), 9, False, CLR_MUTED_FG
     y = y + px(18) + Sp(16)
     Set c = Txt("txtSearch", "", x, y, px(260), px(30), 9)
-    c.Format = "@;""Search number, title or notes..."""
+    c.Format = "@;""Search short title, title, publisher or notes..."""
     Ev c, "OnChange"
     Set c = Chk("chkRetired", "", x + px(276), y + px(6))
     Ev c, "AfterUpdate"
@@ -208,15 +209,18 @@ Private Sub Build_dlgReferences()
     Btn "btnEditors", "Library editors...", x + w - 2 * btnW - Sp(SP_ITEM_GAP), y, btnW, px(30), "outline"
     Btn "btnAdd", "Add reference", x + w - btnW, y, btnW, px(30)
     y = y + px(30) + Sp(SP_ROW_GAP)
-    ' ref_id, Number, Title, Revision, Date, Status, Document
-    colW = "0;" & px(170) & ";" & px(330) & ";" & px(70) & ";" & px(90) & ";" & px(90) & ";" & px(70)
-    Set c = Lst("lstRefs", "", x, y, w, listH, 7, colW)
+    ' ref_id, Short title, Title, Publisher, Classification, Edition, Change, Revised, Status, Document (Stephen's order)
+    colW = "0;" & px(140) & ";" & px(220) & ";" & px(80) & ";" & px(90) & ";" & px(54) & ";" & px(54) & ";" & px(78) & ";" & _
+        px(70) & ";" & px(54)
+    Set c = Lst("lstRefs", "", x, y, w, listH, 10, colW)
     Ev c, "OnDblClick"
     Set c = Lbl("lblNone", "No references match your search.", x + px(10), y + px(30), px(360), px(20), 9, False, CLR_MUTED_FG)
     c.Visible = False
-    y = y + listH + Sp(16)
-    Lbl "lblTip", "Double-click a reference to change it. Open shows its document.", _
-        x, y, w - 3 * px(96) - 2 * Sp(SP_ITEM_GAP) - Sp(16), px(30), 8, False, CLR_MUTED_FG
+    y = y + listH + px(6)
+    Lbl "lblTip", "Double-click a reference to change it. Open shows its document.", x, y, w, px(18), 8, False, CLR_MUTED_FG
+    y = y + px(18) + Sp(10)
+    Btn "btnExport", "Export...", x, y, px(96), px(30), "outline"
+    Btn "btnImport", "Import...", x + px(96) + Sp(SP_ITEM_GAP), y, px(96), px(30), "outline"
     Btn "btnOpen", "Open", x + w - 3 * px(96) - 2 * Sp(SP_ITEM_GAP), y, px(96), px(30), "outline"
     Btn "btnEdit", "Change", x + w - 2 * px(96) - Sp(SP_ITEM_GAP), y, px(96), px(30), "outline"
     Set c = Btn("btnClose", "Close", x + w - px(96), y, px(96), px(30), "outline"): c.Cancel = True
@@ -224,8 +228,10 @@ Private Sub Build_dlgReferences()
     SaveForm REFS_FORM
 End Sub
 
-' dlgReference: add or change one reference. OpenArgs "new", "new|<title>"
-' or a ref_id. Number and revision; title; date and marking; the document
+' dlgReference: add or change one reference. OpenArgs "new", "new|<text>"
+' or a ref_id. Stephen's fields in his order (2026-11-17): short title;
+' title; publisher and classification; current edition and current change
+' (with a line on keeping one record current); date of current revision; the document
 ' link with Browse... and Open; notes; for a change, status and Superseded by
 ' (a reference picker) and History; a line for what went wrong; Save and Close.
 Private Sub Build_dlgReference()
@@ -233,27 +239,42 @@ Private Sub Build_dlgReference()
     Dim c As Control, pad As Long, w As Long, x As Long, x2 As Long, y As Long, half As Long, gap As Long, btnW As Long
     pad = Sp(SP_DIALOG): gap = Sp(SP_ROW_GAP)
     x = pad: w = DLG_W - 2 * pad: half = (w - Sp(16)) \ 2: x2 = x + half + Sp(16): btnW = px(96)
-    NewDialog "Reference", DLG_W, px(700)
+    NewDialog "Reference", DLG_W, px(800)
     Ev F, "OnLoad", "OnOpen", "OnKeyDown": F.KeyPreview = True   ' Form_Open checks who may change; F1 (RefF1)
     y = pad
     Lbl "lblTitle", "Add reference", x, y, w, px(26), 13, True
     y = y + px(26) + Sp(16)
-    RefFieldLabel "lblNumber", "Number (such as OPNAVINST 3120.32D)", x, y, half
-    RefFieldLabel "lblRevision", "Revision or change (optional)", x2, y, half
+    RefFieldLabel "lblNumber", "Short title (publication number)", x, y, half
     y = y + px(18)
-    Txt "txtNumber", "", x, y, half, px(30)
-    Txt "txtRevision", "", x2, y, half, px(30)
+    Set c = Txt("txtNumber", "", x, y, half, px(30))
+    c.Format = "@;""Such as OPNAVINST 3120.32"""
     y = y + px(30) + gap
     RefFieldLabel "lblRefTitle", "Title", x, y, w
     y = y + px(18)
     Txt "txtTitle", "", x, y, w, px(30)
     y = y + px(30) + gap
-    RefFieldLabel "lblDate", "Date (optional)", x, y, half
-    RefFieldLabel "lblMarking", "Marking", x2, y, half
+    RefFieldLabel "lblPublisher", "Publisher (optional)", x, y, half
+    RefFieldLabel "lblMarking", "Classification", x2, y, half
     y = y + px(18)
-    DateBox "txtDate", "", x, y, px(30)
+    Set c = Txt("txtPublisher", "", x, y, half, px(30))
+    c.Format = "@;""Such as OPNAV"""
     Set c = Cbo("cboMarking", "", REF_MARKING_LEVELS, x2, y, half, px(30))
     c.LimitToList = False                           ' a REL TO marking is typed
+    y = y + px(30) + gap
+    RefFieldLabel "lblEdition", "Current edition (optional)", x, y, half
+    RefFieldLabel "lblRevision", "Current change (optional)", x2, y, half
+    y = y + px(18)
+    Set c = Txt("txtEdition", "", x, y, half, px(30))
+    c.Format = "@;""Such as D"""
+    Set c = Txt("txtRevision", "", x2, y, half, px(30))
+    c.Format = "@;""Such as CH-1"""
+    y = y + px(30) + px(4)
+    Lbl "lblEditionHint", "One record per publication: a new edition or change updates this one. A citation prints " & _
+        "the short title with its edition (OPNAVINST 3120.32D).", x, y, w, px(30), 8, False, CLR_MUTED_FG
+    y = y + px(30) + gap
+    RefFieldLabel "lblDate", "Date of current revision (optional)", x, y, half
+    y = y + px(18)
+    DateBox "txtDate", "", x, y, px(30)
     y = y + px(30) + gap
     RefFieldLabel "lblLink", "Document (a file on the shared drive, or a web address)", x, y, w
     y = y + px(18)

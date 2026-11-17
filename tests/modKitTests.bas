@@ -1832,11 +1832,12 @@ End Function
 ' admin signed in (after TestPersonnelPeople) and leaves them signed in.
 Private Sub TestReferences()
     Dim folder As String, refPath As String, id As Long, id2 As Long, added As Boolean, er As Long, msg As String
-    Dim target As String, ver As Long, pdf As String, f As Integer, ann As Long, frm As Form
+    Dim target As String, ver As Long, pdf As String, f As Integer, ann As Long, frm As Form, id3 As Long, rs As DAO.Recordset
     folder = Left$(PersonnelPath(), InStrRev(PersonnelPath(), "\") - 1)
     refPath = folder & "\" & REF_FILE
     On Error Resume Next                        ' links and a file left by an earlier run
     CurrentDb.TableDefs.Delete REF_TABLE: CurrentDb.TableDefs.Delete REF_EDITOR_TABLE: CurrentDb.TableDefs.Delete REF_AUDIT_TABLE
+    CurrentDb.TableDefs.Delete REF_DETAIL_TABLE
     Kill refPath
     On Error GoTo 0
     ' Matching, as the web's Get-KitRefKey and Get-KitRefTitleKey.
@@ -1844,6 +1845,11 @@ Private Sub TestReferences()
         RefKey("NAVSEA_S9086-CH.1") = "NAVSEAS9086CH1", "Reference numbers not compared the web's way"
     Check RefTitleKey("  Ship's   Organization" & vbTab & "Manual ") = "ship's organization manual", "Titles not compared the web's way"
     Check RefLabelOf("OPNAVINST 3120.32D", "SORM", "CH-1") = "OPNAVINST 3120.32D SORM (CH-1)" And RefLabelOf("", "Notes", "") = "Notes", "Reference label wrong"
+    ' Short title with its edition, as the web's Join-KitRefNumber (Stephen, 2026-11-17).
+    Check RefNumberOf("OPNAVINST 3120.32", "D") = "OPNAVINST 3120.32D" And RefNumberOf("NAVSEA S9086", "Rev 3") = "NAVSEA S9086 Rev 3" And _
+        RefNumberOf("X 1", "AB") = "X 1AB" And RefNumberOf("", "D") = "" And RefNumberOf(" SORM ", "") = "SORM", "Short title and edition not joined the web's way"
+    Check RefCiteOf("OPNAVINST 3120.32", "D", "SORM") = "OPNAVINST 3120.32D" And RefCiteOf("", "D", "Ship's Notes") = "Ship's Notes" And _
+        RefLabelOf("OPNAVINST 3120.32", "SORM", "CH-1", "D") = "OPNAVINST 3120.32D SORM (CH-1)", "Citation text wrong"
     ' Input rules.
     Check RefLinkProblem("") = "" And RefLinkProblem("https://x.mil/a.pdf") = "" And RefLinkProblem("\\srv\pubs\a.pdf") = "" And _
         RefLinkProblem("S:\Pubs\a.pdf") = "" And RefLinkProblem("""S:\Pubs\a b.pdf""") = "", "A good document link refused"
@@ -1876,7 +1882,11 @@ Private Sub TestReferences()
     Check er = 5 And Not FileExists(folder & "\refs2.accdb"), "A second library made while one is linked"
     ' Unlinked, it is found again beside Personnel with no questions.
     CurrentDb.TableDefs.Delete REF_TABLE: CurrentDb.TableDefs.Delete REF_EDITOR_TABLE: CurrentDb.TableDefs.Delete REF_AUDIT_TABLE
-    Check ReferencesStatus() = REFS_READY And ReferencesPath() = refPath, "Library beside Personnel not linked by itself"
+    CurrentDb.TableDefs.Delete REF_DETAIL_TABLE
+    Check ReferencesStatus() = REFS_READY And ReferencesPath() = refPath And KitBackendPath(REF_DETAIL_TABLE) = refPath, "Library beside Personnel not linked by itself"
+    ' A front end linked before publisher and edition came gets kit_reference_detail at start.
+    CurrentDb.TableDefs.Delete REF_DETAIL_TABLE
+    Check ReferencesStatus() = REFS_READY And KitBackendPath(REF_DETAIL_TABLE) = refPath, "Publisher and edition table not linked for an older front end"
     ' Adding, and the same document again.
     id = RefAdd("OPNAVINST 3120.32D", "Standard Organization and Regulations of the U.S. Navy", "", #7/16/2012#, "S:\Pubs\sorm.pdf", "", "", "TEST", added)
     Check id > 0 And added And RefLabel(id) = "OPNAVINST 3120.32D Standard Organization and Regulations of the U.S. Navy" And _
@@ -1887,7 +1897,9 @@ Private Sub TestReferences()
     Check id2 = id And Not added And DCount("*", REF_TABLE) = 1, "The same document added twice"
     id2 = RefAdd("", "Ship's Notes", "", Null, "", "", "", "TEST", added)
     Check added And RefAdd("", "  ship's   notes ", "", Null, "", "", "", "TEST") = id2, "A title-only reference not matched on its title"
-    Check RefAdd("OPNAVINST 3120.32D", "SORM", "CH-1", Null, "", "", "", "TEST", added) <> id And added, "A new revision not added as its own reference"
+    ' One record per short title, kept current: another change is the same publication.
+    Check RefAdd("OPNAVINST 3120.32D", "SORM", "CH-1", Null, "", "", "", "TEST", added) = id And Not added And DCount("*", REF_TABLE) = 2, _
+        "Another change of the same short title added as its own reference"
     er = 0: On Error Resume Next: RefAdd "", "", "", Null, "", "", "", "TEST": er = Err.Number: msg = Err.Description: On Error GoTo 0
     Check er = 5 And msg = "Enter the reference's title.", "A reference without a title added"
     ' Changing: editors only, with the stale-save check.
@@ -1907,11 +1919,27 @@ Private Sub TestReferences()
     Check DLookup("superseded_by", REF_TABLE, "ref_id=" & id2) = id And DCount("*", REF_AUDIT_TABLE, "ref_id=" & id2 & " AND [action]='Superseded'") = 1, "Supersede not saved or audited"
     er = 0: On Error Resume Next: RefUpdate id, "OPNAVINST 3120.32D", "SORM", "", Null, "", "", "", REF_SUPERSEDED, id2, RefVersion(id): er = Err.Number: On Error GoTo 0
     Check er = 5, "Two references superseded each other"
-    Check RsCount(RefLibrarySql("", False)) = 2 And _
+    Check RsCount(RefLibrarySql("", False)) = 1 And _
         RsCount(RefLibrarySql("notes", True)) = 1 And _
         RsCount(RefLibrarySql("[*", True)) = 0 And _
-        RsCount(RefPickSql()) = 2, "Library lists wrong"
+        RsCount(RefPickSql()) = 1, "Library lists wrong"
     Check InStr(RefPickSql(), "'" & REF_ACTIVE & "'") > 0, "The picker offers retired references"
+    ' Publisher and edition: kept beside the reference, printed in citations, kept when a caller leaves them out.
+    id3 = RefAdd("OPNAVINST 1000.16", "Navy Total Force Manpower Policies and Procedures", "CH-1", Null, "", "", "", "TEST", added, "OPNAV", "L")
+    Check added And RefPublisher(id3) = "OPNAV" And RefEdition(id3) = "L" And RefCiteText(id3) = "OPNAVINST 1000.16L" And _
+        RefLabel(id3) = "OPNAVINST 1000.16L Navy Total Force Manpower Policies and Procedures (CH-1)", "Publisher and edition not kept"
+    Check RefAdd("opnavinst 1000.16", "Navy Total Force Manpower Policies and Procedures", "", Null, "", "", "", "TEST", added, "", "K") = id3 And Not added, _
+        "The same short title with another edition added twice"
+    RefUpdate id3, "OPNAVINST 1000.16", "Navy Total Force Manpower Policies and Procedures", "", #1/15/2026#, "", "", "", REF_ACTIVE, 0, RefVersion(id3), "TEST", "OPNAV", "M"
+    Check RefEdition(id3) = "M" And RefPublisher(id3) = "OPNAV" And Nz(DLookup("ref_revision", REF_TABLE, "ref_id=" & id3), "") = "" And _
+        RefCiteText(id3) = "OPNAVINST 1000.16M", "A new edition didn't update the one record"
+    RefUpdate id3, "OPNAVINST 1000.16", "Navy Total Force Manpower Policies and Procedures", "CH-2", #1/15/2026#, "", "", "", REF_ACTIVE, 0, RefVersion(id3)
+    Check RefEdition(id3) = "M" And RefPublisher(id3) = "OPNAV", "A change from an older caller lost the publisher or edition"
+    Check RsCount(RefLibrarySql("OPNAV", False)) >= 1 And RsCount(RefLibrarySql("1000.16M", False)) = 1, "Library search misses publisher or short title with edition"
+    Set rs = CurrentDb.OpenRecordset("SELECT q.ref_label FROM (" & RefPickSql() & ") AS q WHERE q.ref_id=" & id3, dbOpenSnapshot)
+    Check Not rs.EOF And Nz(rs!ref_label, "") = "OPNAVINST 1000.16M Navy Total Force Manpower Policies and Procedures (CH-2)", "Picker label doesn't print the edition"
+    rs.Close
+    TestReferencesImport folder, id3
     ' Editors: Personnel admins choose them; anyone else can't change.
     ann = PersonIdFor("alee")
     RefSetEditor ann, True
@@ -1946,12 +1974,26 @@ Private Sub TestReferences()
     BuildReferenceDialogs
     DoCmd.OpenForm REFS_FORM
     Set frm = Forms(REFS_FORM)
-    Check frm.lstRefs.ListCount = DCount("*", REF_TABLE, "ref_status='" & REF_ACTIVE & "'") + 1 And frm.btnEdit.Visible And frm.btnEditors.Visible, "Library page wrong for an admin"
+    Check frm.lstRefs.ListCount = DCount("*", REF_TABLE, "ref_status='" & REF_ACTIVE & "'") + 1 And frm.btnEdit.Visible And frm.btnEditors.Visible And _
+        frm.btnImport.Visible And frm.btnExport.Visible And frm.lstRefs.ColumnCount = 10, "Library page wrong for an admin"
+    Check frm.lstRefs.Column(1, 0) = "Short title" And frm.lstRefs.Column(3, 0) = "Publisher" And frm.lstRefs.Column(4, 0) = "Classification" And _
+        frm.lstRefs.Column(5, 0) = "Edition", "Library columns not in Stephen's order"
     DoCmd.Close acForm, REFS_FORM, acSaveNo
     DoCmd.OpenForm REF_FORM, , , , , , "new|Typed title"
     Set frm = Forms(REF_FORM)
-    Check frm.lblTitle.Caption = "Add reference" And frm.txtTitle = "Typed title" And frm.cboMarking = "UNCLASSIFIED" And _
+    Check frm.lblTitle.Caption = "Add reference" And frm.txtTitle = "Typed title" And frm.cboMarking = "UNCLASSIFIED" And IsNull(frm.txtNumber) And _
         Not frm.cboStatus.Visible And Not frm.txtSup.Visible And Not frm.btnHistory.Visible And frm.btnSave.Top < frm.lblError.Top + frm.lblError.Height + px(40), "Add reference didn't open empty, or kept the status row"
+    DoCmd.Close acForm, REF_FORM, acSaveNo
+    ' A short title typed in a citation lands in Short title, not Title.
+    DoCmd.OpenForm REF_FORM, , , , , , "new|OPNAVINST 5100.19F"
+    Set frm = Forms(REF_FORM)
+    Check frm.txtNumber = "OPNAVINST 5100.19F" And IsNull(frm.txtTitle) And _
+        frm.lblPublisher.Top > frm.txtTitle.Top And frm.cboMarking.Top = frm.txtPublisher.Top And frm.txtEdition.Top > frm.txtPublisher.Top And _
+        frm.txtDate.Top > frm.txtEdition.Top And frm.lblMarking.Caption = "Classification", "Short title not filled from the citation, or fields not in Stephen's order"
+    DoCmd.Close acForm, REF_FORM, acSaveNo
+    DoCmd.OpenForm REF_FORM, , , , , , CStr(id3)
+    Set frm = Forms(REF_FORM)
+    Check frm.txtPublisher = "OPNAV" And frm.txtEdition = "M" And frm.txtRevision = "CH-2", "Change reference didn't show publisher and edition"
     DoCmd.Close acForm, REF_FORM, acSaveNo
     DoCmd.OpenForm REF_FORM, , , , , , CStr(id2)
     Set frm = Forms(REF_FORM)
@@ -1962,7 +2004,70 @@ Private Sub TestReferences()
     Check Forms(REF_EDITORS_FORM).lblNone.Visible, "Library editors page shows editors that aren't there"
     DoCmd.Close acForm, REF_EDITORS_FORM, acSaveNo
     CurrentDb.TableDefs.Delete REF_TABLE: CurrentDb.TableDefs.Delete REF_EDITOR_TABLE: CurrentDb.TableDefs.Delete REF_AUDIT_TABLE
+    CurrentDb.TableDefs.Delete REF_DETAIL_TABLE
     Kill refPath
+End Sub
+
+' Import and export in Stephen's seven columns (RefExport, RefImportRead,
+' RefImportCheck, RefImportApply), with the admin signed in. pubId is
+' OPNAVINST 1000.16 (edition M, change CH-2, publisher OPNAV).
+Private Sub TestReferencesImport(ByVal folder As String, ByVal pubId As Long)
+    Dim csv As String, xl As String, rows As Collection, n As Long, er As Long, msg As String, f As Integer, row As Object, newId As Long, h As Variant
+    csv = folder & "efs export.csv": xl = folder & "efs export.xlsx"
+    On Error Resume Next: Kill csv: Kill xl: On Error GoTo 0
+    n = RefExport(csv)
+    Check n = DCount("*", REF_TABLE) And Left$(ReadTextFile(csv), 120) Like "Short Title (Publication Number),Title,Publisher,Classification,Current Edition,Current Change,Date of current Revision,Document,Notes,Status,Superseded by*", _
+        "Export not in Stephen's seven columns"
+    Set rows = RefImportCheck(RefImportRead(csv))
+    Check rows.Count = n And RefImportCount(rows, "unchanged") = n, "The library's own export didn't read back as unchanged: " & RefImportReport(rows)
+    n = RefExport(xl)
+    Set rows = RefImportCheck(RefImportRead(xl))
+    Check FileExists(xl) And RefImportCount(rows, "unchanged") = n, "The Excel export didn't read back as unchanged: " & RefImportReport(rows)
+    ' A new edition and change update the one record; a new row is added; a bad row stops the whole file.
+    h = "Short Title (Publication Number),Title,Publisher,Classification,Current Edition,Current Change,Date of current Revision,Superseded by"
+    f = FreeFile: Open csv For Output As #f
+    Print #f, h
+    Print #f, "OPNAVINST 1000.16,Navy Total Force Manpower Policies and Procedures,OPNAV N1,UNCLASSIFIED,N,CH-1,2026-06-01,"
+    Print #f, "COMSUBLANTINST 5040.1,Inspections,COMSUBLANT,,D,,,"
+    Print #f, "BAD 1,,,,,,,"
+    Print #f, "OPNAVINST 1000.16,Again,,,,,,"
+    Close #f
+    Set rows = RefImportCheck(RefImportRead(csv))
+    Check RefImportCount(rows, "error") = 2 And RefImportCount(rows, "update") = 1 And RefImportCount(rows, "add") = 1 And _
+        InStr(RefImportReport(rows), "Row 4:") > 0 And InStr(RefImportReport(rows), "Row 5:") > 0, "Import check wrong: " & RefImportReport(rows)
+    For Each row In rows
+        If row("line") = 2 Then Check row("id") = pubId And row("changes") = "publisher,edition,change,date", "Import changes wrong: " & row("changes")
+    Next
+    er = 0: On Error Resume Next: RefImportApply rows: er = Err.Number: On Error GoTo 0
+    Check er = 5 And RefEdition(pubId) = "M" And DCount("*", REF_TABLE, "ref_number='COMSUBLANTINST 5040.1'") = 0, "A file with a problem row was imported"
+    f = FreeFile: Open csv For Output As #f
+    Print #f, h
+    Print #f, "OPNAVINST 1000.16,Navy Total Force Manpower Policies and Procedures,OPNAV N1,UNCLASSIFIED,N,CH-1,2026-06-01,"
+    Print #f, "COMSUBLANTINST 5040.1,Inspections,COMSUBLANT,,D,,,"
+    Print #f, "COMSUBLANTINST 5040.0,Old inspections,COMSUBLANT,,,,,COMSUBLANTINST 5040.1"
+    Close #f
+    Set rows = RefImportCheck(RefImportRead(csv))
+    Check RefImportApply(rows) = "Added 2, changed 1.", "Import not written"
+    newId = Nz(DLookup("ref_id", REF_TABLE, "ref_number='COMSUBLANTINST 5040.1'"), 0)
+    Check RefEdition(pubId) = "N" And RefPublisher(pubId) = "OPNAV N1" And DLookup("ref_revision", REF_TABLE, "ref_id=" & pubId) = "CH-1" And _
+        Format$(DLookup("pub_date", REF_TABLE, "ref_id=" & pubId), "yyyy-mm-dd") = "2026-06-01" And DCount("*", REF_TABLE, "ref_number='OPNAVINST 1000.16'") = 1, _
+        "A new edition didn't update the one record"
+    Check newId > 0 And RefCiteText(newId) = "COMSUBLANTINST 5040.1D" And RefPublisher(newId) = "COMSUBLANT" And _
+        DLookup("superseded_by", REF_TABLE, "ref_number='COMSUBLANTINST 5040.0'") = newId And _
+        DLookup("ref_status", REF_TABLE, "ref_number='COMSUBLANTINST 5040.0'") = REF_SUPERSEDED, "Imported rows or Superseded by wrong"
+    Check DCount("*", REF_AUDIT_TABLE, "[action]='Import'") = 1 And DCount("*", REF_AUDIT_TABLE, "[action]='Imported'") = 3, "Import not audited"
+    ' Blank cells keep what the library has.
+    f = FreeFile: Open csv For Output As #f
+    Print #f, "Short Title (Publication Number),Title"
+    Print #f, "OPNAVINST 1000.16,Navy Total Force Manpower Policies and Procedures"
+    Close #f
+    Set rows = RefImportCheck(RefImportRead(csv))
+    Check RefImportCount(rows, "unchanged") = 1, "Blank cells counted as changes"
+    ' A sheet with no Title column is refused.
+    f = FreeFile: Open csv For Output As #f: Print #f, "Number,Name2": Print #f, "X,Y": Close #f
+    er = 0: On Error Resume Next: Set rows = RefImportRead(csv): er = Err.Number: msg = Err.Description: On Error GoTo 0
+    Check er = 5 And InStr(msg, "Title") > 0, "A sheet without a Title column read"
+    Kill csv: Kill xl
 End Sub
 
 ' The rows sql returns.
