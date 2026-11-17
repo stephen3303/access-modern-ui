@@ -73,14 +73,21 @@ Private Sub ShowChangeRows(ByVal show As Boolean)
     top = Me.lblStatus.Top
     delta = Me.lblError.Top - top
     For Each c In Me.Controls
-        If c.Tag = "change" Then c.Visible = False
+        If IsChangeRow(c) Then c.Visible = False
     Next
     For Each c In Me.Controls
-        If c.Tag <> "change" And c.Top > top Then c.Top = c.Top - delta
+        If Not IsChangeRow(c) And c.Top > top Then c.Top = c.Top - delta
     Next
     Me.Section(acDetail).Height = Me.Section(acDetail).Height - delta
     Me.InsideHeight = Me.InsideHeight - delta
 End Sub
+
+' True for a control of the status row, History included. The builder tags
+' them "change"; the Superseded by picker can't carry that Tag (PickBox keeps
+' its row source there), so it is named.
+Private Function IsChangeRow(c As Control) As Boolean
+    IsChangeRow = (c.Tag = "change" Or c.Name = "txtSup" Or c.Name = "txtSupKey")
+End Function
 
 ' Superseded by applies only to a superseded reference.
 Private Sub SetSupEnabled()

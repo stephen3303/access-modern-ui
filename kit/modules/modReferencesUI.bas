@@ -276,10 +276,10 @@ Private Sub Build_dlgReference()
     Set c = Cbo("cboStatus", "", REF_ACTIVE & ";" & REF_SUPERSEDED & ";" & REF_CANCELLED, x, y, half, px(30))
     c.Tag = "change"
     Ev c, "AfterUpdate"
+    ' No "change" Tag here: PickBox keeps its row source in the Tag, so
+    ' dlgReference's IsChangeRow names txtSup and txtSupKey instead.
     Set c = RefPickBox("txtSup", "", x2, y, half)
-    c.Tag = "change"
     Ev c, "OnKeyDown"
-    F.Controls("txtSupKey").Tag = "change"
     y = y + px(30) + px(4)
     Lbl("lblStatusHint", "Retire a reference rather than deleting it: citations to it keep working.", _
         x, y, w, px(16), 8, False, CLR_MUTED_FG).Tag = "change"

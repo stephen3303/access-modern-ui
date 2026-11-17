@@ -1811,8 +1811,8 @@ End Function
 Private Sub TestReferences()
     Dim folder As String, refPath As String, id As Long, id2 As Long, added As Boolean, er As Long, msg As String
     Dim target As String, ver As Long, pdf As String, f As Integer, ann As Long, frm As Form
-    folder = Left$(PersonnelPath(), InStrRev(PersonnelPath(), "") - 1)
-    refPath = folder & "" & REF_FILE
+    folder = Left$(PersonnelPath(), InStrRev(PersonnelPath(), "\") - 1)
+    refPath = folder & "\" & REF_FILE
     On Error Resume Next                        ' links and a file left by an earlier run
     CurrentDb.TableDefs.Delete REF_TABLE: CurrentDb.TableDefs.Delete REF_EDITOR_TABLE: CurrentDb.TableDefs.Delete REF_AUDIT_TABLE
     Kill refPath
@@ -1929,7 +1929,7 @@ Private Sub TestReferences()
     DoCmd.OpenForm REF_FORM, , , , , , "new|Typed title"
     Set frm = Forms(REF_FORM)
     Check frm.lblTitle.Caption = "Add reference" And frm.txtTitle = "Typed title" And frm.cboMarking = "UNCLASSIFIED" And _
-        Not frm.cboStatus.Visible And Not frm.btnHistory.Visible And frm.btnSave.Top < frm.lblError.Top + frm.lblError.Height + px(40), "Add reference didn't open empty, or kept the status row"
+        Not frm.cboStatus.Visible And Not frm.txtSup.Visible And Not frm.btnHistory.Visible And frm.btnSave.Top < frm.lblError.Top + frm.lblError.Height + px(40), "Add reference didn't open empty, or kept the status row"
     DoCmd.Close acForm, REF_FORM, acSaveNo
     DoCmd.OpenForm REF_FORM, , , , , , CStr(id2)
     Set frm = Forms(REF_FORM)
