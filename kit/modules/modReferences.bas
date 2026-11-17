@@ -87,6 +87,9 @@ Public Const REF_EDITOR_TABLE As String = "kit_reference_editor"
 Public Const REF_AUDIT_TABLE As String = "kit_reference_audit"
 Public Const REF_SETTING_TABLE As String = "kit_reference_setting"
 Public Const REF_DETAIL_TABLE As String = "kit_reference_detail"
+' Import and export's scratch objects in the front end (dropped after use).
+Private Const REF_EXPORT_QUERY As String = "zz_qryRefExport"
+Private Const REF_IMPORT_TABLE As String = "zz_reference_import"
 
 ' ReferencesStatus results.
 Public Const REFS_READY As Long = 0           ' linked and reachable
@@ -1025,9 +1028,6 @@ End Function
 ' updates that record (a new edition or change, a new date), and a blank
 ' cell keeps what the library has.
 
-Private Const REF_EXPORT_QUERY As String = "zz_qryRefExport"
-Private Const REF_IMPORT_TABLE As String = "zz_reference_import"
-
 ' The export's headings, in Stephen's order, for a sheet's first row.
 Public Function RefExportHeadings() As Variant
     RefExportHeadings = Array("Short Title (Publication Number)", "Title", "Publisher", "Classification", "Current Edition", _
@@ -1178,8 +1178,12 @@ Public Function RefImportRead(ByVal path As String) As Collection
     Case Else
         Err.Raise 5, "modReferences", "Import reads .xlsx, .xls or .csv files."
     End Select
-    If Not hasTitle Then Err.Raise 5, "modReferences", _
-        "The first row must name the columns, with at least Title. Export the library to see the layout."
+    If Not hasTitle Then
+        ' Raised with no handler in this procedure, so it reaches the caller as it is.
+        On Error GoTo 0
+        Err.Raise 5, "modReferences", "The first row must name the columns, with at least Title. Export the library to see the layout."
+    End If
+    On Error GoTo Fail
     For Each d In raw
         i = i + 1
         Set row = CreateObject("Scripting.Dictionary")

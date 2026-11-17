@@ -2013,11 +2013,13 @@ End Sub
 ' OPNAVINST 1000.16 (edition M, change CH-2, publisher OPNAV).
 Private Sub TestReferencesImport(ByVal folder As String, ByVal pubId As Long)
     Dim csv As String, xl As String, rows As Collection, n As Long, er As Long, msg As String, f As Integer, row As Object, newId As Long, h As Variant
-    csv = folder & "efs export.csv": xl = folder & "efs export.xlsx"
+    csv = folder & "\refs export.csv": xl = folder & "\refs export.xlsx"
     On Error Resume Next: Kill csv: Kill xl: On Error GoTo 0
     n = RefExport(csv)
-    Check n = DCount("*", REF_TABLE) And Left$(ReadTextFile(csv), 120) Like "Short Title (Publication Number),Title,Publisher,Classification,Current Edition,Current Change,Date of current Revision,Document,Notes,Status,Superseded by*", _
-        "Export not in Stephen's seven columns"
+    msg = "Short Title (Publication Number),Title,Publisher,Classification,Current Edition,Current Change,Date of current Revision,Document,Notes,Status,Superseded by"
+    Check n = DCount("*", REF_TABLE) And Left$(ReadTextFile(csv), Len(msg) + 2) = msg & vbCrLf, _
+        "Export doesn't start with Stephen's seven columns then Document, Notes, Status and Superseded by (the web's layout)"
+    msg = ""
     Set rows = RefImportCheck(RefImportRead(csv))
     Check rows.Count = n And RefImportCount(rows, "unchanged") = n, "The library's own export didn't read back as unchanged: " & RefImportReport(rows)
     n = RefExport(xl)
