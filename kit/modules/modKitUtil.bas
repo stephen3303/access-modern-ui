@@ -44,6 +44,18 @@ Private Declare PtrSafe Function GetMonitorInfo Lib "user32" Alias "GetMonitorIn
 Private Declare PtrSafe Function SetWindowPos Lib "user32" (ByVal hWnd As LongPtr, ByVal hWndInsertAfter As LongPtr, _
     ByVal x As Long, ByVal y As Long, ByVal cx As Long, ByVal cy As Long, ByVal wFlags As Long) As Long
 
+' The bitness of the running Office, "x64" or "x86". A compiled front end
+' (.accde) opens only on the bitness of the Office that compiled it, so a
+' release has one per bitness (<app>_FE_x64.accde, <app>_FE_x86.accde) and the
+' update notice names this one (modKitUpdate.ReleasedFrontEnd).
+Public Function KitOfficeBitness() As String
+#If Win64 Then
+    KitOfficeBitness = "x64"
+#Else
+    KitOfficeBitness = "x86"
+#End If
+End Function
+
 ' True when a file exists.
 Public Function FileExists(ByVal path As String) As Boolean
     On Error Resume Next

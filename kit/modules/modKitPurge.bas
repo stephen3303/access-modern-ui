@@ -299,6 +299,23 @@ Fail:
     End Select
 End Function
 
+' Open cn on the ACE OLE DB provider with the rest of the connection string.
+' Tries Microsoft.ACE.OLEDB.12.0, then 16.0: a PC with only the newer
+' provider registered (some Office 2016+ installs) has no 12.0. Only "provider
+' not found" (ADO 3706) moves on to 16.0; any other error (a wrong password,
+' a missing file) is raised as it is, so it isn't hidden behind 16.0's.
+Private Sub OpenAce(cn As Object, ByVal rest As String)
+    Const adErrProviderNotFound As Long = 3706
+    Dim num As Long, desc As String, src As String
+    On Error Resume Next
+    cn.Open "Provider=Microsoft.ACE.OLEDB.12.0;" & rest
+    num = Err.Number: desc = Err.Description: src = Err.Source
+    On Error GoTo 0
+    If num = 0 Then Exit Sub
+    If num <> adErrProviderNotFound Then Err.Raise num, src, desc
+    cn.Open "Provider=Microsoft.ACE.OLEDB.16.0;" & rest
+End Sub
+
 ' True when the last KitPurgeData emptied the Personnel file too: the app
 ' then restarts into the Personnel setup screen, not its sign-in.
 Public Function KitPurgedPersonnel() As Boolean
@@ -322,8 +339,7 @@ Public Function KitDataFileUsers(ByVal bePath As String) As String
     thisPc = WinComputer()
     pwd = PasswordOfFile(bePath)
     Set cn = CreateObject("ADODB.Connection")
-    cn.Open "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=" & bePath & _
-        IIf(Len(pwd) > 0, ";Jet OLEDB:Database Password=" & pwd, "")
+    OpenAce cn, "Data Source=" & bePath & IIf(Len(pwd) > 0, ";Jet OLEDB:Database Password=" & pwd, "")
     Set rs = cn.OpenSchema(adSchemaProviderSpecific, , JET_SCHEMA_USERROSTER)
     Do Until rs.EOF
         pc = Trim$(Replace(Nz(rs.Fields(0).Value, ""), Chr$(0), ""))
