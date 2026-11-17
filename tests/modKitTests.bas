@@ -758,6 +758,28 @@ Public Function TestKit(ByVal root As String) As String
     Check ReleasedVersion(text & "\") = "1.4.0", "Release folder version misread"
     Kill text & "\" & KIT_VERSION_FILE: RmDir text
     Check ReleasedVersion(text) = "", "Missing version file read a version"
+#If Win64 Then
+    Check KitOfficeBitness() = "x64", "64-bit Office not reported as x64"
+#Else
+    Check KitOfficeBitness() = "x86", "32-bit Office not reported as x86"
+#End If
+    Check FrontEndFileName("APP_FE", "x86") = "APP_FE_x86.accde", "Per-bitness front end misnamed"
+    Check ReleasedFrontEnd("", "APP_FE") = "", "Blank release folder named a front end"
+    EnsureFolder text
+    Check ReleasedFrontEnd(text, "APP_FE") = "", "Empty release folder named a front end"
+    WriteTextFile text & "\APP_FE.accde", "old"
+    Check ReleasedFrontEnd(text & "\", "APP_FE", "x86") = "APP_FE.accde", "Older single front end not offered"
+    WriteTextFile text & "\APP_FE_x64.accde", "x64"
+    Check ReleasedFrontEnd(text, "APP_FE", "x64") = "APP_FE_x64.accde", "64-bit Office not given the x64 front end"
+    Check ReleasedFrontEnd(text, "APP_FE", "x86") = "", "32-bit Office offered a stale or 64-bit front end"
+    Check InStr(FrontEndAdvice(text, "APP_FE", "x86"), "no copy for 32-bit Office") > 0, _
+        "Missing 32-bit build not explained"
+    Check InStr(FrontEndAdvice(text, "APP_FE", "x64"), "copy APP_FE_x64.accde from:") > 0, _
+        "Notice did not name the x64 front end"
+    WriteTextFile text & "\APP_FE_x86.accde", "x86"
+    Check ReleasedFrontEnd(text, "APP_FE", "x86") = "APP_FE_x86.accde", "32-bit Office not given the x86 front end"
+    Check InStr(FrontEndAdvice(text), "copy the new version from:") > 0, "Notice without a front end name changed"
+    Kill text & "\*.accde": RmDir text
     Check FederalHoliday(#10/12/2026#) = "Columbus Day", "Columbus Day 2026 missing"
     Check FederalHoliday(#5/25/2026#) = "Memorial Day", "Memorial Day 2026 missing"
     Check FederalHoliday(#11/26/2026#) = "Thanksgiving Day", "Thanksgiving 2026 missing"

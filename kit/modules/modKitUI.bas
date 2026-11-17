@@ -44,7 +44,7 @@ Public Const SPLASH_HIDDEN As String = "|hidden"
 ' The field showing the focus ring (FocusRing): the control, its form's
 ' window and its name, and the border color the ring covers.
 Private m_ringCtl As Control
-Private m_ringHwnd As Long
+Private m_ringHwnd As LongPtr
 Private m_ringName As String
 Private m_ringWas As Long
 ' The question the input dialog (dlgInput) is asking (KitInputBox), and the
