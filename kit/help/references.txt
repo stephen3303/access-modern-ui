@@ -1,0 +1,47 @@
+Reference library help topics for the kit's Reference library screens
+(modReferencesUI). Copy the topics below into the app's src\help\help.txt. The
+keys match the HelpTopic of dlgReferences, dlgReference and dlgRefEditors, so
+F1 on those screens opens them. The keys start with reflib, so they don't clash
+with an app page keyed references or library.
+
+=== reflib | Reference library
+One shared Reference library holds the instructions, manuals and notices that
+every app cites, in Access and on the web. Add a publication once and every app
+can cite it.
+
+# Find a reference
+- Type part of its number, title, revision or notes in the search box.
+- **Show retired** adds superseded and cancelled references. Citations to them still work.
+- **Document** says whether a file or web address is linked. **Open** shows it.
+
+# Add a reference
+Anyone signed in can add one with **Add reference**. If the library already has
+the same document (the same number and revision, however it is typed), that one
+is used instead of adding it twice.
+
+# Change or retire a reference
+Only Library editors and Personnel admins can. Double-click a reference, or pick
+it and choose **Change**. A Personnel admin chooses the editors with **Library
+editors**.
+
+=== reflib.reference | Add or change a reference
+- **Number** is the publication's number, such as OPNAVINST 3120.32D. Leave it blank for a document without one; then its title tells it apart.
+- **Revision or change** is the change it is at, such as CH-1. A new revision is its own reference.
+- **Marking** is the document's classification marking. A REL TO marking can be typed, such as SECRET//REL TO USA, FVEY.
+- **Document** is a file on the shared drive (\\server\share\... or S:\...) or a web address. **Browse** opens the Windows file picker. Choose the copy on the shared drive, so everyone can open it.
+- A PDF opens at the page a citation names. Other documents open in their usual program. Programs and scripts are never opened from the library.
+
+# Retire a reference
+Set **Status** to superseded (and choose what replaced it in **Superseded by**)
+or cancelled. References are never deleted: citations to them keep working.
+**History** shows who added and changed it, and from which PC.
+
+# Someone changed it first
+If someone else saved a change after you opened the reference, Save says so.
+Close it, open it again to see their change, then make yours again.
+
+=== reflib.editors | Library editors
+Library editors change, retire and supersede references in every app, Access
+and web. Personnel admins always can, so they aren't listed.
+- Type a name, pick the person, and choose **Add**.
+- Pick an editor in the list and choose **Remove** to take the right away.

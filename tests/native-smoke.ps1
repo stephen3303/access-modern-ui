@@ -48,6 +48,9 @@ Copy-Item (Join-Path $repo 'kit/forms/dlgPalette.vba') $formDir
  Copy-Item (Join-Path $repo 'kit/forms/dlgSignIn.vba') $formDir
  Copy-Item (Join-Path $repo 'kit/forms/dlgPersonnel.vba') $formDir
  Copy-Item (Join-Path $repo 'kit/forms/dlgPerson.vba') $formDir
+ Copy-Item (Join-Path $repo 'kit/forms/dlgReferences.vba') $formDir
+ Copy-Item (Join-Path $repo 'kit/forms/dlgReference.vba') $formDir
+ Copy-Item (Join-Path $repo 'kit/forms/dlgRefEditors.vba') $formDir
  Copy-Item (Join-Path $repo 'kit/forms/pgDesigner.vba') $formDir
  Copy-Item (Join-Path $repo 'kit/forms/dlgDzProps.vba') $formDir
  Copy-Item (Join-Path $repo 'kit/forms/dlgDzTabs.vba') $formDir
