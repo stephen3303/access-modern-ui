@@ -1993,7 +1993,7 @@ Private Sub TestReferences()
     DoCmd.Close acForm, REF_FORM, acSaveNo
     DoCmd.OpenForm REF_FORM, , , , , , CStr(id3)
     Set frm = Forms(REF_FORM)
-    Check frm.txtPublisher = "OPNAV" And frm.txtEdition = "M" And frm.txtRevision = "CH-2", "Change reference didn't show publisher and edition"
+    Check frm.txtPublisher = "OPNAV N1" And frm.txtEdition = "N" And frm.txtRevision = "CH-1", "Change reference didn't show publisher and edition"   ' as the import left it
     DoCmd.Close acForm, REF_FORM, acSaveNo
     DoCmd.OpenForm REF_FORM, , , , , , CStr(id2)
     Set frm = Forms(REF_FORM)

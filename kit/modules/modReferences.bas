@@ -88,7 +88,7 @@ Public Const REF_AUDIT_TABLE As String = "kit_reference_audit"
 Public Const REF_SETTING_TABLE As String = "kit_reference_setting"
 Public Const REF_DETAIL_TABLE As String = "kit_reference_detail"
 ' Import and export's scratch objects in the front end (dropped after use).
-Private Const REF_EXPORT_QUERY As String = "zz_qryRefExport"
+Private Const REF_EXPORT_QUERY As String = "References"          ' also the exported sheet's name
 Private Const REF_IMPORT_TABLE As String = "zz_reference_import"
 
 ' ReferencesStatus results.
