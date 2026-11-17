@@ -1825,7 +1825,156 @@ End Function
 ' one per entry. Its own procedure: TestKit is at VBA's procedure size limit.
 ' Checks with their own procedures, called from one line of TestKit (it is
 ' at VBA's procedure size limit).
+' The shared Reference library (modReferences, modReferencesUI): matching,
+' input rules, the file beside Personnel, adding (and finding the same one),
+' changing with the stale-save check, supersede rules, editors, opening at a
+' page (checked, never launched) and the screens. Runs with the Personnel
+' admin signed in (after TestPersonnelPeople) and leaves them signed in.
+Private Sub TestReferences()
+    Dim folder As String, refPath As String, id As Long, id2 As Long, added As Boolean, er As Long, msg As String
+    Dim target As String, ver As Long, pdf As String, f As Integer, ann As Long, frm As Form
+    folder = Left$(PersonnelPath(), InStrRev(PersonnelPath(), "\") - 1)
+    refPath = folder & "\" & REF_FILE
+    On Error Resume Next                        ' links and a file left by an earlier run
+    CurrentDb.TableDefs.Delete REF_TABLE: CurrentDb.TableDefs.Delete REF_EDITOR_TABLE: CurrentDb.TableDefs.Delete REF_AUDIT_TABLE
+    Kill refPath
+    On Error GoTo 0
+    ' Matching, as the web's Get-KitRefKey and Get-KitRefTitleKey.
+    Check RefKey("OPNAVINST 3120.32D") = RefKey("opnavinst3120.32 d") And RefKey("OPNAVINST 3120.32D") = "OPNAVINST312032D" And _
+        RefKey("NAVSEA_S9086-CH.1") = "NAVSEAS9086CH1", "Reference numbers not compared the web's way"
+    Check RefTitleKey("  Ship's   Organization" & vbTab & "Manual ") = "ship's organization manual", "Titles not compared the web's way"
+    Check RefLabelOf("OPNAVINST 3120.32D", "SORM", "CH-1") = "OPNAVINST 3120.32D SORM (CH-1)" And RefLabelOf("", "Notes", "") = "Notes", "Reference label wrong"
+    ' Input rules.
+    Check RefLinkProblem("") = "" And RefLinkProblem("https://x.mil/a.pdf") = "" And RefLinkProblem("\\srv\pubs\a.pdf") = "" And _
+        RefLinkProblem("S:\Pubs\a.pdf") = "" And RefLinkProblem("""S:\Pubs\a b.pdf""") = "", "A good document link refused"
+    Check RefLinkProblem("javascript:alert(1)") <> "" And RefLinkProblem("pubs\a.pdf") <> "" And RefLinkProblem("https://x y") <> "" And _
+        RefLinkProblem("\\srv/x\a.pdf") <> "" And RefLinkProblem("S:\" & String(260, "a")) <> "", "A bad document link accepted"
+    Check RefMarkingProblem("") = "" And RefMarkingText("") = "UNCLASSIFIED" And RefMarkingProblem("secret//rel to usa, fvey") = "" And _
+        RefMarkingText(" secret//rel to usa ") = "SECRET//REL TO USA", "A good marking refused"
+    Check RefMarkingProblem("TOP SEKRET") <> "" And RefMarkingProblem("SECRET//") <> "", "A bad marking accepted"
+    Check RefInputProblem("", "", "", Null, "", "", "") = "Enter the reference's title." And _
+        RefInputProblem(String(101, "N"), "T", "", Null, "", "", "") <> "" And RefInputProblem("", "T", String(31, "R"), Null, "", "", "") <> "" And _
+        RefInputProblem("", "T", "", #1/1/1850#, "", "", "") <> "" And RefInputProblem("", "T", "", "not a date", "", "", "") <> "" And _
+        RefInputProblem("", "T", "", Null, "", "", String(2001, "x")) <> "" And RefInputProblem("N", "T", "R", #3/4/2025#, "", "CUI", "n") = "", _
+        "Reference input rules wrong"
+    Check RefPageProblem(Null) = "" And RefPageProblem("") = "" And RefPageProblem(12) = "" And RefPageProblem("0") <> "" And _
+        RefPageProblem("1.5") <> "" And RefPageProblem("x") <> "" And RefPageProblem(100000) <> "", "Page rules wrong"
+    Check RefOpenCaption(12) = "Open p. 12" And RefOpenCaption(0) = "Open document", "Open button caption wrong"
+    Check RefFileUri("S:\Pubs\a b#1.pdf") = "file:///S:/Pubs/a%20b%231.pdf" And RefFileUri("\\srv\share\x.pdf") = "file://srv/share/x.pdf" And _
+        RefFileUri("C:\" & ChrW(&HE9) & ".pdf") = "file:///C:/%C3%A9.pdf", "File address not written as .NET writes it"
+    ' The file: beside Personnel, not set up until a Personnel admin makes it.
+    Check ReferencesDefaultPath() = refPath And ReferencesStatus() = REFS_NOT_SET_UP And Not ReferencesReady(), "Library not looked for beside Personnel"
+    Check ReferencesFileProblem(PersonnelPath()) <> "" And ReferencesFileProblem(folder & "\none.accdb") <> "", "Another file accepted as the library"
+    PersonnelSignOut
+    er = 0: On Error Resume Next: CreateReferencesFile refPath: er = Err.Number: On Error GoTo 0
+    Check er = 5 And Not FileExists(refPath), "Library made with no Personnel admin signed in"
+    Check PersonnelSignInWindows("TEST", True) And PersonnelIsAdminNow(), "Admin not signed back in for the library"
+    CreateReferencesFile refPath
+    Check ReferencesPath() = refPath And ReferencesReady() And ReferencesStatus() = REFS_READY And KitBackendPath(REF_AUDIT_TABLE) = refPath And _
+        InStr(CurrentDb.TableDefs(REF_TABLE).Connect, "PWD=") = 0 And RefMarkingWidth() = REF_MARKING_MAX, "Library not made, linked or left without a password"
+    er = 0: On Error Resume Next: CreateReferencesFile folder & "\refs2.accdb": er = Err.Number: On Error GoTo 0
+    Check er = 5 And Not FileExists(folder & "\refs2.accdb"), "A second library made while one is linked"
+    ' Unlinked, it is found again beside Personnel with no questions.
+    CurrentDb.TableDefs.Delete REF_TABLE: CurrentDb.TableDefs.Delete REF_EDITOR_TABLE: CurrentDb.TableDefs.Delete REF_AUDIT_TABLE
+    Check ReferencesStatus() = REFS_READY And ReferencesPath() = refPath, "Library beside Personnel not linked by itself"
+    ' Adding, and the same document again.
+    id = RefAdd("OPNAVINST 3120.32D", "Standard Organization and Regulations of the U.S. Navy", "", #7/16/2012#, "S:\Pubs\sorm.pdf", "", "", "TEST", added)
+    Check id > 0 And added And RefLabel(id) = "OPNAVINST 3120.32D Standard Organization and Regulations of the U.S. Navy" And _
+        DLookup("source_app", REF_TABLE, "ref_id=" & id) = "TEST" And DLookup("row_version", REF_TABLE, "ref_id=" & id) = 1 And _
+        DLookup("ref_marking", REF_TABLE, "ref_id=" & id) = "UNCLASSIFIED" And DLookup("ref_status", REF_TABLE, "ref_id=" & id) = REF_ACTIVE, "Reference not added"
+    Check DCount("*", REF_AUDIT_TABLE, "ref_id=" & id & " AND [action]='Added' AND app_key='TEST'") = 1, "Add not in the audit"
+    id2 = RefAdd("opnavinst 3120.32 d", "Another title", "", Null, "", "", "", "TEST", added)
+    Check id2 = id And Not added And DCount("*", REF_TABLE) = 1, "The same document added twice"
+    id2 = RefAdd("", "Ship's Notes", "", Null, "", "", "", "TEST", added)
+    Check added And RefAdd("", "  ship's   notes ", "", Null, "", "", "", "TEST") = id2, "A title-only reference not matched on its title"
+    Check RefAdd("OPNAVINST 3120.32D", "SORM", "CH-1", Null, "", "", "", "TEST", added) <> id And added, "A new revision not added as its own reference"
+    er = 0: On Error Resume Next: RefAdd "", "", "", Null, "", "", "", "TEST": er = Err.Number: msg = Err.Description: On Error GoTo 0
+    Check er = 5 And msg = "Enter the reference's title.", "A reference without a title added"
+    ' Changing: editors only, with the stale-save check.
+    Check RefIsEditor(), "A Personnel admin is not a library editor"
+    ver = RefVersion(id)
+    RefUpdate id, "OPNAVINST 3120.32D", "SORM", "", #7/16/2012#, "S:\Pubs\sorm.pdf", "CUI", "Ch 1 in", REF_ACTIVE, 0, ver, "TEST"
+    Check RefVersion(id) = ver + 1 And DLookup("ref_title", REF_TABLE, "ref_id=" & id) = "SORM" And DLookup("ref_marking", REF_TABLE, "ref_id=" & id) = "CUI", "Reference change not saved"
+    er = 0: On Error Resume Next: RefUpdate id, "OPNAVINST 3120.32D", "Old", "", Null, "", "", "", REF_ACTIVE, 0, ver, "TEST": er = Err.Number: On Error GoTo 0
+    Check er = 5 And DLookup("ref_title", REF_TABLE, "ref_id=" & id) = "SORM", "A stale change overwrote a newer one"
+    er = 0: On Error Resume Next: RefUpdate id2, "OPNAVINST 3120.32D", "Dup", "", Null, "", "", "", REF_ACTIVE, 0, RefVersion(id2): er = Err.Number: On Error GoTo 0
+    Check er = 5, "A change made two references the same document"
+    er = 0: On Error Resume Next: RefUpdate id, "OPNAVINST 3120.32D", "SORM", "", Null, "", "", "", REF_SUPERSEDED, id, RefVersion(id): er = Err.Number: On Error GoTo 0
+    Check er = 5, "A reference superseded itself"
+    er = 0: On Error Resume Next: RefUpdate id, "OPNAVINST 3120.32D", "SORM", "", Null, "", "", "", REF_SUPERSEDED, 0, RefVersion(id): er = Err.Number: On Error GoTo 0
+    Check er = 5, "Superseded without the reference that replaced it"
+    RefUpdate id2, "", "Ship's Notes", "", Null, "", "", "", REF_SUPERSEDED, id, RefVersion(id2), "TEST"
+    Check DLookup("superseded_by", REF_TABLE, "ref_id=" & id2) = id And DCount("*", REF_AUDIT_TABLE, "ref_id=" & id2 & " AND [action]='Superseded'") = 1, "Supersede not saved or audited"
+    er = 0: On Error Resume Next: RefUpdate id, "OPNAVINST 3120.32D", "SORM", "", Null, "", "", "", REF_SUPERSEDED, id2, RefVersion(id): er = Err.Number: On Error GoTo 0
+    Check er = 5, "Two references superseded each other"
+    Check RsCount(RefLibrarySql("", False)) = 2 And _
+        RsCount(RefLibrarySql("notes", True)) = 1 And _
+        RsCount(RefLibrarySql("[*", True)) = 0 And _
+        RsCount(RefPickSql()) = 2, "Library lists wrong"
+    Check InStr(RefPickSql(), "'" & REF_ACTIVE & "'") > 0, "The picker offers retired references"
+    ' Editors: Personnel admins choose them; anyone else can't change.
+    ann = PersonIdFor("alee")
+    RefSetEditor ann, True
+    Check RefIsEditorId(ann) And DCount("*", REF_AUDIT_TABLE, "[action]='EditorAdded'") = 1, "Library editor not added"
+    RefSetEditor ann, False
+    Check Not RefIsEditorId(ann) And DCount("*", REF_AUDIT_TABLE, "[action]='EditorRemoved'") = 1, "Library editor not removed"
+    PersonnelSignOut
+    Check Not RefIsEditor(), "Nobody signed in counted as a library editor"
+    er = 0: On Error Resume Next: RefUpdate id, "OPNAVINST 3120.32D", "X", "", Null, "", "", "", REF_ACTIVE, 0, RefVersion(id): er = Err.Number: On Error GoTo 0
+    Check er = 5 And DLookup("ref_title", REF_TABLE, "ref_id=" & id) = "SORM", "A reference changed with nobody signed in"
+    er = 0: On Error Resume Next: RefAdd "", "Nobody", "", Null, "", "", "", "TEST": er = Err.Number: On Error GoTo 0
+    Check er = 5, "A reference added with nobody signed in"
+    er = 0: On Error Resume Next: RefSetEditor ann, True: er = Err.Number: On Error GoTo 0
+    Check er = 5 And Not RefIsEditorId(ann), "A Library editor chosen with no Personnel admin signed in"
+    Check PersonnelSignInWindows("TEST", True), "Admin not signed back in after the library rights"
+    ' Opening: checked, never launched here.
+    pdf = folder & "\sorm test.pdf"
+    f = FreeFile: Open pdf For Output As #f: Print #f, "%PDF-1.4": Close #f
+    RefUpdate id, "OPNAVINST 3120.32D", "SORM", "", Null, pdf, "", "", REF_ACTIVE, 0, RefVersion(id)
+    Check RefOpenCheck(id, 12, target) = "" And target = RefFileUri(pdf) & "#page=12" And InStr(target, "%20") > 0, "A PDF not opened at its page"
+    Check RefOpenCheck(id, 0, target) = "" And target = pdf, "A PDF with no page not opened as a file"
+    RefUpdate id, "OPNAVINST 3120.32D", "SORM", "", Null, "https://x.mil/sorm.pdf#zoom=50", "", "", REF_ACTIVE, 0, RefVersion(id)
+    Check RefOpenCheck(id, 7, target) = "" And target = "https://x.mil/sorm.pdf#page=7", "A web link not opened at its page"
+    RefUpdate id, "OPNAVINST 3120.32D", "SORM", "", Null, folder & "\run.cmd", "", "", REF_ACTIVE, 0, RefVersion(id)
+    Check RefOpenCheck(id, 1, target) <> "" And target = "", "A program would be opened from the library"
+    RefUpdate id, "OPNAVINST 3120.32D", "SORM", "", Null, folder & "\gone.pdf", "", "", REF_ACTIVE, 0, RefVersion(id)
+    Check InStr(RefOpenCheck(id, 1, target), "not at") > 0, "A missing document not reported"
+    RefUpdate id, "OPNAVINST 3120.32D", "SORM", "", Null, "", "", "", REF_ACTIVE, 0, RefVersion(id)
+    Check InStr(RefOpenCheck(id, 1, target), "no document linked") > 0 And RefOpenCheck(-1, 1, target) = "No such reference.", "No document not reported"
+    Kill pdf
+    ' Screens: built, and open in their first state.
+    BuildReferenceDialogs
+    DoCmd.OpenForm REFS_FORM
+    Set frm = Forms(REFS_FORM)
+    Check frm.lstRefs.ListCount = DCount("*", REF_TABLE, "ref_status='" & REF_ACTIVE & "'") + 1 And frm.btnEdit.Visible And frm.btnEditors.Visible, "Library page wrong for an admin"
+    DoCmd.Close acForm, REFS_FORM, acSaveNo
+    DoCmd.OpenForm REF_FORM, , , , , , "new|Typed title"
+    Set frm = Forms(REF_FORM)
+    Check frm.lblTitle.Caption = "Add reference" And frm.txtTitle = "Typed title" And frm.cboMarking = "UNCLASSIFIED" And _
+        Not frm.cboStatus.Visible And Not frm.txtSup.Visible And Not frm.btnHistory.Visible And frm.btnSave.Top < frm.lblError.Top + frm.lblError.Height + px(40), "Add reference didn't open empty, or kept the status row"
+    DoCmd.Close acForm, REF_FORM, acSaveNo
+    DoCmd.OpenForm REF_FORM, , , , , , CStr(id2)
+    Set frm = Forms(REF_FORM)
+    Check frm.txtTitle = "Ship's Notes" And frm.cboStatus = REF_SUPERSEDED And frm.txtSupKey = id And frm.txtSup = RefLabel(id) And frm.cboStatus.Visible, _
+        "Change reference didn't show the reference or what superseded it"
+    DoCmd.Close acForm, REF_FORM, acSaveNo
+    DoCmd.OpenForm REF_EDITORS_FORM
+    Check Forms(REF_EDITORS_FORM).lblNone.Visible, "Library editors page shows editors that aren't there"
+    DoCmd.Close acForm, REF_EDITORS_FORM, acSaveNo
+    CurrentDb.TableDefs.Delete REF_TABLE: CurrentDb.TableDefs.Delete REF_EDITOR_TABLE: CurrentDb.TableDefs.Delete REF_AUDIT_TABLE
+    Kill refPath
+End Sub
+
+' The rows sql returns.
+Private Function RsCount(ByVal sql As String) As Long
+    Dim rs As DAO.Recordset
+    Set rs = CurrentDb.OpenRecordset(sql, dbOpenSnapshot)
+    Do While Not rs.EOF: RsCount = RsCount + 1: rs.MoveNext: Loop
+    rs.Close
+End Function
+
 Private Sub TestMore()
+    TestReferences
     TestEventLog
     TestDesigner
     TestDesignerKinds
